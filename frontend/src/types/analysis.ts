@@ -140,6 +140,9 @@ export interface StockInfo {
   dif?: number           // MACD-DIF
   dea?: number           // MACD-DEA
   macd_hist?: number     // MACD柱状图
+
+  // 量化综合评分
+  composite_score?: number // 多因子综合评分 (0-100分)
 }
 
 // 单股分析请求

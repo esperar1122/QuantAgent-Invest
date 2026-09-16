@@ -51,6 +51,8 @@ class DatabaseScreeningService:
             "amount": "amount",                # 成交额（万元）
             "close": "close",                  # 收盘价
             "volume": "volume",                # 成交量
+            # 综合评分指标
+            "composite_score": "composite_score",  # 多因子量化综合得分
         }
         
         # 支持的操作符
@@ -180,6 +182,20 @@ class DatabaseScreeningService:
             if codes:
                 await self._enrich_with_financial_data(results, codes)
 
+            # 动态加权计算多因子量化综合评分 (composite_score)
+            for item in results:
+                item["composite_score"] = self._calculate_composite_score(item)
+
+            # 若指定按 composite_score 排序，在内存中进行重排
+            if order_by:
+                for order in order_by:
+                    field = order.get("field") if isinstance(order, dict) else getattr(order, "field", "")
+                    if field == "composite_score":
+                        direction = order.get("direction", "desc") if isinstance(order, dict) else getattr(order, "direction", "desc")
+                        reverse = str(direction).lower() == "desc"
+                        results.sort(key=lambda x: x.get("composite_score", 0), reverse=reverse)
+                        break
+
             logger.info(f"✅ 数据库筛选完成: 总数={total_count}, 返回={len(results)}, 数据源={source}")
 
             return results, total_count
@@ -236,8 +252,12 @@ class DatabaseScreeningService:
         
         sort_conditions = []
         for order in order_by:
-            field = order.get("field")
-            direction = order.get("direction", "desc")
+            field = order.get("field") if isinstance(order, dict) else getattr(order, "field", "")
+            if field == "composite_score":
+                # composite_score 为动态量化计算属性，在内存中进行重排，跳过 MongoDB 排序
+                continue
+
+            direction = order.get("direction", "desc") if isinstance(order, dict) else getattr(order, "direction", "desc")
             
             # 映射字段名
             db_field = self.basic_fields.get(field)
@@ -248,6 +268,9 @@ class DatabaseScreeningService:
             sort_direction = -1 if direction.lower() == "desc" else 1
             sort_conditions.append((db_field, sort_direction))
         
+        if not sort_conditions:
+            return [("total_mv", -1)]
+
         return sort_conditions
     
     async def _enrich_with_financial_data(self, results: List[Dict[str, Any]], codes: List[str]) -> None:
@@ -319,7 +342,121 @@ class DatabaseScreeningService:
 
         except Exception as e:
             logger.warning(f"⚠️ 填充财务数据失败: {e}")
-            # 不抛出异常，允许继续返回基础数据
+    def _calculate_composite_score(self, item: Dict[str, Any]) -> float:
+        """
+        计算股票的多因子量化综合评分 (0 - 100分)
+        融合维度：估值因子 (25%) + 基本面/盈利因子 (35%) + 动量因子 (20%) + 流动性与量价因子 (20%)
+        """
+        try:
+            # 1. 估值因子 (Valuation, 25%)
+            pe = item.get("pe_ttm") or item.get("pe")
+            if pe is not None and isinstance(pe, (int, float)):
+                if 0 < pe <= 15:
+                    pe_score = 95.0
+                elif 15 < pe <= 25:
+                    pe_score = 85.0
+                elif 25 < pe <= 40:
+                    pe_score = 70.0
+                elif 40 < pe <= 65:
+                    pe_score = 55.0
+                elif pe > 65:
+                    pe_score = 40.0
+                else:  # pe <= 0 (亏损)
+                    pe_score = 30.0
+            else:
+                pe_score = 60.0
+
+            pb = item.get("pb_mrq") or item.get("pb")
+            if pb is not None and isinstance(pb, (int, float)):
+                if 0.8 <= pb <= 2.5:
+                    pb_score = 90.0
+                elif 2.5 < pb <= 5.0:
+                    pb_score = 75.0
+                elif 0 < pb < 0.8:
+                    pb_score = 80.0
+                elif pb > 5.0:
+                    pb_score = 50.0
+                else:
+                    pb_score = 35.0
+            else:
+                pb_score = 60.0
+            
+            valuation_score = 0.6 * pe_score + 0.4 * pb_score
+
+            # 2. 基本面/盈利因子 (Fundamental, 35%)
+            roe = item.get("roe")
+            if roe is not None and isinstance(roe, (int, float)):
+                if roe >= 20.0:
+                    roe_score = 98.0
+                elif roe >= 15.0:
+                    roe_score = 88.0
+                elif roe >= 10.0:
+                    roe_score = 76.0
+                elif roe >= 5.0:
+                    roe_score = 65.0
+                elif roe > 0:
+                    roe_score = 50.0
+                else:
+                    roe_score = 30.0
+            else:
+                roe_score = 60.0
+
+            mv = item.get("total_mv")
+            if mv is not None and isinstance(mv, (int, float)):
+                if mv >= 1000:  # 1000亿以上大蓝筹
+                    mv_score = 90.0
+                elif mv >= 300: # 300~1000亿中大盘
+                    mv_score = 82.0
+                elif mv >= 100: # 100~300亿中盘
+                    mv_score = 72.0
+                else:
+                    mv_score = 60.0
+            else:
+                mv_score = 60.0
+
+            fundamental_score = 0.7 * roe_score + 0.3 * mv_score
+
+            # 3. 动量因子 (Momentum, 20%)
+            pct_chg = item.get("pct_chg")
+            if pct_chg is not None and isinstance(pct_chg, (int, float)):
+                if 2.0 <= pct_chg <= 7.0:
+                    momentum_score = 88.0
+                elif 0.0 <= pct_chg < 2.0:
+                    momentum_score = 75.0
+                elif pct_chg > 7.0:
+                    momentum_score = 72.0
+                elif -3.0 <= pct_chg < 0.0:
+                    momentum_score = 58.0
+                else:
+                    momentum_score = 42.0
+            else:
+                momentum_score = 60.0
+
+            # 4. 流动性/量价因子 (Liquidity, 20%)
+            turnover = item.get("turnover_rate")
+            if turnover is not None and isinstance(turnover, (int, float)):
+                if 2.0 <= turnover <= 6.0:
+                    liquidity_score = 85.0
+                elif 1.0 <= turnover < 2.0:
+                    liquidity_score = 75.0
+                elif 6.0 < turnover <= 12.0:
+                    liquidity_score = 70.0
+                elif turnover > 12.0:
+                    liquidity_score = 58.0
+                else:
+                    liquidity_score = 50.0
+            else:
+                liquidity_score = 60.0
+
+            total = (
+                0.25 * valuation_score +
+                0.35 * fundamental_score +
+                0.20 * momentum_score +
+                0.20 * liquidity_score
+            )
+            return round(float(total), 1)
+        except Exception:
+            return 65.0
 
     def _format_result(self, doc: Dict[str, Any]) -> Dict[str, Any]:
         """格式化查询结果，统一使用后端字段名"""
@@ -378,6 +515,9 @@ class DatabaseScreeningService:
             "dif": None,
             "dea": None,
             "macd_hist": None,
+
+            # 量化综合得分
+            "composite_score": doc.get("composite_score"),
 
             # 元数据
             "source": doc.get("source", "database"),

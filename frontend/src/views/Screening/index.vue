@@ -255,6 +255,14 @@
 
         <el-table-column prop="name" label="股票名称" width="150" />
 
+        <el-table-column prop="composite_score" label="量化综合得分" width="140" sortable align="center">
+          <template #default="{ row }">
+            <el-tag :type="getScoreTagType(row.composite_score)" effect="dark" round>
+              {{ (row.composite_score ?? 65.0).toFixed(1) }} 分
+            </el-tag>
+          </template>
+        </el-table-column>
+
         <el-table-column prop="industry" label="行业" width="120" />
 
         <el-table-column prop="close" label="当前价格" width="100" align="right">
@@ -317,10 +325,11 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button type="text" size="small" @click="analyzeSingle(row)">
-              分析
+            <el-button type="primary" size="small" plain @click="analyzeSingle(row)">
+              <el-icon><Cpu /></el-icon>
+              智能研判
             </el-button>
             <el-button type="text" size="small" @click="toggleFavorite(row)">
               <el-icon><Star /></el-icon>
@@ -361,7 +370,7 @@
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Refresh, TrendCharts, Download, Star, Connection, Warning } from '@element-plus/icons-vue'
+import { Search, Refresh, TrendCharts, Download, Star, Connection, Warning, Cpu } from '@element-plus/icons-vue'
 import type { StockInfo } from '@/types/analysis'
 import { screeningApi, type FieldConfigResponse } from '@/api/screening'
 import { favoritesApi } from '@/api/favorites'
@@ -605,6 +614,14 @@ const batchAnalyze = async () => {
 }
 
 
+const getScoreTagType = (score?: number) => {
+  if (score === undefined || score === null) return 'info'
+  if (score >= 80) return 'success'
+  if (score >= 65) return 'primary'
+  if (score >= 50) return 'warning'
+  return 'danger'
+}
+
 const analyzeSingle = (stock: StockInfo) => {
   const stockCode = stock.code || stock.symbol || ''
   if (!stockCode) return
@@ -612,6 +629,7 @@ const analyzeSingle = (stock: StockInfo) => {
     name: 'SingleAnalysis',
     query: {
       stock: stockCode,
+      name: stock.name || '',
       market: normalizeMarketForAnalysis((stock as any).market || filters.market)
     }
   })
