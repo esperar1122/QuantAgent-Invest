@@ -1,4 +1,4 @@
-﻿# QuantAgent-Invest
+# QuantAgent-Invest
 
 ### 基于大模型多智能体与量化因子融合的智能投研系统设计与实现
 
@@ -155,21 +155,29 @@ cp .env.example .env
 ```
 
 ### 3. 一键启动（Windows PowerShell）
-```powershell
-.\start_dev.ps1
-```
 
-### 4. 分步手动启动
-如需独立调试各端，可分别执行以下命令：
+- **启动后端 API（推荐，极简直出模式，端口 8000）**：
+  ```powershell
+  .\start_dev.ps1
+  ```
+  > 默认直接前台启动后端服务并开启热重载（`--reload`），彩色日志实时直显，按 `Ctrl+C` 即可安全秒级退出。
+
+- **启动前端开发服务器（Vite，端口 5173）**：
+  ```powershell
+  .\start_dev.ps1 frontend
+  ```
+
+- **启动分布式双进程模式（后端 API + 任务 Worker）**：
+  ```powershell
+  .\start_dev.ps1 -WithWorker
+  ```
+
+### 4. 分步手动启动（跨平台通用）
+如需在 Linux/macOS 或独立调试各端，可分别执行以下命令：
 
 **启动后端 API**：
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-**启动异步分析 Worker**：
-```bash
-python -m app.worker
 ```
 
 **启动前端界面**：
@@ -178,7 +186,7 @@ cd frontend
 npm install
 npm run dev
 ```
-启动成功后，浏览器访问 `http://localhost:5173` 即可进入系统。
+启动成功后，浏览器访问 `http://localhost:5173` 即可进入系统交互界面。
 
 ---
 
