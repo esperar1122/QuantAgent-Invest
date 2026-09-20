@@ -1,5 +1,5 @@
 """
-TradingAgents-CN Worker Service
+QuantAgent-Invest Worker Service
 FastAPI-based worker application with health check and queue consumer
 """
 
@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="TradingAgents Worker Service",
+    title="QuantAgent-Invest Worker Service",
     description="异步分析任务 Worker 服务",
     version="1.0.0",
     lifespan=lifespan
@@ -89,7 +89,7 @@ app = FastAPI(
 @app.get("/")
 async def root():
     return {
-        "service": "TradingAgents Worker",
+        "service": "QuantAgent-Invest Worker",
         "status": "running"
     }
 
@@ -102,7 +102,7 @@ async def health_check():
         status_code=200,
         content={
             "status": "healthy",
-            "service": "TradingAgents Worker",
+            "service": "QuantAgent-Invest Worker",
             "worker_id": worker_instance.worker_id if worker_instance else "standalone",
             "running": is_running,
             "has_task": bool(worker_instance and worker_instance.current_task)

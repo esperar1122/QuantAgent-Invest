@@ -1,5 +1,5 @@
 """
-TradingAgents-CN WebAPI Worker
+QuantAgent-Invest WebAPI Worker
 
 Consumes tasks from Redis queue and processes them using actual stock analysis.
 """

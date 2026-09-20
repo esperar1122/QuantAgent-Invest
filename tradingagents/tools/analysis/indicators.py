@@ -13,7 +13,7 @@ class IndicatorSpec:
     params: Optional[Dict[str, Any]] = None
 
 
-SUPPORTED = {"ma", "ema", "macd", "rsi", "boll", "atr", "kdj"}
+SUPPORTED = {"ma", "ema", "macd", "rsi", "boll", "atr", "kdj", "obv", "beta"}
 
 
 def _require_cols(df: pd.DataFrame, cols: Iterable[str]):
@@ -185,6 +185,33 @@ def kdj(high: pd.Series, low: pd.Series, close: pd.Series, n: int = 9, m1: int =
     return pd.DataFrame({"kdj_k": k, "kdj_d": d, "kdj_j": j})
 
 
+def obv(close: pd.Series, volume: pd.Series) -> pd.Series:
+    """
+    计算OBV能量潮指标（On-Balance Volume）
+    
+    规则：
+    - 若今日收盘价 > 昨日收盘价，OBV = 昨日OBV + 今日成交量
+    - 若今日收盘价 < 昨日收盘价，OBV = 昨日OBV - 今日成交量
+    - 若今日收盘价 == 昨日收盘价，OBV = 昨日OBV
+    """
+    diff = close.diff()
+    direction = pd.Series(np.where(diff > 0, 1.0, np.where(diff < 0, -1.0, 0.0)), index=close.index)
+    direction.iloc[0] = 0.0
+    return (direction * volume).cumsum()
+
+
+def beta(stock_close: pd.Series, market_close: pd.Series, n: int = 60) -> pd.Series:
+    """
+    计算Beta系数（衡量个股相对于大盘基准如沪深300的波动敏感度）
+    Beta = Cov(R_stock, R_market) / Var(R_market)
+    """
+    r_stock = stock_close.pct_change()
+    r_market = market_close.pct_change()
+    cov = r_stock.rolling(window=int(n), min_periods=max(5, int(n // 2))).cov(r_market)
+    var = r_market.rolling(window=int(n), min_periods=max(5, int(n // 2))).var()
+    return cov / var.replace(0, np.nan)
+
+
 def compute_indicator(df: pd.DataFrame, spec: IndicatorSpec) -> pd.DataFrame:
     name = spec.name.lower()
     params = spec.params or {}
@@ -241,6 +268,19 @@ def compute_indicator(df: pd.DataFrame, spec: IndicatorSpec) -> pd.DataFrame:
         kdj_df = kdj(df["high"], df["low"], df["close"], n=n, m1=m1, m2=m2)
         for c in kdj_df.columns:
             out[c] = kdj_df[c]
+        return out
+
+    if name == "obv":
+        _require_cols(df, ["close", "volume"])
+        out["obv"] = obv(df["close"], df["volume"])
+        return out
+
+    if name == "beta":
+        _require_cols(df, ["close"])
+        n = int(params.get("n", params.get("period", 60)))
+        market_close = params.get("market_close")
+        if market_close is not None and isinstance(market_close, pd.Series):
+            out[f"beta{n}"] = beta(df["close"], market_close, n=n)
         return out
 
     raise ValueError(f"不支持的指标: {name}")
@@ -348,6 +388,10 @@ def add_all_indicators(df: pd.DataFrame, close_col: str = 'close',
     df['boll_mid'] = boll_df['boll_mid']
     df['boll_upper'] = boll_df['boll_upper']
     df['boll_lower'] = boll_df['boll_lower']
+
+    # 计算OBV能量潮（当存在成交量时）
+    if 'volume' in df.columns:
+        df['obv'] = obv(df[close_col], df['volume'])
 
     return df
 

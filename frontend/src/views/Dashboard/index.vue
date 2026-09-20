@@ -4,11 +4,11 @@
     <div class="welcome-section">
       <div class="welcome-content">
         <h1 class="welcome-title">
-          欢迎使用 TradingAgents-CN
-          <span class="version-badge">v1.0.1</span>
+          欢迎使用 QuantAgent-Invest
+          <span class="version-badge">v1.0.0</span>
         </h1>
         <p class="welcome-subtitle">
-          现代化的多智能体股票分析学习平台，辅助你掌握更全面的市场视角分析股票
+          现代化的多智能体金融量化投研平台，多维度评估投资价值与市场风险
         </p>
       </div>
       <div class="welcome-actions">
@@ -16,36 +16,36 @@
           <el-icon><TrendCharts /></el-icon>
           快速分析
         </el-button>
-        <el-button size="large" @click="goToScreening">
-          <el-icon><Search /></el-icon>
-          股票筛选
+        <el-button size="large" @click="goToStockPool">
+          <el-icon><Collection /></el-icon>
+          A股股票池
         </el-button>
       </div>
     </div>
 
-
-    <!-- 学习中心推荐卡片 -->
-    <el-card class="learning-highlight-card">
-      <div class="learning-highlight">
-        <div class="learning-icon">
-          <el-icon size="48"><Reading /></el-icon>
+    <!-- A股全市场股票池推荐卡片 -->
+    <el-card class="stock-pool-highlight-card learning-highlight-card">
+      <div class="stock-pool-highlight learning-highlight">
+        <div class="stock-pool-icon learning-icon">
+          <el-icon size="48"><Collection /></el-icon>
         </div>
-        <div class="learning-content">
-          <h2>📚 AI股票分析学习中心</h2>
-          <p>从零开始学习AI、大语言模型和智能股票分析。了解多智能体系统如何协作分析股票，掌握提示词工程技巧，选择合适的大模型，理解AI的能力与局限性。</p>
-          <div class="learning-features">
-            <span class="feature-tag">🤖 AI基础知识</span>
-            <span class="feature-tag">✍️ 提示词工程</span>
-            <span class="feature-tag">🎯 模型选择</span>
-            <span class="feature-tag">📊 分析原理</span>
-            <span class="feature-tag">⚠️ 风险认知</span>
-            <span class="feature-tag">🎓 实战教程</span>
+        <div class="stock-pool-content learning-content">
+          <h2>🏛️ A股全市场股票池 (5,564 只在市活跃标的)</h2>
+          <p>全盘覆盖沪深主板、创业板、科创板与北交所上市公司全量基础档案、最新日频行情与多因子量化指标。支持多维量化高级筛选与一键多智能体投研研判。</p>
+          <div class="stock-pool-features learning-features">
+            <span class="feature-tag">📈 5,564 标的在市全量</span>
+            <span class="feature-tag">🏢 沪深主板 (3197)</span>
+            <span class="feature-tag">🚀 创业板 (1406)</span>
+            <span class="feature-tag">🔬 科创板 (617)</span>
+            <span class="feature-tag">🌟 北交所 (344)</span>
+            <span class="feature-tag">🎯 多维量化筛选</span>
+            <span class="feature-tag">🤖 一键智能研判</span>
           </div>
         </div>
-        <div class="learning-action">
-          <el-button type="primary" size="large" @click="goToLearning">
-            <el-icon><Reading /></el-icon>
-            开始学习
+        <div class="stock-pool-action learning-action">
+          <el-button type="primary" size="large" @click="goToStockPool">
+            <el-icon><Collection /></el-icon>
+            进入股票池
           </el-button>
         </div>
       </div>
@@ -79,13 +79,13 @@
               <el-icon class="action-arrow"><ArrowRight /></el-icon>
             </div>
 
-            <div class="action-item" @click="goToScreening">
+            <div class="action-item" @click="goToStockPool">
               <div class="action-icon">
-                <el-icon><Search /></el-icon>
+                <el-icon><Collection /></el-icon>
               </div>
               <div class="action-content">
-                <h3>股票筛选</h3>
-                <p>通过多维度条件筛选优质股票</p>
+                <h3>A股股票池</h3>
+                <p>全市场标的与多维量化筛选</p>
               </div>
               <el-icon class="action-arrow"><ArrowRight /></el-icon>
             </div>
@@ -143,31 +143,9 @@
             </el-button>
           </div>
         </el-card>
-
-        <!-- 市场快讯 -->
-        <el-card class="market-news-card" style="margin-top: 24px;">
-          <template #header>
-            <span>市场快讯</span>
-          </template>
-          <div v-if="marketNews.length > 0" class="news-list">
-            <div
-              v-for="news in marketNews"
-              :key="news.id"
-              class="news-item"
-              @click="openNewsUrl(news.url)"
-            >
-              <div class="news-title">{{ news.title }}</div>
-              <div class="news-time">{{ formatTime(news.time) }}</div>
-            </div>
-          </div>
-          <div v-else class="empty-state">
-            <el-icon class="empty-icon"><InfoFilled /></el-icon>
-            <p>暂无市场快讯</p>
-          </div>
-        </el-card>
       </el-col>
 
-      <!-- 右侧：自选股和快讯 -->
+      <!-- 右侧：自选股与数据源状态 -->
       <el-col :span="8">
         <!-- 我的自选股 -->
         <el-card class="favorites-card">
@@ -231,20 +209,17 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
   TrendCharts,
-  Search,
   Document,
   Files,
   List,
   ArrowRight,
-  InfoFilled,
-  Reading
+  Collection
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { AnalysisTask, AnalysisStatus } from '@/types/analysis'
 import MultiSourceSyncCard from '@/components/Dashboard/MultiSourceSyncCard.vue'
 import { favoritesApi } from '@/api/favorites'
 import { analysisApi } from '@/api/analysis'
-import { newsApi } from '@/api/news'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -263,12 +238,8 @@ const recentAnalyses = ref<AnalysisTask[]>([])
 // 自选股数据
 const favoriteStocks = ref<any[]>([])
 
-// 市场快讯数据
-const marketNews = ref<any[]>([])
-
-
-
 // 方法
+
 const quickAnalysis = () => {
   router.push('/analysis/single')
 }
@@ -281,8 +252,8 @@ const goToBatchAnalysis = () => {
   router.push('/analysis/batch')
 }
 
-const goToScreening = () => {
-  router.push('/screening')
+const goToStockPool = () => {
+  router.push('/stock-pool')
 }
 
 const goToQueue = () => {
@@ -291,10 +262,6 @@ const goToQueue = () => {
 
 const goToHistory = () => {
   router.push('/tasks?tab=completed')
-}
-
-const goToLearning = () => {
-  router.push('/learning')
 }
 
 const viewAnalysis = (analysis: AnalysisTask) => {
@@ -340,13 +307,6 @@ const downloadReport = async (analysis: AnalysisTask) => {
   }
 }
 
-const openNewsUrl = (url?: string) => {
-  if (url) {
-    window.open(url, '_blank')
-  } else {
-    ElMessage.info('该新闻暂无详情链接')
-  }
-}
 
 const getStatusType = (status: string | AnalysisStatus): 'success' | 'info' | 'warning' | 'danger' => {
   const statusMap: Record<string, 'success' | 'info' | 'warning' | 'danger'> = {
@@ -433,41 +393,12 @@ const loadRecentAnalyses = async () => {
   }
 }
 
-const loadMarketNews = async () => {
-  try {
-    // 先尝试获取最近 24 小时的新闻
-    let response = await newsApi.getLatestNews(undefined, 10, 24)
-
-    // 如果最近 24 小时没有新闻，则获取最新的 10 条（不限时间）
-    if (response.success && response.data && response.data.news.length === 0) {
-      console.log('最近 24 小时没有新闻，获取最新的 10 条新闻（不限时间）')
-      response = await newsApi.getLatestNews(undefined, 10, 24 * 365) // 回溯 1 年
-    }
-
-    if (response.success && response.data) {
-      marketNews.value = response.data.news.map((item: any) => ({
-        id: item.id || item.title,
-        title: item.title,
-        time: item.publish_time,
-        url: item.url,
-        source: item.source
-      }))
-    }
-  } catch (error) {
-    console.error('加载市场快讯失败:', error)
-    // 如果加载失败，显示提示信息
-    marketNews.value = []
-  }
-}
-
 // 生命周期
 onMounted(async () => {
   // 加载自选股数据
   await loadFavoriteStocks()
   // 加载最近分析
   await loadRecentAnalyses()
-  // 加载市场快讯
-  await loadMarketNews()
 })
 </script>
 
@@ -591,6 +522,21 @@ onMounted(async () => {
         cursor: pointer;
         transition: all 0.3s ease;
 
+        &.flagship {
+          border-color: rgba(37, 99, 235, 0.4);
+          background: linear-gradient(135deg, rgba(37, 99, 235, 0.06) 0%, rgba(37, 99, 235, 0.01) 100%);
+
+          .flagship-icon {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: #ffffff;
+          }
+
+          &:hover {
+            border-color: #2563eb;
+            background-color: rgba(37, 99, 235, 0.12);
+          }
+        }
+
         &:hover {
           border-color: var(--el-color-primary);
           background-color: var(--el-color-primary-light-9);
@@ -663,44 +609,6 @@ onMounted(async () => {
         font-weight: 600;
         color: var(--el-text-color-primary);
       }
-    }
-  }
-
-  .market-news-card {
-    .news-list {
-      .news-item {
-        padding: 12px 0;
-        cursor: pointer;
-        border-bottom: 1px solid var(--el-border-color-lighter);
-
-        &:last-child {
-          border-bottom: none;
-        }
-
-        &:hover {
-          background-color: var(--el-fill-color-lighter);
-          margin: 0 -16px;
-          padding: 12px 16px;
-          border-radius: 4px;
-        }
-
-        .news-title {
-          font-size: 14px;
-          color: var(--el-text-color-primary);
-          margin-bottom: 4px;
-          line-height: 1.4;
-        }
-
-        .news-time {
-          font-size: 12px;
-          color: var(--el-text-color-placeholder);
-        }
-      }
-    }
-
-    .news-footer {
-      text-align: center;
-      margin-top: 16px;
     }
   }
 

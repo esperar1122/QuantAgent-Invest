@@ -14,9 +14,9 @@ from .news.google_news import *
 
 from .news.chinese_finance import get_chinese_social_sentiment
 
-# 导入 Finnhub 工具（支持新旧路径）
-
-from .providers.us import get_data_in_range
+# Finnhub/美股工具已下线，提供空桩以防历史调用异常
+def get_data_in_range(*args, **kwargs):
+    return {}
 
 
 # 导入统一日志系统
@@ -27,89 +27,30 @@ from tradingagents.utils.logging_manager import get_logger
 logger = get_logger('agents')
 logger = setup_dataflow_logging()
 
-# 导入港股工具
-try:
-    from .providers.hk.hk_stock import get_hk_stock_data, get_hk_stock_info
-    HK_STOCK_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"⚠️ 港股工具不可用: {e}")
-    HK_STOCK_AVAILABLE = False
+# 港股提供器已下线（系统纯化为A股量化体系）
+HK_STOCK_AVAILABLE = False
+AKSHARE_HK_AVAILABLE = False
 
-# 导入AKShare港股工具
-# 注意：港股功能在 providers/hk/ 目录中
-try:
-    from .providers.hk.improved_hk import get_hk_stock_data_akshare, get_hk_stock_info_akshare
-    AKSHARE_HK_AVAILABLE = True
-except (ImportError, AttributeError) as e:
-    logger.warning(f"⚠️ AKShare港股工具不可用: {e}")
-    AKSHARE_HK_AVAILABLE = False
-    # 定义占位函数
-    def get_hk_stock_data_akshare(*args, **kwargs):
-        return None
-    def get_hk_stock_info_akshare(*args, **kwargs):
-        return None
+def get_hk_stock_data(*args, **kwargs):
+    return None
+
+def get_hk_stock_info(*args, **kwargs):
+    return None
+
+def get_hk_stock_data_akshare(*args, **kwargs):
+    return None
+
+def get_hk_stock_info_akshare(*args, **kwargs):
+    return None
 
 
 # ==================== 数据源配置读取 ====================
 
 def _get_enabled_hk_data_sources() -> list:
-    """
-    从数据库读取用户启用的港股数据源配置
+    """港股数据源已下线，返回空列表"""
+    return []
 
-    Returns:
-        list: 按优先级排序的数据源列表，如 ['akshare', 'yfinance']
-    """
-    try:
-        # 尝试从数据库读取配置
-        from app.core.database import get_mongo_db_sync
-        db = get_mongo_db_sync()
 
-        # 获取最新的激活配置
-        config_data = db.system_configs.find_one(
-            {"is_active": True},
-            sort=[("version", -1)]
-        )
-
-        if config_data and config_data.get('data_source_configs'):
-            data_source_configs = config_data.get('data_source_configs', [])
-
-            # 过滤出启用的港股数据源
-            enabled_sources = []
-            for ds in data_source_configs:
-                if not ds.get('enabled', True):
-                    continue
-
-                # 检查是否支持港股市场（支持中英文标识）
-                market_categories = ds.get('market_categories', [])
-                if market_categories:
-                    # 支持 '港股' 或 'hk_stocks'
-                    if '港股' not in market_categories and 'hk_stocks' not in market_categories:
-                        continue
-
-                # 映射数据源类型
-                ds_type = ds.get('type', '').lower()
-                if ds_type in ['akshare', 'yfinance', 'finnhub']:
-                    enabled_sources.append({
-                        'type': ds_type,
-                        'priority': ds.get('priority', 0)
-                    })
-
-            # 按优先级排序（数字越大优先级越高）
-            enabled_sources.sort(key=lambda x: x['priority'], reverse=True)
-
-            result = [s['type'] for s in enabled_sources]
-            if result:
-                logger.info(f"✅ [港股数据源] 从数据库读取: {result}")
-                return result
-            else:
-                logger.warning(f"⚠️ [港股数据源] 数据库中没有启用的港股数据源，使用默认顺序")
-        else:
-            logger.warning("⚠️ [港股数据源] 数据库中没有配置，使用默认顺序")
-    except Exception as e:
-        logger.warning(f"⚠️ [港股数据源] 从数据库读取失败: {e}，使用默认顺序")
-
-    # 回退到默认顺序
-    return ['akshare', 'yfinance']
 
 
 def _get_enabled_us_data_sources() -> list:
@@ -171,13 +112,8 @@ def _get_enabled_us_data_sources() -> list:
     # 回退到默认顺序
     return ['yfinance', 'finnhub']
 
-# 尝试导入yfinance相关模块，如果失败则跳过
-try:
-    from .providers.us.yfinance import *
-    YFIN_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"⚠️ yfinance工具不可用: {e}")
-    YFIN_AVAILABLE = False
+# 美股/yfinance 提供器已下线
+YFIN_AVAILABLE = False
 
 try:
     from .technical.stockstats import *
@@ -1251,23 +1187,8 @@ def _get_fundamentals_alpha_vantage(ticker, curr_date, cache):
     Returns:
         str: 基本面数据报告，失败返回 None
     """
-    try:
-        logger.info(f"📊 [Alpha Vantage] 获取 {ticker} 的基本面数据...")
-        from .providers.us.alpha_vantage_fundamentals import get_fundamentals as get_av_fundamentals
-
-        result = get_av_fundamentals(ticker, curr_date)
-
-        if result and "Error" not in result and len(result) > 100:
-            # 保存到缓存
-            cache.save_fundamentals_data(ticker, result, data_source="alpha_vantage")
-            logger.info(f"✅ [Alpha Vantage] 基本面数据获取成功: {ticker}")
-            return result
-        else:
-            logger.warning(f"⚠️ [Alpha Vantage] 数据质量不佳")
-            return None
-    except Exception as e:
-        logger.warning(f"⚠️ [Alpha Vantage] 获取失败: {e}")
-        return None
+    logger.info(f"📊 [Alpha Vantage] 美股数据源已下线，无法获取 {ticker} 基本面数据")
+    return None
 
 
 def _get_fundamentals_yfinance(ticker, curr_date, cache):
@@ -1743,172 +1664,22 @@ def get_current_china_data_source() -> str:
         return f"❌ 获取数据源信息失败: {e}"
 
 
-# ==================== 港股数据接口 ====================
+
+# ==================== 港股数据接口（已下线） ====================
 
 def get_hk_stock_data_unified(symbol: str, start_date: str = None, end_date: str = None) -> str:
-    """
-    获取港股数据的统一接口（根据用户配置选择数据源）
-
-    Args:
-        symbol: 港股代码 (如: 0700.HK)
-        start_date: 开始日期 (YYYY-MM-DD)
-        end_date: 结束日期 (YYYY-MM-DD)
-
-    Returns:
-        str: 格式化的港股数据
-    """
-    try:
-        logger.info(f"🇭🇰 获取港股数据: {symbol}")
-
-        # 🔧 智能日期范围处理：自动扩展到配置的回溯天数，处理周末/节假日
-        from tradingagents.utils.dataflow_utils import get_trading_date_range
-        from app.core.config import get_settings
-
-        original_start_date = start_date
-        original_end_date = end_date
-
-        # 从配置获取市场分析回溯天数（默认60天）
-        try:
-            settings = get_settings()
-            lookback_days = settings.MARKET_ANALYST_LOOKBACK_DAYS
-            logger.info(f"📅 [港股配置验证] MARKET_ANALYST_LOOKBACK_DAYS: {lookback_days}天")
-        except Exception as e:
-            lookback_days = 60  # 默认60天
-            logger.warning(f"⚠️ [港股配置验证] 无法获取配置，使用默认值: {lookback_days}天")
-            logger.warning(f"⚠️ [港股配置验证] 错误详情: {e}")
-
-        # 使用 end_date 作为目标日期，向前回溯指定天数
-        start_date, end_date = get_trading_date_range(end_date, lookback_days=lookback_days)
-
-        logger.info(f"📅 [港股智能日期] 原始输入: {original_start_date} 至 {original_end_date}")
-        logger.info(f"📅 [港股智能日期] 回溯天数: {lookback_days}天")
-        logger.info(f"📅 [港股智能日期] 计算结果: {start_date} 至 {end_date}")
-        logger.info(f"📅 [港股智能日期] 实际天数: {(datetime.strptime(end_date, '%Y-%m-%d') - datetime.strptime(start_date, '%Y-%m-%d')).days}天")
-
-        # 🔥 从数据库读取用户启用的数据源配置
-        enabled_sources = _get_enabled_hk_data_sources()
-
-        # 按优先级尝试各个数据源
-        for source in enabled_sources:
-            if source == 'akshare' and AKSHARE_HK_AVAILABLE:
-                try:
-                    logger.info(f"🔄 使用AKShare获取港股数据: {symbol}")
-                    result = get_hk_stock_data_akshare(symbol, start_date, end_date)
-                    if result and "❌" not in result:
-                        logger.info(f"✅ AKShare港股数据获取成功: {symbol}")
-                        return result
-                    else:
-                        logger.warning(f"⚠️ AKShare返回错误结果，尝试下一个数据源")
-                except Exception as e:
-                    logger.error(f"⚠️ AKShare港股数据获取失败: {e}，尝试下一个数据源")
-
-            elif source == 'yfinance' and HK_STOCK_AVAILABLE:
-                try:
-                    logger.info(f"🔄 使用Yahoo Finance获取港股数据: {symbol}")
-                    result = get_hk_stock_data(symbol, start_date, end_date)
-                    if result and "❌" not in result:
-                        logger.info(f"✅ Yahoo Finance港股数据获取成功: {symbol}")
-                        return result
-                    else:
-                        logger.warning(f"⚠️ Yahoo Finance返回错误结果，尝试下一个数据源")
-                except Exception as e:
-                    logger.error(f"⚠️ Yahoo Finance港股数据获取失败: {e}，尝试下一个数据源")
-
-            elif source == 'finnhub':
-                try:
-                    # 导入美股数据提供器（支持新旧路径）
-                    try:
-                        from .providers.us import OptimizedUSDataProvider
-                        provider = OptimizedUSDataProvider()
-                        get_us_stock_data_cached = provider.get_stock_data
-                    except ImportError:
-                        from tradingagents.dataflows.providers.us.optimized import get_us_stock_data_cached
-
-                    logger.info(f"🔄 使用FINNHUB获取港股数据: {symbol}")
-                    result = get_us_stock_data_cached(symbol, start_date, end_date)
-                    if result and "❌" not in result:
-                        logger.info(f"✅ FINNHUB港股数据获取成功: {symbol}")
-                        return result
-                    else:
-                        logger.warning(f"⚠️ FINNHUB返回错误结果，尝试下一个数据源")
-                except Exception as e:
-                    logger.error(f"⚠️ FINNHUB港股数据获取失败: {e}，尝试下一个数据源")
-
-        # 所有数据源都失败
-        error_msg = f"❌ 无法获取港股{symbol}数据 - 所有启用的数据源都不可用"
-        logger.error(error_msg)
-        return error_msg
-
-    except Exception as e:
-        logger.error(f"❌ 获取港股数据失败: {e}")
-        return f"❌ 获取港股{symbol}数据失败: {e}"
+    """港股数据接口已下线（系统纯化为A股量化体系）"""
+    return f"❌ 当前系统已纯化为A股量化系统，不支持港股标的: {symbol}，请输入A股代码（如 600519, 000001）"
 
 
 def get_hk_stock_info_unified(symbol: str) -> Dict:
-    """
-    获取港股信息的统一接口（根据用户配置选择数据源）
-
-    Args:
-        symbol: 港股代码
-
-    Returns:
-        Dict: 港股信息
-    """
-    try:
-        # 🔥 从数据库读取用户启用的数据源配置
-        enabled_sources = _get_enabled_hk_data_sources()
-
-        # 按优先级尝试各个数据源
-        for source in enabled_sources:
-            if source == 'akshare' and AKSHARE_HK_AVAILABLE:
-                try:
-                    logger.info(f"🔄 使用AKShare获取港股信息: {symbol}")
-                    result = get_hk_stock_info_akshare(symbol)
-                    if result and 'error' not in result and not result.get('name', '').startswith('港股'):
-                        logger.info(f"✅ AKShare成功获取港股信息: {symbol} -> {result.get('name', 'N/A')}")
-                        return result
-                    else:
-                        logger.warning(f"⚠️ AKShare返回默认信息，尝试下一个数据源")
-                except Exception as e:
-                    logger.error(f"⚠️ AKShare港股信息获取失败: {e}，尝试下一个数据源")
-
-            elif source == 'yfinance' and HK_STOCK_AVAILABLE:
-                try:
-                    logger.info(f"🔄 使用Yahoo Finance获取港股信息: {symbol}")
-                    result = get_hk_stock_info(symbol)
-                    if result and 'error' not in result and not result.get('name', '').startswith('港股'):
-                        logger.info(f"✅ Yahoo Finance成功获取港股信息: {symbol} -> {result.get('name', 'N/A')}")
-                        return result
-                    else:
-                        logger.warning(f"⚠️ Yahoo Finance返回默认信息，尝试下一个数据源")
-                except Exception as e:
-                    logger.error(f"⚠️ Yahoo Finance港股信息获取失败: {e}，尝试下一个数据源")
-
-        # 所有数据源都失败，返回基本信息
-        logger.warning(f"⚠️ 所有启用的数据源都失败，使用默认信息: {symbol}")
-        return {
-            'symbol': symbol,
-            'name': f'港股{symbol}',
-            'currency': 'HKD',
-            'exchange': 'HKG',
-            'source': 'fallback'
-        }
-
-    except Exception as e:
-        logger.error(f"❌ 获取港股信息失败: {e}")
-        return {
-            'symbol': symbol,
-            'name': f'港股{symbol}',
-            'currency': 'HKD',
-            'exchange': 'HKG',
-            'source': 'error',
-            'error': str(e)
-        }
+    """港股信息接口已下线（系统纯化为A股量化体系）"""
+    return {'symbol': symbol, 'error': '港股模块已下线，系统当前专注于中国A股市场'}
 
 
 def get_stock_data_by_market(symbol: str, start_date: str = None, end_date: str = None) -> str:
     """
-    根据股票市场类型自动选择数据源获取数据
+    根据股票市场类型自动选择数据源获取数据（当前仅支持A股）
 
     Args:
         symbol: 股票代码
@@ -1926,20 +1697,10 @@ def get_stock_data_by_market(symbol: str, start_date: str = None, end_date: str 
         if market_info['is_china']:
             # 中国A股
             return get_china_stock_data_unified(symbol, start_date, end_date)
-        elif market_info['is_hk']:
-            # 港股
-            return get_hk_stock_data_unified(symbol, start_date, end_date)
         else:
-            # 美股或其他
-            # 导入美股数据提供器（支持新旧路径）
-            try:
-                from .providers.us import OptimizedUSDataProvider
-                provider = OptimizedUSDataProvider()
-                return provider.get_stock_data(symbol, start_date, end_date)
-            except ImportError:
-                from tradingagents.dataflows.providers.us.optimized import get_us_stock_data_cached
-                return get_us_stock_data_cached(symbol, start_date, end_date)
+            return f"❌ 当前系统已纯化为A股量化系统，不支持港股或海外标的: {symbol}，请输入A股代码（如 600519, 000001）"
 
     except Exception as e:
         logger.error(f"❌ 获取股票数据失败: {e}")
         return f"❌ 获取股票{symbol}数据失败: {e}"
+

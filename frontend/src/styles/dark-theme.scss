@@ -1,722 +1,689 @@
 /**
- * 暗色主题优化样式
- * 修复暗色模式下按钮和文本对比度不足的问题
+ * QuantAgent-Invest 专业金融深色主题系统 (Slate/Zinc Dark Theme)
+ * 采用高质感深空灰蓝体系，深度适配 Element-Plus 与全站量化界面
  */
 
-// 暗色主题下的全局样式优化
 html.dark {
-  // 全局背景设为纯黑
-  background-color: #000000 !important;
+  // 1. Element-Plus 核心背景与文字体系覆盖
+  --el-bg-color-page: #090d16;
+  --el-bg-color: #111827;
+  --el-bg-color-overlay: #182234;
 
-  // 优化标题文字
-  h1, h2, h3, h4, h5, h6 {
-    color: #ffffff !important;
-    font-weight: 600 !important;
-  }
+  --el-text-color-primary: #f1f5f9;
+  --el-text-color-regular: #cbd5e1;
+  --el-text-color-secondary: #94a3b8;
+  --el-text-color-placeholder: #64748b;
 
-  h1 {
-    font-size: 28px !important;
-  }
+  --el-border-color: #1e293b;
+  --el-border-color-light: #243147;
+  --el-border-color-lighter: #2d3c59;
+  --el-border-color-extra-light: #374668;
 
-  h2 {
-    font-size: 24px !important;
-  }
+  --el-fill-color-blank: #111827;
+  --el-fill-color: #182234;
+  --el-fill-color-light: #162032;
+  --el-fill-color-lighter: #1e293b;
+  --el-fill-color-extra-light: #253348;
+  --el-fill-color-dark: #101726;
 
-  h3 {
-    font-size: 20px !important;
-  }
+  --el-mask-color: rgba(9, 13, 22, 0.75);
 
-  h4 {
-    font-size: 18px !important;
-  }
+  background-color: var(--el-bg-color-page);
+  color: var(--el-text-color-primary);
 
-  // 优化卡片标题
-  .el-card__header {
-    h1, h2, h3, h4, h5, h6 {
-      color: #ffffff !important;
-      font-weight: 600 !important;
+  // 2. 滚动条暗色适配
+  ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.25);
+    &:hover {
+      background: rgba(148, 163, 184, 0.45);
     }
   }
 
-  // 优化页面标题
+  // 3. 标题与页面主标题适配
+  h1, h2, h3, h4, h5, h6,
   .page-title,
   .section-title,
   .card-title {
-    color: #ffffff !important;
-    font-weight: 600 !important;
-  }
-  
-  // 优化按钮样式
-  .el-button {
-    // 主要按钮
-    &.el-button--primary {
-      --el-button-text-color: #ffffff;
-      --el-button-bg-color: var(--el-color-primary);
-      --el-button-border-color: var(--el-color-primary);
-      --el-button-hover-text-color: #ffffff;
-      --el-button-hover-bg-color: var(--el-color-primary-light-3);
-      --el-button-hover-border-color: var(--el-color-primary-light-3);
-      --el-button-active-text-color: #ffffff;
-      --el-button-active-bg-color: var(--el-color-primary-dark-2);
-      --el-button-active-border-color: var(--el-color-primary-dark-2);
-      
-      color: #ffffff !important;
-      
-      &:hover {
-        color: #ffffff !important;
-      }
-      
-      &:active {
-        color: #ffffff !important;
-      }
-    }
-    
-    // 成功按钮
-    &.el-button--success {
-      --el-button-text-color: #ffffff;
-      color: #ffffff !important;
-      
-      &:hover,
-      &:active {
-        color: #ffffff !important;
-      }
-    }
-    
-    // 警告按钮
-    &.el-button--warning {
-      --el-button-text-color: #ffffff;
-      color: #ffffff !important;
-      
-      &:hover,
-      &:active {
-        color: #ffffff !important;
-      }
-    }
-    
-    // 危险按钮
-    &.el-button--danger {
-      --el-button-text-color: #ffffff;
-      color: #ffffff !important;
-      
-      &:hover,
-      &:active {
-        color: #ffffff !important;
-      }
-    }
-    
-    // 信息按钮
-    &.el-button--info {
-      --el-button-text-color: #ffffff;
-      color: #ffffff !important;
-      
-      &:hover,
-      &:active {
-        color: #ffffff !important;
-      }
-    }
-    
-    // 默认按钮（白色背景）
-    &.el-button--default {
-      --el-button-text-color: var(--el-text-color-primary);
-      --el-button-bg-color: var(--el-fill-color-blank);
-      --el-button-border-color: var(--el-border-color);
-      
-      color: var(--el-text-color-primary) !important;
-      
-      &:hover {
-        color: var(--el-color-primary) !important;
-      }
-    }
-    
-    // 文本按钮
-    &.el-button--text {
-      --el-button-text-color: var(--el-text-color-primary);
-      color: var(--el-text-color-primary) !important;
-      
-      &:hover {
-        color: var(--el-color-primary) !important;
-      }
-    }
-  }
-  
-  // 优化单选按钮组
-  .el-radio-group {
-    .el-radio {
-      --el-radio-text-color: var(--el-text-color-primary);
-      
-      .el-radio__label {
-        color: var(--el-text-color-primary) !important;
-      }
-      
-      &.is-checked {
-        .el-radio__label {
-          color: var(--el-color-primary) !important;
-        }
-      }
-    }
-    
-    // 按钮样式的单选框
-    .el-radio-button {
-      .el-radio-button__inner {
-        color: var(--el-text-color-primary) !important;
-        background-color: var(--el-fill-color-blank);
-        border-color: var(--el-border-color);
-      }
-      
-      &.is-active {
-        .el-radio-button__inner {
-          color: #ffffff !important;
-          background-color: var(--el-color-primary);
-          border-color: var(--el-color-primary);
-        }
-      }
-      
-      &:hover {
-        .el-radio-button__inner {
-          color: var(--el-color-primary) !important;
-        }
-      }
-    }
-  }
-  
-  // 优化复选框
-  .el-checkbox {
-    --el-checkbox-text-color: var(--el-text-color-primary);
-    
-    .el-checkbox__label {
-      color: var(--el-text-color-primary) !important;
-    }
-    
-    &.is-checked {
-      .el-checkbox__label {
-        color: var(--el-color-primary) !important;
-      }
-    }
-  }
-  
-  // 优化表单标签
-  .el-form-item__label {
     color: var(--el-text-color-primary) !important;
   }
-  
-  // 优化卡片
+
+  // 4. 卡片暗色优化
   .el-card {
-    --el-card-bg-color: var(--el-bg-color);
     background-color: var(--el-bg-color);
-    border-color: var(--el-border-color-light);
+    border-color: var(--el-border-color-lighter);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 
     .el-card__header {
       background-color: var(--el-bg-color);
       border-bottom-color: var(--el-border-color-light);
-      color: #ffffff !important;
-      font-weight: 600;
-
-      // 卡片标题
-      h1, h2, h3, h4, h5, h6,
-      .card-title,
-      .el-card__title {
-        color: #ffffff !important;
-        font-weight: 600 !important;
-      }
-    }
-
-    .el-card__body {
-      color: var(--el-text-color-primary);
     }
   }
-  
-  // 优化菜单
+
+  // 5. 侧边栏与菜单暗色优化
   .el-menu {
     background-color: var(--el-bg-color);
     border-color: var(--el-border-color-light);
-    
+
     .el-menu-item,
     .el-sub-menu__title {
-      color: var(--el-text-color-primary) !important;
-      
+      color: var(--el-text-color-regular);
+
       &:hover {
         background-color: var(--el-fill-color-light);
-        color: var(--el-color-primary) !important;
+        color: #60a5fa;
       }
-      
+
       &.is-active {
-        color: var(--el-color-primary) !important;
-        background-color: var(--el-color-primary-light-9);
+        color: #ffffff !important;
+        background: linear-gradient(90deg, rgba(37, 99, 235, 0.3) 0%, rgba(37, 99, 235, 0.08) 100%) !important;
       }
     }
   }
-  
-  // 优化输入框
-  .el-input {
-    .el-input__wrapper {
-      background-color: var(--el-fill-color-blank);
-      box-shadow: 0 0 0 1px var(--el-border-color) inset;
-      
-      .el-input__inner {
-        color: var(--el-text-color-primary);
-        
-        &::placeholder {
-          color: var(--el-text-color-placeholder);
-        }
-      }
-    }
-    
-    &.is-disabled {
-      .el-input__wrapper {
-        background-color: var(--el-fill-color-light);
-        
-        .el-input__inner {
-          color: var(--el-text-color-placeholder);
-        }
-      }
-    }
-  }
-  
-  // 优化选择器
-  .el-select {
-    .el-input__wrapper {
-      background-color: var(--el-fill-color-blank);
-    }
-  }
-  
-  // 优化下拉菜单
-  .el-dropdown-menu {
-    background-color: var(--el-bg-color-overlay);
-    border-color: var(--el-border-color-light);
-    
-    .el-dropdown-menu__item {
-      color: var(--el-text-color-primary);
-      
-      &:hover {
-        background-color: var(--el-fill-color-light);
-        color: var(--el-color-primary);
-      }
-    }
-  }
-  
-  // 优化表格
+
+  // 6. 表格暗色高对比度优化
   .el-table {
     --el-table-bg-color: var(--el-bg-color);
     --el-table-tr-bg-color: var(--el-bg-color);
-    --el-table-header-bg-color: var(--el-fill-color-light);
+    --el-table-header-bg-color: #141c2c;
     --el-table-text-color: var(--el-text-color-primary);
     --el-table-header-text-color: var(--el-text-color-primary);
-    --el-table-border-color: var(--el-border-color-lighter);
-    
+    --el-table-border-color: var(--el-border-color-light);
+    --el-table-row-hover-bg-color: #182338;
+
     background-color: var(--el-bg-color);
-    
+
     th.el-table__cell {
-      background-color: var(--el-fill-color-light);
-      color: var(--el-text-color-primary);
-    }
-    
-    td.el-table__cell {
-      color: var(--el-text-color-primary);
-    }
-  }
-  
-  // 优化标签页
-  .el-tabs {
-    .el-tabs__item {
-      color: var(--el-text-color-regular);
-      
-      &:hover {
-        color: var(--el-color-primary);
-      }
-      
-      &.is-active {
-        color: var(--el-color-primary);
-      }
-    }
-  }
-  
-  // 优化滑块
-  .el-slider {
-    .el-slider__runway {
-      background-color: var(--el-border-color-lighter);
-    }
-    
-    .el-slider__bar {
-      background-color: var(--el-color-primary);
-    }
-  }
-  
-  // 优化开关
-  .el-switch {
-    &.is-checked {
-      .el-switch__core {
-        background-color: var(--el-color-primary);
-      }
-    }
-  }
-  
-  // 优化对话框
-  .el-dialog {
-    background-color: var(--el-bg-color);
-    border: 1px solid var(--el-border-color-light);
-
-    .el-dialog__header {
-      .el-dialog__title {
-        color: #ffffff !important;
-        font-weight: 600 !important;
-        font-size: 18px !important;
-      }
-    }
-
-    .el-dialog__body {
-      color: var(--el-text-color-primary);
-
-      h1, h2, h3, h4, h5, h6 {
-        color: #ffffff !important;
-        font-weight: 600 !important;
-      }
-    }
-  }
-  
-  // 优化抽屉
-  .el-drawer {
-    background-color: var(--el-bg-color);
-
-    .el-drawer__header {
-      color: #ffffff !important;
-      font-weight: 600 !important;
-      font-size: 18px !important;
-
-      .el-drawer__title {
-        color: #ffffff !important;
-        font-weight: 600 !important;
-      }
-    }
-
-    .el-drawer__body {
-      color: var(--el-text-color-primary);
-
-      h1, h2, h3, h4, h5, h6 {
-        color: #ffffff !important;
-        font-weight: 600 !important;
-      }
-    }
-  }
-
-  // 优化描述列表
-  .el-descriptions {
-    .el-descriptions__header {
-      .el-descriptions__title {
-        color: #ffffff !important;
-        font-weight: 600 !important;
-      }
-    }
-
-    .el-descriptions__label {
-      color: var(--el-text-color-regular) !important;
-    }
-
-    .el-descriptions__content {
-      color: var(--el-text-color-primary) !important;
-    }
-  }
-
-  // 优化折叠面板
-  .el-collapse {
-    border-color: var(--el-border-color-light);
-
-    .el-collapse-item__header {
-      color: #ffffff !important;
-      font-weight: 600 !important;
-      background-color: var(--el-fill-color-light);
+      background-color: #141c2c;
+      color: #f1f5f9;
       border-bottom-color: var(--el-border-color-light);
     }
 
-    .el-collapse-item__content {
-      color: var(--el-text-color-primary);
+    td.el-table__cell {
+      border-bottom-color: var(--el-border-color-light);
     }
   }
 
-  // 优化步骤条
-  .el-steps {
-    .el-step__title {
+  // 7. 输入框与下拉框暗色优化
+  .el-input__wrapper,
+  .el-select .el-input__wrapper {
+    background-color: #151d2d !important;
+    box-shadow: 0 0 0 1px var(--el-border-color-lighter) inset !important;
+
+    .el-input__inner {
       color: var(--el-text-color-primary) !important;
 
-      &.is-process,
-      &.is-finish {
-        color: var(--el-color-primary) !important;
-        font-weight: 600 !important;
+      &::placeholder {
+        color: var(--el-text-color-placeholder) !important;
       }
     }
 
-    .el-step__description {
-      color: var(--el-text-color-regular) !important;
+    &.is-focus {
+      box-shadow: 0 0 0 1px #3b82f6 inset, 0 0 0 3px rgba(59, 130, 246, 0.25) !important;
     }
   }
 
-  // 优化时间线
-  .el-timeline {
-    .el-timeline-item__timestamp {
-      color: var(--el-text-color-secondary) !important;
-    }
+  // 8. 弹窗与抽屉暗色优化
+  .el-dialog {
+    background-color: #111827;
+    border: 1px solid var(--el-border-color-lighter);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 
-    .el-timeline-item__title {
-      color: #ffffff !important;
-      font-weight: 600 !important;
-    }
+    .el-dialog__header {
+      background-color: #141c2c;
+      border-bottom-color: var(--el-border-color-light);
 
-    .el-timeline-item__content {
-      color: var(--el-text-color-primary) !important;
-    }
-  }
-
-  // 优化结果组件
-  .el-result {
-    .el-result__title {
-      color: #ffffff !important;
-      font-weight: 600 !important;
-    }
-
-    .el-result__subtitle {
-      color: var(--el-text-color-regular) !important;
-    }
-  }
-
-  // 优化空状态
-  .el-empty {
-    .el-empty__description {
-      color: var(--el-text-color-regular) !important;
-    }
-  }
-
-  // 优化分析页面标题
-  .analysis-page {
-    .title-section {
-      .page-title {
-        color: #ffffff !important;
-      }
-
-      .page-description {
-        color: var(--el-text-color-regular) !important;
+      .el-dialog__title {
+        color: #f1f5f9;
+        font-weight: 600;
       }
     }
 
-    .analysis-container {
-      .form-section {
-        .section-title {
-          color: #ffffff !important;
-          border-bottom-color: var(--el-border-color) !important;
+    .el-dialog__footer {
+      border-top-color: var(--el-border-color-light);
+    }
+  }
+
+  .el-drawer {
+    background-color: #111827;
+
+    .el-drawer__header {
+      border-bottom: 1px solid var(--el-border-color-light);
+      margin-bottom: 0;
+      padding: 16px 20px;
+      color: #f1f5f9;
+    }
+  }
+
+  // 9. 磨砂玻璃暗色
+  .glass-panel {
+    background: rgba(17, 24, 39, 0.85);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  // 10. 标签页与单选按钮暗色
+  .el-radio-button__inner {
+    background-color: #151d2d;
+    border-color: var(--el-border-color-light);
+    color: var(--el-text-color-regular);
+  }
+
+  .el-radio-button.is-active .el-radio-button__inner {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+    color: #ffffff !important;
+  }
+
+  // 11. A股 AI 智能投研终端 (Terminal) 专属深色金融终端体系
+  .terminal-layout {
+    background-color: #090d16 !important;
+  }
+
+  .terminal-main-workspace {
+    background-color: #090d16 !important;
+  }
+
+  .terminal-top-bar {
+    background-color: #111827 !important;
+    border-bottom: 1px solid #1e293b !important;
+
+    .brand-badge {
+      background-color: rgba(37, 99, 235, 0.2) !important;
+      border-color: rgba(59, 130, 246, 0.4) !important;
+      color: #60a5fa !important;
+    }
+
+    .brand-text {
+      .brand-title { color: #f1f5f9 !important; }
+      .brand-sub { color: #94a3b8 !important; }
+    }
+
+    .index-ticker-strip {
+      .index-item {
+        .index-name { color: #94a3b8 !important; }
+        &.up .index-change {
+          background-color: rgba(217, 45, 32, 0.15) !important;
+          color: #f97066 !important;
+        }
+        &.down .index-change {
+          background-color: rgba(3, 152, 85, 0.15) !important;
+          color: #32d583 !important;
         }
       }
+    }
 
-      .step-title {
-        color: #ffffff !important;
-      }
+    .market-status-pill {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      .status-text { color: #f1f5f9 !important; }
+      .live-clock { color: #94a3b8 !important; border-left-color: #243147 !important; }
+    }
 
-      .step-description {
-        color: var(--el-text-color-regular) !important;
-      }
+    .top-bar-divider {
+      background-color: #243147 !important;
+    }
 
-      .report-title,
-      .report-name {
-        color: #ffffff !important;
-      }
-
-      .report-description {
-        color: var(--el-text-color-regular) !important;
+    .top-actions .top-action-btn {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      color: #94a3b8 !important;
+      &:hover {
+        background-color: #1e293b !important;
+        color: #60a5fa !important;
+        border-color: #3b82f6 !important;
       }
     }
   }
 
-  // 优化设置页面标题
-  .settings-page {
-    .page-title {
-      color: #ffffff !important;
-    }
+  .terminal-sidebar {
+    background-color: #111827 !important;
+    border-right: 1px solid #1e293b !important;
 
-    .page-description {
-      color: var(--el-text-color-regular) !important;
-    }
-  }
-
-  // 优化仪表盘页面标题
-  .dashboard-page {
-    .page-title {
-      color: #ffffff !important;
-    }
-
-    .section-title {
-      color: #ffffff !important;
-    }
-  }
-
-  // 优化通用页面标题样式
-  .page-container,
-  .view-container {
-    .page-title,
-    .section-title,
-    .card-title {
-      color: #ffffff !important;
-      font-weight: 600 !important;
-    }
-
-    .page-description,
-    .section-description {
-      color: var(--el-text-color-regular) !important;
-    }
-  }
-
-  // 优化所有硬编码的深色文字
-  .title-section,
-  .header-section,
-  .content-header {
-    .page-title,
-    .section-title,
-    h1, h2, h3, h4, h5, h6 {
-      color: #ffffff !important;
-    }
-  }
-
-  // 优化关于页面的白色卡片内的文字
-  .about {
-    .feature-card,
-    .tech-category,
-    .framework-info,
-    .contact-card {
-      h3, h4 {
-        color: #ffffff !important;
-      }
-
-      .tech-name,
-      .name,
-      p {
-        color: #ffffff !important;
-      }
-
-      .tech-desc,
-      .contact-desc {
-        color: var(--el-text-color-regular) !important;
+    .nav-group {
+      .group-title { color: #64748b !important; }
+      .nav-item {
+        color: #cbd5e1 !important;
+        .nav-icon { color: #94a3b8 !important; }
+        &:hover {
+          background-color: #182234 !important;
+          color: #60a5fa !important;
+          .nav-icon { color: #60a5fa !important; }
+        }
+        &.active {
+          background: linear-gradient(90deg, rgba(37, 99, 235, 0.25) 0%, rgba(37, 99, 235, 0.06) 100%) !important;
+          color: #60a5fa !important;
+          .nav-icon { color: #60a5fa !important; }
+        }
       }
     }
 
-    // 优化 Hero 区域的按钮
-    .hero-section {
-      .hero-actions {
-        .el-button {
-          &.el-button--primary {
-            background: white !important;
-            color: #667eea !important;
-            border: none !important;
+    .sidebar-footer {
+      border-top-color: #1e293b !important;
+      .exit-item {
+        background-color: #182234 !important;
+        border-color: #243147 !important;
+        color: #cbd5e1 !important;
+        &:hover {
+          background-color: #1e293b !important;
+          color: #60a5fa !important;
+        }
+      }
+      .demo-badge {
+        background-color: #141c2c !important;
+        border-color: #1e293b !important;
+        .demo-tag { color: #60a5fa !important; }
+        .demo-desc { color: #64748b !important; }
+      }
+    }
+  }
 
-            &:hover {
-              background: rgba(255, 255, 255, 0.9) !important;
-            }
+  // Pipeline Banner
+  .pipeline-card {
+    background-color: #111827 !important;
+    border-color: #1e293b !important;
+    .pipeline-title { color: #f1f5f9 !important; }
+    .pipeline-note { color: #64748b !important; }
+    .step-box {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      .step-num { color: #64748b !important; }
+      .step-name { color: #f1f5f9 !important; }
+      .step-desc { color: #94a3b8 !important; }
+      .step-badge {
+        background-color: #141c2c !important;
+        color: #94a3b8 !important;
+      }
+      &.active {
+        border-color: rgba(59, 130, 246, 0.5) !important;
+        .step-num { color: #60a5fa !important; }
+        .step-badge {
+          background-color: rgba(37, 99, 235, 0.2) !important;
+          color: #60a5fa !important;
+        }
+      }
+      &.highlight {
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.25) 0%, #182234 100%) !important;
+        border-color: #3b82f6 !important;
+        .step-name { color: #93c5fd !important; }
+      }
+      &.final {
+        border-color: rgba(16, 185, 129, 0.4) !important;
+        .step-badge.final-badge {
+          background-color: rgba(16, 185, 129, 0.2) !important;
+          color: #34d399 !important;
+        }
+      }
+    }
+    .step-arrow { color: #475467 !important; }
+  }
 
-            .el-icon {
-              color: #667eea !important;
-            }
+  // 个股研究 (Stock Research) 深色适配
+  .stock-switcher-ribbon {
+    background-color: #111827 !important;
+    border-color: #1e293b !important;
+    .ribbon-label { color: #94a3b8 !important; }
+    .quick-pill {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      color: #cbd5e1 !important;
+      &:hover {
+        background-color: #1e293b !important;
+        color: #60a5fa !important;
+        border-color: #3b82f6 !important;
+      }
+      &.active {
+        background-color: rgba(37, 99, 235, 0.25) !important;
+        border-color: #3b82f6 !important;
+        color: #60a5fa !important;
+      }
+    }
+    .custom-select-btn {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      color: #cbd5e1 !important;
+    }
+    .refresh-btn {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      color: #94a3b8 !important;
+      &:hover { color: #60a5fa !important; }
+    }
+  }
+
+  .stock-header-card {
+    background-color: #111827 !important;
+    border-color: #1e293b !important;
+    .stock-name-h1 { color: #f1f5f9 !important; }
+    .stock-code-sub { color: #94a3b8 !important; }
+    .sector-tag {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      color: #94a3b8 !important;
+    }
+    .board-tag {
+      background-color: rgba(37, 99, 235, 0.2) !important;
+      color: #60a5fa !important;
+    }
+    .header-middle-stats {
+      .stat-box {
+        background-color: #182234 !important;
+        border-color: #243147 !important;
+        .stat-lbl { color: #94a3b8 !important; }
+        .stat-val { color: #f1f5f9 !important; }
+      }
+    }
+  }
+
+  .panel-box,
+  .orderbook-card,
+  .casefile-container {
+    background-color: #111827 !important;
+    border-color: #1e293b !important;
+    .panel-header, .ob-header, .casefile-header {
+      background-color: #141c2c !important;
+      border-bottom-color: #1e293b !important;
+      .panel-title, .ob-title, .cf-title {
+        color: #f1f5f9 !important;
+      }
+    }
+    .kv-item {
+      border-bottom-color: #1e293b !important;
+      .k { color: #94a3b8 !important; }
+      .v { color: #f1f5f9 !important; }
+    }
+    .inst-info .inst-stat {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      .lbl { color: #94a3b8 !important; }
+      .num { color: #f1f5f9 !important; }
+    }
+    .ob-level { color: #94a3b8 !important; }
+    .ob-row:hover { background-color: #182234 !important; }
+    .case-card {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      .case-title { color: #f1f5f9 !important; }
+      .case-body { color: #94a3b8 !important; }
+      .case-evidence-meta {
+        background-color: #141c2c !important;
+        border-top-color: #1e293b !important;
+        color: #94a3b8 !important;
+      }
+    }
+  }
+
+  // K 线图暗色适配
+  .kline-container {
+    background-color: #111827 !important;
+    border-color: #1e293b !important;
+    .kline-toolbar {
+      background-color: #141c2c !important;
+      border-bottom-color: #1e293b !important;
+      .tab-btn, .sub-btn {
+        background-color: #182234 !important;
+        border-color: #243147 !important;
+        color: #cbd5e1 !important;
+        &.active {
+          background-color: rgba(37, 99, 235, 0.3) !important;
+          border-color: #3b82f6 !important;
+          color: #60a5fa !important;
+        }
+      }
+    }
+    .kline-viewport {
+      background-color: #111827 !important;
+      .grid-lines line {
+        stroke: #1e293b !important;
+      }
+      .y-labels text, .time-axis text {
+        fill: #64748b !important;
+      }
+    }
+  }
+
+  // Workflow 流水线暗色适配
+  .workflow-control-bar,
+  .pipeline-flow-card,
+  .terminal-log-box,
+  .evidence-aggregator-card {
+    background-color: #111827 !important;
+    border-color: #1e293b !important;
+    .ctrl-title, .fh-title, .lh-title, .section-title {
+      color: #f1f5f9 !important;
+    }
+    .stock-pill {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      .stock-tag { color: #64748b !important; }
+      .stock-name { color: #f1f5f9 !important; }
+      .stock-code { color: #94a3b8 !important; }
+    }
+    .flow-header {
+      border-bottom-color: #1e293b !important;
+      .fh-sub { color: #64748b !important; }
+    }
+    .node-box {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      .node-step { color: #64748b !important; }
+      .node-title { color: #f1f5f9 !important; }
+      .node-desc { color: #94a3b8 !important; }
+      &.node-completed {
+        border-color: rgba(59, 130, 246, 0.4) !important;
+        background-color: rgba(37, 99, 235, 0.1) !important;
+      }
+      &.decision-node {
+        border-color: rgba(16, 185, 129, 0.4) !important;
+      }
+    }
+    .flow-connector .conn-arrow { color: #475467 !important; }
+    .log-header {
+      background-color: #141c2c !important;
+      border-bottom-color: #1e293b !important;
+      .log-stat { color: #94a3b8 !important; }
+    }
+    .log-body {
+      background-color: #0b0f19 !important;
+      .log-line {
+        border-bottom-color: #162032 !important;
+        .log-time { color: #64748b !important; }
+        .log-msg { color: #cbd5e1 !important; }
+      }
+    }
+  }
+
+  // 证据汇总 (Evidence Aggregator) 暗色
+  .evidence-aggregator-card {
+    .aggregator-header {
+      background-color: #141c2c !important;
+      border-bottom-color: #1e293b !important;
+      .code-badge {
+        background-color: #182234 !important;
+        border-color: #243147 !important;
+        color: #94a3b8 !important;
+      }
+    }
+    .stat-pill {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      .pill-k { color: #64748b !important; }
+      .pill-v { color: #f1f5f9 !important; }
+    }
+    .evidence-column {
+      border-right-color: #1e293b !important;
+      .column-header {
+        background-color: #141c2c !important;
+        border-bottom-color: #1e293b !important;
+        .col-title { color: #f1f5f9 !important; }
+        .col-count { color: #94a3b8 !important; }
+      }
+      .evidence-item {
+        background-color: #182234 !important;
+        border-color: #243147 !important;
+        .item-title { color: #f1f5f9 !important; }
+        .item-desc { color: #94a3b8 !important; }
+        .item-source {
+          border-top-color: #1e293b !important;
+          .src-label { color: #64748b !important; }
+          .src-text { color: #cbd5e1 !important; }
+        }
+      }
+      .arbitration-box {
+        background-color: #141c2c !important;
+        border-color: rgba(245, 158, 11, 0.3) !important;
+        .arb-title { color: #f59e0b !important; }
+        .arb-content { color: #cbd5e1 !important; }
+      }
+    }
+  }
+
+  // 研报 (Report) 暗色纸张模式
+  .report-paper {
+    background-color: #111827 !important;
+    border-color: #1e293b !important;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4) !important;
+    color: #f1f5f9 !important;
+
+    .report-header {
+      border-bottom-color: #334155 !important;
+      .inst-brand .inst-name { color: #f1f5f9 !important; }
+      .inst-brand .inst-sub { color: #94a3b8 !important; }
+      .report-meta .meta-row .mv { color: #cbd5e1 !important; }
+    }
+
+    .rating-banner {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      .stock-name { color: #f1f5f9 !important; }
+      .stock-code { background-color: #141c2c !important; color: #94a3b8 !important; }
+      .stock-desc { color: #94a3b8 !important; }
+      .target-price { color: #f1f5f9 !important; }
+    }
+
+    .benchmark-grid {
+      background-color: #141c2c !important;
+      border-color: #1e293b !important;
+      .bm-col {
+        border-right-color: #1e293b !important;
+        .bk { color: #64748b !important; }
+        .bv { color: #f1f5f9 !important; }
+      }
+    }
+
+    .report-section {
+      .sec-header {
+        border-bottom-color: #1e293b !important;
+        .sec-num { color: #60a5fa !important; }
+        .sec-title { color: #f1f5f9 !important; }
+      }
+      .summary-paragraph { color: #cbd5e1 !important; }
+      .highlight-boxes .h-box {
+        background-color: #182234 !important;
+        border-color: #243147 !important;
+        .h-num { color: #60a5fa !important; }
+        .h-title { color: #f1f5f9 !important; }
+        .h-desc { color: #94a3b8 !important; }
+      }
+      .factor-table {
+        th { background-color: #141c2c !important; color: #94a3b8 !important; border-bottom-color: #1e293b !important; }
+        td { border-bottom-color: #1e293b !important; color: #cbd5e1 !important; }
+      }
+      .evidence-block {
+        background-color: #182234 !important;
+        border-color: #243147 !important;
+        .eb-title { color: #f1f5f9 !important; }
+        .eb-list li { color: #cbd5e1 !important; }
+      }
+      .arbitration-paper-box {
+        background-color: #141c2c !important;
+        border-color: rgba(37, 99, 235, 0.4) !important;
+        .apb-title { color: #f1f5f9 !important; }
+        .apb-text { color: #cbd5e1 !important; }
+        .action-recommendation-grid {
+          background-color: #182234 !important;
+          border-color: #243147 !important;
+          .arg-item {
+            border-bottom-color: #1e293b !important;
+            .arg-k { color: #94a3b8 !important; }
+            .arg-v { color: #f1f5f9 !important; }
           }
-
-          &:not(.el-button--primary) {
-            background: rgba(255, 255, 255, 0.1) !important;
-            color: white !important;
-            border: 1px solid rgba(255, 255, 255, 0.3) !important;
-
-            &:hover {
-              background: rgba(255, 255, 255, 0.2) !important;
-            }
-
-            .el-icon {
-              color: white !important;
-            }
-          }
         }
       }
     }
 
-    // 优化 Hero 区域的统计卡片文字
-    .hero-visual {
-      .stat-item {
-        .stat-number,
-        .stat-label {
-          color: white !important;
-        }
-      }
+    .report-footer {
+      border-top-color: #1e293b !important;
+      .disclaimer-title { color: #94a3b8 !important; }
+      .disclaimer-text { color: #64748b !important; }
+      .footer-sign { color: #64748b !important; }
     }
   }
 
-  // 优化报告详情页面的关键指标卡片
-  .report-detail {
-    .metrics-content {
-      .metric-item {
-        .metric-label {
-          color: #ffffff !important;
-        }
-
-        .recommendation-value {
-          color: #ffffff !important;
-        }
-
-        .confidence-label {
-          color: #ffffff !important;
-        }
-
-        .confidence-text {
-          .confidence-number,
-          .confidence-unit {
-            color: #ffffff !important;
-          }
-        }
-
-        .risk-label {
-          // 保持原有的风险颜色，不覆盖
-        }
-
-        .risk-description {
-          color: var(--el-text-color-secondary) !important;
-        }
-      }
-
-      .key-points {
-        h4 {
-          color: #ffffff !important;
-        }
-
-        li {
-          color: #ffffff !important;
-        }
-      }
+  .report-toolbar {
+    background-color: #111827 !important;
+    border-color: #1e293b !important;
+    .report-no {
+      background-color: #182234 !important;
+      color: #94a3b8 !important;
     }
   }
 
-  // 优化单股分析页面的页面头部
-  .single-analysis {
-    .page-header {
-      .header-content {
-        background: var(--el-bg-color) !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
-      }
-
-      .page-title {
-        color: #ffffff !important;
-      }
-
-      .page-description {
-        color: var(--el-text-color-regular) !important;
+  // 市场总览 (Overview) 暗色适配
+  .market-banner,
+  .metric-card,
+  .sectors-card,
+  .themes-card,
+  .feed-card {
+    background-color: #111827 !important;
+    border-color: #1e293b !important;
+    .card-header {
+      border-bottom-color: #1e293b !important;
+      .header-title { color: #f1f5f9 !important; }
+    }
+    .metric-value { color: #f1f5f9 !important; }
+    .metric-label { color: #94a3b8 !important; }
+    .sectors-table {
+      th { background-color: #141c2c !important; color: #94a3b8 !important; border-bottom-color: #1e293b !important; }
+      td { border-bottom-color: #1e293b !important; color: #cbd5e1 !important; }
+      tbody tr:hover { background-color: #182234 !important; }
+      .leader-badge {
+        background-color: #182234 !important;
+        color: #cbd5e1 !important;
+        &.clickable:hover {
+          background-color: rgba(37, 99, 235, 0.25) !important;
+          color: #60a5fa !important;
+          border-color: rgba(59, 130, 246, 0.5) !important;
+        }
       }
     }
-  }
-
-  // 优化批量分析页面的页面头部
-  .batch-analysis {
-    .page-header {
-      .header-content {
-        background: var(--el-bg-color) !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+    .theme-item {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      .theme-name { color: #f1f5f9 !important; }
+      .theme-logic { color: #94a3b8 !important; }
+      .stock-pill {
+        background-color: #141c2c !important;
+        color: #cbd5e1 !important;
+        &.clickable:hover {
+          background-color: rgba(37, 99, 235, 0.25) !important;
+          color: #60a5fa !important;
+          border-color: rgba(59, 130, 246, 0.5) !important;
+        }
       }
-
-      .page-title {
-        color: #ffffff !important;
+      &:hover {
+        background-color: #1e293b !important;
+        border-color: #3b82f6 !important;
       }
-
-      .page-description {
-        color: var(--el-text-color-regular) !important;
+    }
+    .feed-item {
+      .feed-time { color: #64748b !important; }
+      .feed-target {
+        color: #f1f5f9 !important;
+        &.clickable {
+          color: #60a5fa !important;
+          &:hover { color: #93c5fd !important; }
+        }
       }
+      .feed-text { color: #94a3b8 !important; }
     }
   }
 }

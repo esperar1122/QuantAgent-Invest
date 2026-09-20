@@ -37,7 +37,7 @@
                     <el-form-item label="股票代码" required>
                       <el-input
                         v-model="analysisForm.stockCode"
-                        placeholder="如：000001、AAPL、700、1810"
+                        placeholder="如：600519、000001、000300"
                         clearable
                         size="large"
                         class="stock-input"
@@ -72,13 +72,9 @@
                           <span>🇨🇳 A股市场</span>
                           <span style="color: #909399; font-size: 12px; margin-left: 8px;">（6位数字）</span>
                         </el-option>
-                        <el-option label="🇺🇸 美股市场" value="美股">
-                          <span>🇺🇸 美股市场</span>
-                          <span style="color: #909399; font-size: 12px; margin-left: 8px;">（1-5个字母）</span>
-                        </el-option>
-                        <el-option label="🇭🇰 港股市场" value="港股">
-                          <span>🇭🇰 港股市场</span>
-                          <span style="color: #909399; font-size: 12px; margin-left: 8px;">（1-5位数字）</span>
+                        <el-option label="📊 国内指数" value="指数">
+                          <span>📊 国内指数</span>
+                          <span style="color: #909399; font-size: 12px; margin-left: 8px;">（沪深300/中证500等）</span>
                         </el-option>
                       </el-select>
                     </el-form-item>
@@ -229,488 +225,34 @@
               </div>
 
               <!-- 分析进度显示 -->
-              <div v-if="analysisStatus === 'running'" class="progress-section">
-                <el-card class="progress-card" shadow="hover">
-                  <template #header>
-                    <div class="progress-header">
-                      <h4>
-                        <el-icon class="rotating-icon">
-                          <Loading />
-                        </el-icon>
-                        分析进行中...
-                      </h4>
-                      <!-- 任务ID已隐藏 -->
-                      <!-- <el-tag type="warning">{{ currentTaskId }}</el-tag> -->
-                    </div>
-                  </template>
-
-                  <div class="progress-content">
-                    <!-- 总体进度信息 -->
-                    <div class="overall-progress-info">
-                      <div class="progress-stats">
-                        <!-- 当前步骤已隐藏 -->
-                        <!--
-                        <div class="stat-item">
-                          <div class="stat-label">当前步骤</div>
-                          <div class="stat-value">{{ progressInfo.currentStep || '初始化中...' }}</div>
-                        </div>
-                        -->
-                        <!-- 整体进度已隐藏 -->
-                        <!--
-                        <div class="stat-item">
-                          <div class="stat-label">整体进度</div>
-                          <div class="stat-value">{{ progressInfo.progress.toFixed(1) }}%</div>
-                        </div>
-                        -->
-                        <div class="stat-item">
-                          <div class="stat-label">已用时间</div>
-                          <div class="stat-value">{{ formatTime(progressInfo.elapsedTime) }}</div>
-                        </div>
-                        <div class="stat-item">
-                          <div class="stat-label">预计剩余</div>
-                          <div class="stat-value">{{ formatTime(progressInfo.remainingTime) }}</div>
-                        </div>
-                        <div class="stat-item">
-                          <div class="stat-label">预计总时长</div>
-                          <div class="stat-value">{{ formatTime(progressInfo.totalTime) }}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- 进度条 -->
-                    <div class="progress-bar-section">
-                      <el-progress
-                        :percentage="Math.round(progressInfo.progress)"
-                        :stroke-width="12"
-                        :show-text="true"
-                        :status="getProgressStatus()"
-                        class="main-progress-bar"
-                      />
-                    </div>
-
-                    <!-- 当前任务详情 -->
-                    <div class="current-task-info">
-                      <div class="task-title">
-                        <el-icon class="task-icon">
-                          <Loading />
-                        </el-icon>
-                        {{ progressInfo.currentStep || '正在初始化分析引擎...' }}
-                      </div>
-                      <div
-                        class="task-description"
-                        style="white-space: pre-wrap; line-height: 1.6;"
-                      >
-                        {{ progressInfo.currentStepDescription || progressInfo.message || 'AI正在根据您的要求重点分析相关内容' }}
-                      </div>
-                    </div>
-
-                    <!-- 分析步骤显示 - 已隐藏 -->
-                    <!--
-                    <div v-if="analysisSteps.length > 0" class="analysis-steps">
-                      <h5 class="steps-title">📋 分析步骤</h5>
-                      <div class="steps-container">
-                        <div
-                          v-for="(step, index) in analysisSteps"
-                          :key="index"
-                          class="step-item"
-                          :class="{
-                            'step-completed': step.status === 'completed',
-                            'step-current': step.status === 'current',
-                            'step-pending': step.status === 'pending'
-                          }"
-                        >
-                          <div class="step-icon">
-                            <el-icon v-if="step.status === 'completed'" class="completed-icon">
-                              <Check />
-                            </el-icon>
-                            <el-icon v-else-if="step.status === 'current'" class="current-icon rotating-icon">
-                              <Loading />
-                            </el-icon>
-                            <el-icon v-else class="pending-icon">
-                              <Clock />
-                            </el-icon>
-                          </div>
-                          <div class="step-content">
-                            <div class="step-title">{{ step.title }}</div>
-                            <div class="step-description">{{ step.description }}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    -->
-                  </div>
-                </el-card>
-              </div>
+              <AnalysisProgressView
+                v-if="analysisStatus === 'running'"
+                :progress-info="progressInfo"
+              />
             </el-form>
           </el-card>
         </el-col>
 
         <!-- 右侧：高级配置 -->
         <el-col :span="6">
-          <el-card class="config-card" shadow="hover">
-            <template #header>
-              <div class="card-header">
-                <h3>高级配置</h3>
-                <el-tag type="warning" size="small">可选设置</el-tag>
-              </div>
-            </template>
-
-            <div class="config-content">
-              <!-- AI模型配置 -->
-              <div class="config-section">
-                <h4 class="config-title">🤖 AI模型配置</h4>
-                <div class="model-config">
-                  <div class="model-item">
-                    <div class="model-label">
-                      <span>快速分析模型</span>
-                      <el-tooltip content="用于市场分析、新闻分析、基本面分析等" placement="top">
-                        <el-icon class="help-icon"><InfoFilled /></el-icon>
-                      </el-tooltip>
-                    </div>
-                    <el-select v-model="modelSettings.quickAnalysisModel" size="small" style="width: 100%" filterable>
-                      <el-option
-                        v-for="model in availableModels"
-                        :key="`quick-${model.provider}/${model.model_name}`"
-                        :label="model.model_display_name || model.model_name"
-                        :value="model.model_name"
-                      >
-                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-                          <span style="flex: 1;">{{ model.model_display_name || model.model_name }}</span>
-                          <div style="display: flex; align-items: center; gap: 4px;">
-                            <!-- 能力等级徽章 -->
-                            <el-tag
-                              v-if="model.capability_level"
-                              :type="getCapabilityTagType(model.capability_level)"
-                              size="small"
-                              effect="plain"
-                            >
-                              {{ getCapabilityText(model.capability_level) }}
-                            </el-tag>
-                            <!-- 角色标签 -->
-                            <el-tag
-                              v-if="isQuickAnalysisRole(model.suitable_roles)"
-                              type="success"
-                              size="small"
-                              effect="plain"
-                            >
-                              ⚡快速
-                            </el-tag>
-                            <span style="font-size: 12px; color: #909399;">{{ model.provider }}</span>
-                          </div>
-                        </div>
-                      </el-option>
-                    </el-select>
-                  </div>
-
-                  <div class="model-item">
-                    <div class="model-label">
-                      <span>深度决策模型</span>
-                      <el-tooltip content="用于研究管理者综合决策、风险管理者最终评估" placement="top">
-                        <el-icon class="help-icon"><InfoFilled /></el-icon>
-                      </el-tooltip>
-                    </div>
-                    <DeepModelSelector v-model="modelSettings.deepAnalysisModel" :available-models="availableModels" type="deep" size="small" width="100%" />
-                  </div>
-                </div>
-
-                <!-- 🆕 模型推荐提示 -->
-                <el-alert
-                  v-if="modelRecommendation"
-                  :title="modelRecommendation.title"
-                  :type="modelRecommendation.type"
-                  :closable="false"
-                  style="margin-top: 12px;"
-                >
-                  <template #default>
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-                      <div style="font-size: 13px; line-height: 1.8; flex: 1; white-space: pre-line;">
-                        {{ modelRecommendation.message }}
-                      </div>
-                      <el-button
-                        v-if="modelRecommendation.quickModel && modelRecommendation.deepModel"
-                        type="primary"
-                        size="small"
-                        @click="applyRecommendedModels"
-                        style="flex-shrink: 0;"
-                      >
-                        应用推荐
-                      </el-button>
-                    </div>
-                  </template>
-                </el-alert>
-              </div>
-
-              <!-- 分析选项 -->
-              <div class="config-section">
-                <h4 class="config-title">⚙️ 分析选项</h4>
-                <div class="option-list">
-                  <div class="option-item">
-                    <div class="option-info">
-                      <span class="option-name">情绪分析</span>
-                      <span class="option-desc">分析市场情绪和投资者心理</span>
-                    </div>
-                    <el-switch v-model="analysisForm.includeSentiment" />
-                  </div>
-
-                  <div class="option-item">
-                    <div class="option-info">
-                      <span class="option-name">风险评估</span>
-                      <span class="option-desc">包含详细的风险因素分析</span>
-                    </div>
-                    <el-switch v-model="analysisForm.includeRisk" />
-                  </div>
-
-                  <div class="option-item">
-                    <div class="option-info">
-                      <span class="option-name">语言偏好</span>
-                    </div>
-                    <el-select v-model="analysisForm.language" size="small" style="width: 100px">
-                      <el-option label="中文" value="zh-CN" />
-                      <el-option label="English" value="en-US" />
-                    </el-select>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </el-card>
+          <AnalysisConfigSidebar
+            :model-settings="modelSettings"
+            :analysis-form="analysisForm"
+            :available-models="availableModels"
+            :model-recommendation="modelRecommendation"
+            @apply-recommended="applyRecommendedModels"
+          />
         </el-col>
       </el-row>
 
       <!-- 分析结果显示 -->
-      <div v-if="showResults && analysisResults" class="results-section">
-        <el-row :gutter="24">
-          <el-col :span="24">
-            <el-card class="results-card" shadow="hover">
-              <template #header>
-                <div class="results-header">
-                  <h3>📊 分析结果</h3>
-                  <div class="result-meta">
-                    <el-tag type="success">{{ analysisResults.symbol || analysisResults.stock_symbol || analysisForm.symbol || analysisForm.stockCode }}</el-tag>
-                    <el-tag>{{ analysisResults.analysis_date }}</el-tag>
-                    <el-tag v-if="analysisResults.model_info && analysisResults.model_info !== 'Unknown'" type="info">
-                      <el-icon><Cpu /></el-icon>
-                      {{ analysisResults.model_info }}
-                    </el-tag>
-                  </div>
-                </div>
-              </template>
-
-              <div class="results-content">
-                <!-- 风险提示 -->
-                <div class="risk-disclaimer">
-                  <el-alert
-                    type="warning"
-                    :closable="false"
-                    show-icon
-                  >
-                    <template #title>
-                      <div class="disclaimer-content">
-                        <el-icon class="disclaimer-icon"><WarningFilled /></el-icon>
-                        <div class="disclaimer-text">
-                          <p style="margin: 0 0 8px 0;"><strong>⚠️ 重要风险提示与免责声明</strong></p>
-                          <ul style="margin: 0; padding-left: 20px; line-height: 1.8;">
-                            <li><strong>工具性质：</strong>本系统为股票分析辅助工具，使用AI技术对公开市场数据进行分析，不具备证券投资咨询资质。</li>
-                            <li><strong>非投资建议：</strong>所有分析结果、评分、建议仅为技术分析参考，不构成任何买卖建议或投资决策依据。</li>
-                            <li><strong>数据局限性：</strong>分析基于历史数据和公开信息，可能存在延迟、不完整或不准确的情况，无法预测未来市场走势。</li>
-                            <li><strong>投资风险：</strong>股票投资存在市场风险、流动性风险、政策风险等多种风险，可能导致本金损失。</li>
-                            <li><strong>独立决策：</strong>投资者应基于自身风险承受能力、投资目标和财务状况独立做出投资决策。</li>
-                            <li><strong>专业咨询：</strong>重大投资决策建议咨询具有合法资质的专业投资顾问或金融机构。</li>
-                            <li><strong>责任声明：</strong>使用本工具产生的任何投资决策及其后果由投资者自行承担，本系统不承担任何责任。</li>
-                          </ul>
-                        </div>
-                      </div>
-                    </template>
-                  </el-alert>
-                </div>
-
-                <!-- 最终决策 -->
-                <div v-if="analysisResults.decision" class="decision-section">
-                  <h4>🎯 分析参考</h4>
-                  <div class="decision-card">
-                    <div class="decision-main">
-                      <div class="decision-action">
-                        <span class="label">分析倾向:</span>
-                        <el-tag
-                          :type="getActionTagType(analysisResults.decision.action)"
-                          size="large"
-                        >
-                          {{ analysisResults.decision.action }}
-                        </el-tag>
-                        <el-tag type="info" size="small" style="margin-left: 8px;">仅供参考</el-tag>
-                      </div>
-
-                      <div class="decision-metrics">
-                        <div class="metric-item">
-                          <span class="label">参考价格:</span>
-                          <span class="value">{{ analysisResults.decision.target_price }}</span>
-                        </div>
-                        <div class="metric-item">
-                          <span class="label">模型置信度:</span>
-                          <span class="value">{{ (analysisResults.decision.confidence * 100).toFixed(1) }}%</span>
-                          <el-tooltip content="基于AI模型计算的置信度，不代表实际投资成功率" placement="top">
-                            <el-icon style="margin-left: 4px; cursor: help;"><QuestionFilled /></el-icon>
-                          </el-tooltip>
-                        </div>
-                        <div class="metric-item">
-                          <span class="label">风险评分:</span>
-                          <span class="value">{{ (analysisResults.decision.risk_score * 100).toFixed(1) }}%</span>
-                          <el-tooltip content="基于历史数据的风险评估，实际风险可能更高" placement="top">
-                            <el-icon style="margin-left: 4px; cursor: help;"><QuestionFilled /></el-icon>
-                          </el-tooltip>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="decision-reasoning">
-                      <h5>分析依据:</h5>
-                      <p>{{ analysisResults.decision.reasoning }}</p>
-                      <el-alert type="info" :closable="false" style="margin-top: 12px;">
-                        <template #default>
-                          <span style="font-size: 13px;">💡 以上分析基于AI模型对历史数据的处理，不构成投资建议，请结合自身情况独立决策。</span>
-                        </template>
-                      </el-alert>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 分析概览 -->
-                <div v-if="analysisResults" class="overview-section">
-                  <h4>📊 分析概览</h4>
-                  <div class="overview-card">
-  
-                    <div v-if="analysisResults.summary" class="overview-summary">
-                      <h5>分析摘要:</h5>
-                      <p>{{ analysisResults.summary }}</p>
-                    </div>
-
-                    <div v-if="analysisResults.recommendation" class="overview-recommendation">
-                      <h5>投资建议:</h5>
-                      <p>{{ analysisResults.recommendation }}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 📐 五维量化因子特征评估卡片 (课题核心：大模型多智能体与量化因子融合) -->
-                <div v-if="analysisResults" class="quant-factors-section">
-                  <div class="quant-section-header">
-                    <div class="header-left">
-                      <h4>📐 五维量化因子特征评估 (Quant Factors Assessment)</h4>
-                      <el-tag size="small" type="info" effect="plain" style="margin-left: 8px;">多智能体决策数据底座</el-tag>
-                    </div>
-                    <span class="quant-badge">量化因子与多智能体融合</span>
-                  </div>
-                  <div class="quant-factors-grid">
-                    <div class="quant-factor-card" v-for="factor in quantFactorList" :key="factor.key">
-                      <div class="factor-header">
-                        <span class="factor-icon">{{ factor.icon }}</span>
-                        <span class="factor-name">{{ factor.name }}</span>
-                        <el-tag :type="factor.statusType" size="small" effect="plain">{{ factor.status }}</el-tag>
-                      </div>
-                      <div class="factor-score-row">
-                        <span class="factor-score">{{ factor.score }}</span>
-                        <span class="factor-score-max">/100</span>
-                        <el-progress 
-                          :percentage="factor.score" 
-                          :color="factor.progressColor" 
-                          :show-text="false" 
-                          :stroke-width="6" 
-                          class="factor-progress"
-                        />
-                      </div>
-                      <div class="factor-desc">{{ factor.desc }}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 详细分析报告 -->
-                <div v-if="analysisResults.state || analysisResults.reports" class="reports-section">
-                  <h4>📋 详细分析报告</h4>
-
-                  <!-- 美观的标签页展示 -->
-                  <div class="analysis-tabs-container">
-                    <el-tabs
-                      v-model="activeReportTab"
-                      type="card"
-                      class="analysis-tabs"
-                      tab-position="top"
-                      :key="analysisResults?.id || 'default'"
-                    >
-                      <el-tab-pane
-                        v-for="(report, key) in getAnalysisReports(analysisResults)"
-                        :key="key"
-                        :name="key.toString()"
-                        :label="report.title"
-                        class="report-tab-pane"
-                      >
-                        <!-- 标签页内容头部 -->
-                        <div class="report-header">
-                          <div class="report-title">
-                            <span class="report-icon">{{ getReportIcon(report.title) }}</span>
-                            <span class="report-name">{{ getReportName(report.title) }}</span>
-                          </div>
-                          <div class="report-description">{{ getReportDescription(report.title) }}</div>
-                        </div>
-
-                        <!-- 报告内容 -->
-                        <div class="report-content-wrapper">
-                          <div
-                            class="report-content"
-                            v-html="formatReportContent(report.content)"
-                            v-if="report.content"
-                          ></div>
-                          <div v-else class="no-content">
-                            <el-empty description="暂无内容" />
-                          </div>
-                        </div>
-                      </el-tab-pane>
-                    </el-tabs>
-                  </div>
-                </div>
-
-                <!-- 操作按钮 -->
-                <div class="result-actions">
-                  <el-dropdown trigger="click" @command="downloadReport">
-                    <el-button type="primary">
-                      <el-icon><Download /></el-icon>
-                      下载报告
-                      <el-icon class="el-icon--right"><arrow-down /></el-icon>
-                    </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="markdown">
-                          <el-icon><document /></el-icon> Markdown
-                        </el-dropdown-item>
-                        <el-dropdown-item command="docx">
-                          <el-icon><document /></el-icon> Word 文档
-                        </el-dropdown-item>
-                        <el-dropdown-item command="pdf">
-                          <el-icon><document /></el-icon> PDF
-                        </el-dropdown-item>
-                        <el-dropdown-item command="json" divided>
-                          <el-icon><document /></el-icon> JSON (原始数据)
-                        </el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
-                </div>
-
-                <!-- 风险提示 -->
-                <el-alert
-                  type="warning"
-                  :closable="false"
-                  show-icon
-                  class="risk-disclaimer"
-                >
-                  <template #title>
-                    <span style="font-weight: bold;">报告依据真实交易数据使用AI分析生成，仅供参考，不构成任何投资建议。市场有风险，投资需谨慎。</span>
-                  </template>
-                </el-alert>
-              </div>
-            </el-card>
-          </el-col>
-        </el-row>
-      </div>
+      <AnalysisReportView
+        v-if="showResults && analysisResults"
+        :results="analysisResults"
+        :form="analysisForm"
+        :quant-factors="quantFactorList"
+        @download="downloadReport"
+      />
     </div>
   </div>
 </template>
@@ -726,22 +268,20 @@ import {
   Check,
   Loading,
   Refresh,
-  Download,
-  WarningFilled,
-  Cpu,
-  QuestionFilled,
-  ArrowDown,
+  WarningFilled
 } from '@element-plus/icons-vue'
 import { analysisApi, type SingleAnalysisRequest } from '@/api/analysis'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { configApi } from '@/api/config'
-import DeepModelSelector from '@/components/DeepModelSelector.vue'
 import { ANALYSTS, convertAnalystNamesToIds } from '@/constants/analysts'
 import { marked } from 'marked'
 import { recommendModels } from '@/api/modelCapabilities'
 import { validateStockCode, getStockCodeFormatHelp } from '@/utils/stockValidator'
 import { normalizeMarketForAnalysis, getMarketByStockCode } from '@/utils/market'
+import AnalysisConfigSidebar from './components/AnalysisConfigSidebar.vue'
+import AnalysisProgressView from './components/AnalysisProgressView.vue'
+import AnalysisReportView from './components/AnalysisReportView.vue'
 
 // 配置marked选项
 marked.setOptions({
@@ -750,7 +290,7 @@ marked.setOptions({
 })
 
 // 市场类型定义
-type MarketType = 'A股' | '美股' | '港股'
+type MarketType = 'A股' | '指数' | string
 
 // 表单类型定义
 interface AnalysisForm {
@@ -877,7 +417,6 @@ const quantFactorList = computed<QuantFactor[]>(() => {
     }
   ]
 })
-const activeReportTab = ref('') // 当前激活的报告标签页
 const progressInfo = ref({
   progress: 0,
   currentStep: '',
@@ -1355,173 +894,6 @@ const restartAnalysis = () => {
 }
 
 
-// 获取操作标签类型
-const getActionTagType = (action: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
-  const actionTypes: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
-    '买入': 'success',
-    '持有': 'warning',
-    '卖出': 'danger',
-    '观望': 'info'
-  }
-  return actionTypes[action] || 'info'
-}
-
-// 获取分析报告
-const getAnalysisReports = (data: any) => {
-  console.log('📊 getAnalysisReports 输入数据:', data)
-  const reports: Array<{title: string, content: any}> = []
-
-  // 优先从 reports 字段获取数据（新的API格式）
-  let reportsData = data
-  if (data && data.reports && typeof data.reports === 'object') {
-    reportsData = data.reports
-    console.log('📊 使用 data.reports:', reportsData)
-  } else if (data && data.state && typeof data.state === 'object') {
-    reportsData = data.state
-    console.log('📊 使用 data.state:', reportsData)
-  } else {
-    console.log('📊 没有找到有效的报告数据')
-    return reports
-  }
-
-  // 定义报告映射（按照完整的分析流程顺序）
-  const reportMappings = [
-    // 分析师团队 (4个)
-    { key: 'market_report', title: '📈 市场技术分析', category: '分析师团队' },
-    { key: 'sentiment_report', title: '💭 市场情绪分析', category: '分析师团队' },
-    { key: 'news_report', title: '📰 新闻事件分析', category: '分析师团队' },
-    { key: 'fundamentals_report', title: '💰 基本面分析', category: '分析师团队' },
-
-    // 研究团队 (3个)
-    { key: 'bull_researcher', title: '🐂 多头研究员', category: '研究团队' },
-    { key: 'bear_researcher', title: '🐻 空头研究员', category: '研究团队' },
-    { key: 'research_team_decision', title: '🔬 研究经理决策', category: '研究团队' },
-
-    // 交易团队 (1个)
-    { key: 'trader_investment_plan', title: '💼 交易员计划', category: '交易团队' },
-
-    // 风险管理团队 (4个)
-    { key: 'risky_analyst', title: '⚡ 激进分析师', category: '风险管理团队' },
-    { key: 'safe_analyst', title: '🛡️ 保守分析师', category: '风险管理团队' },
-    { key: 'neutral_analyst', title: '⚖️ 中性分析师', category: '风险管理团队' },
-    { key: 'risk_management_decision', title: '👔 投资组合经理', category: '风险管理团队' },
-
-    // 最终决策 (1个)
-    { key: 'final_trade_decision', title: '🎯 最终交易决策', category: '最终决策' },
-
-    // 兼容旧格式
-    { key: 'investment_plan', title: '📋 投资建议', category: '其他' },
-    { key: 'investment_debate_state', title: '🔬 研究团队决策（旧）', category: '其他' },
-    { key: 'risk_debate_state', title: '⚖️ 风险管理团队（旧）', category: '其他' }
-  ]
-
-  // 遍历所有可能的报告
-  reportMappings.forEach(mapping => {
-    const content = reportsData[mapping.key]
-    if (content) {
-      console.log(`📊 找到报告: ${mapping.key} -> ${mapping.title}`)
-      reports.push({
-        title: mapping.title,
-        content: content
-      })
-    }
-  })
-
-  console.log(`📊 总共找到 ${reports.length} 个报告`)
-
-  // 设置第一个报告为默认激活标签页
-  if (reports.length > 0 && !activeReportTab.value) {
-    activeReportTab.value = '0'
-  }
-
-  return reports
-}
-
-// 获取报告图标
-const getReportIcon = (title: string) => {
-  const iconMap: Record<string, string> = {
-    '📈 市场技术分析': '📈',
-    '💰 基本面分析': '💰',
-    '📰 新闻事件分析': '📰',
-    '💭 市场情绪分析': '💭',
-    '📋 投资建议': '📋',
-    '🔬 研究团队决策': '🔬',
-    '💼 交易团队计划': '💼',
-    '⚖️ 风险管理团队': '⚖️',
-    '🎯 最终交易决策': '🎯'
-  }
-  return iconMap[title] || '📊'
-}
-
-// 获取报告名称（去掉图标）
-const getReportName = (title: string) => {
-  return title.replace(/^[^\s]+\s/, '')
-}
-
-// 获取报告描述
-const getReportDescription = (title: string) => {
-  const descMap: Record<string, string> = {
-    '📈 市场技术分析': '技术指标、价格趋势、支撑阻力位分析',
-    '💰 基本面分析': '财务数据、估值水平、盈利能力分析',
-    '📰 新闻事件分析': '相关新闻事件、市场动态影响分析',
-    '💭 市场情绪分析': '投资者情绪、社交媒体情绪指标',
-    '📋 投资建议': '具体投资策略、仓位管理建议',
-    '🔬 研究团队决策': '多头/空头研究员辩论分析，研究经理综合决策',
-    '💼 交易团队计划': '专业交易员制定的具体交易执行计划',
-    '⚖️ 风险管理团队': '激进/保守/中性分析师风险评估，投资组合经理最终决策',
-    '🎯 最终交易决策': '综合所有团队分析后的最终投资决策'
-  }
-  return descMap[title] || '详细分析报告'
-}
-
-// 格式化报告内容
-const formatReportContent = (content: any) => {
-  console.log('🎨 [DEBUG] formatReportContent 被调用:', {
-    content: content,
-    type: typeof content,
-    length: typeof content === 'string' ? content.length : 'N/A'
-  })
-
-  // 确保content是字符串类型
-  if (!content) {
-    console.log('⚠️ [DEBUG] content为空，返回空字符串')
-    return ''
-  }
-
-  // 如果content不是字符串，转换为字符串
-  let stringContent = ''
-  if (typeof content === 'string') {
-    stringContent = content
-    console.log('✅ [DEBUG] content是字符串，长度:', stringContent.length)
-  } else if (typeof content === 'object') {
-    // 如果是对象，尝试提取有用信息
-    if (content.judge_decision) {
-      stringContent = content.judge_decision
-      console.log('📝 [DEBUG] 从对象中提取judge_decision')
-    } else {
-      stringContent = JSON.stringify(content, null, 2)
-      console.log('📝 [DEBUG] 将对象转换为JSON字符串')
-    }
-  } else {
-    stringContent = String(content)
-    console.log('📝 [DEBUG] 将内容转换为字符串')
-  }
-
-  try {
-    // 使用marked库将Markdown转换为HTML
-    const htmlContent = marked.parse(stringContent) as string
-
-    console.log('🎨 [DEBUG] Marked转换完成，HTML长度:', htmlContent.length)
-    console.log('🎨 [DEBUG] HTML前200字符:', htmlContent.substring(0, 200))
-
-    return htmlContent
-  } catch (error) {
-    console.error('❌ [ERROR] Marked转换失败:', error)
-    // 如果marked转换失败，回退到简单的文本显示
-    return `<pre style="white-space: pre-wrap; font-family: inherit;">${stringContent}</pre>`
-  }
-}
-
 // 下载报告
 const downloadReport = async (format: string = 'markdown') => {
   try {
@@ -1649,37 +1021,6 @@ document.addEventListener('visibilitychange', handleVisibilityChange)
 const getDepthDescription = (depth: number) => {
   const descriptions = ['快速', '基础', '标准', '深度', '全面']
   return descriptions[depth - 1] || '标准'
-}
-
-// 获取进度条状态
-const getProgressStatus = () => {
-  if (analysisStatus.value === 'completed') {
-    return 'success'
-  } else if (analysisStatus.value === 'failed') {
-    return 'exception'
-  } else if (analysisStatus.value === 'running') {
-    return '' // 默认状态，显示蓝色进度条
-  }
-  return ''
-}
-
-// 简单的时间格式化方法（只用于显示后端返回的时间）
-const formatTime = (seconds: number) => {
-  if (!seconds || seconds <= 0) {
-    return '计算中...'
-  }
-
-  if (seconds < 60) {
-    return `${Math.floor(seconds)}秒`
-  } else if (seconds < 3600) {
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = Math.floor(seconds % 60)
-    return remainingSeconds > 0 ? `${minutes}分${remainingSeconds}秒` : `${minutes}分钟`
-  } else {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    return `${hours}小时${minutes}分钟`
-  }
 }
 
 // 更新分析步骤状态
@@ -1895,43 +1236,6 @@ const restoreTaskFromCache = async () => {
   }
 }
 
-// 🆕 模型能力相关辅助函数
-
-/**
- * 获取能力等级文本
- */
-const getCapabilityText = (level: number): string => {
-  const texts: Record<number, string> = {
-    1: '⚡基础',
-    2: '📊标准',
-    3: '🎯高级',
-    4: '🔥专业',
-    5: '👑旗舰'
-  }
-  return texts[level] || '📊标准'
-}
-
-/**
- * 获取能力等级标签类型
- */
-const getCapabilityTagType = (level: number): 'success' | 'info' | 'warning' | 'danger' => {
-  if (level >= 4) return 'danger'
-  if (level >= 3) return 'warning'
-  if (level >= 2) return 'success'
-  return 'info'
-}
-
-/**
- * 判断是否适合快速分析
- */
-const isQuickAnalysisRole = (roles: string[] | undefined): boolean => {
-  if (!roles || !Array.isArray(roles)) return false
-  return roles.includes('quick_analysis') || roles.includes('both')
-}
-
-/**
- * 判断是否适合深度分析
- */
 /**
  * 显示分析深度的模型推荐说明
  */
@@ -2116,28 +1420,27 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .single-analysis {
-  min-height: 100vh;
-  background: var(--el-bg-color-page);
-  padding: 24px;
+  padding: 0;
 
   .page-header {
-    margin-bottom: 32px;
+    margin-bottom: 24px;
 
     .header-content {
       background: var(--el-bg-color);
-      padding: 32px;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      padding: 24px 28px;
+      border-radius: 14px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--el-border-color-lighter, #ebeef5);
     }
 
     .title-section {
       .page-title {
         display: flex;
         align-items: center;
-        font-size: 32px;
+        font-size: 26px;
         font-weight: 700;
-        color: #1a202c;
-        margin: 0 0 8px 0;
+        color: var(--el-text-color-primary, #1a202c);
+        margin: 0 0 6px 0;
 
         .title-icon {
           margin-right: 12px;
@@ -2146,24 +1449,24 @@ onMounted(async () => {
       }
 
       .page-description {
-        font-size: 16px;
-        color: #64748b;
+        font-size: 14px;
+        color: var(--el-text-color-secondary, #64748b);
         margin: 0;
       }
     }
   }
 
   .analysis-container {
-    .main-form-card, .config-card {
-      border-radius: 16px;
-      border: none;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    .main-form-card {
+      border-radius: 14px;
+      border: 1px solid var(--el-border-color-lighter, #ebeef5);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
 
       :deep(.el-card__header) {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
         color: white;
-        border-radius: 16px 16px 0 0;
-        padding: 20px 24px;
+        border-radius: 14px 14px 0 0;
+        padding: 16px 20px;
 
         .card-header {
           display: flex;
@@ -2172,8 +1475,9 @@ onMounted(async () => {
 
           h3 {
             margin: 0;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
+            color: white;
           }
         }
       }
@@ -2185,18 +1489,18 @@ onMounted(async () => {
 
     .analysis-form {
       .form-section {
-        margin-bottom: 32px;
+        margin-bottom: 28px;
         width: 100%;
         display: flex;
         flex-direction: column;
 
         .section-title {
-          font-size: 16px;
+          font-size: 15px;
           font-weight: 600;
-          color: #1a202c;
-          margin: 0 0 16px 0;
+          color: var(--el-text-color-primary, #1a202c);
+          margin: 0 0 14px 0;
           padding-bottom: 8px;
-          border-bottom: 2px solid #e2e8f0;
+          border-bottom: 2px solid var(--el-border-color-lighter, #e2e8f0);
         }
       }
 
@@ -2217,7 +1521,7 @@ onMounted(async () => {
         display: flex;
         align-items: center;
         gap: 4px;
-        margin-top: 8px;
+        margin-top: 6px;
         font-size: 12px;
         color: #f56c6c;
 
@@ -2230,7 +1534,7 @@ onMounted(async () => {
         display: flex;
         align-items: center;
         gap: 4px;
-        margin-top: 8px;
+        margin-top: 6px;
         font-size: 12px;
         color: #67c23a;
 
@@ -2241,17 +1545,17 @@ onMounted(async () => {
 
       .depth-selector {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         gap: 12px;
 
         .depth-option {
           display: flex;
           align-items: center;
-          padding: 16px;
-          border: 2px solid #e2e8f0;
+          padding: 14px;
+          border: 2px solid var(--el-border-color-light, #e2e8f0);
           border-radius: 12px;
           cursor: pointer;
-          transition: all 0.3s ease;
+          transition: all 0.25s ease;
 
           &:hover {
             border-color: #3b82f6;
@@ -2264,18 +1568,18 @@ onMounted(async () => {
             background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
             color: #1e40af;
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
+            box-shadow: 0 6px 18px rgba(59, 130, 246, 0.15);
           }
 
           .depth-icon {
-            font-size: 24px;
+            font-size: 22px;
             margin-right: 12px;
           }
 
           .depth-info {
             .depth-name {
               font-weight: 600;
-              margin-bottom: 4px;
+              margin-bottom: 2px;
             }
 
             .depth-desc {
@@ -2294,17 +1598,17 @@ onMounted(async () => {
 
       .analysts-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 14px;
 
         .analyst-card {
           display: flex;
           align-items: center;
-          padding: 16px;
-          border: 2px solid #e2e8f0;
+          padding: 14px;
+          border: 2px solid var(--el-border-color-light, #e2e8f0);
           border-radius: 12px;
           cursor: pointer;
-          transition: all 0.3s ease;
+          transition: all 0.25s ease;
 
           &:hover {
             border-color: #3b82f6;
@@ -2317,11 +1621,11 @@ onMounted(async () => {
             background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
             color: #1e40af;
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
+            box-shadow: 0 6px 18px rgba(59, 130, 246, 0.15);
           }
 
           &.disabled {
-            opacity: 0.5;
+            opacity: 0.45;
             cursor: not-allowed;
 
             &:hover {
@@ -2332,15 +1636,16 @@ onMounted(async () => {
           }
 
           .analyst-avatar {
-            width: 48px;
-            height: 48px;
+            width: 42px;
+            height: 42px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-right: 16px;
-            font-size: 20px;
+            margin-right: 12px;
+            font-size: 18px;
           }
 
           .analyst-content {
@@ -2348,7 +1653,8 @@ onMounted(async () => {
 
             .analyst-name {
               font-weight: 600;
-              margin-bottom: 4px;
+              margin-bottom: 2px;
+              font-size: 14px;
             }
 
             .analyst-desc {
@@ -2359,7 +1665,7 @@ onMounted(async () => {
 
           .analyst-check {
             .check-icon {
-              font-size: 20px;
+              font-size: 18px;
               color: #3b82f6;
             }
           }
@@ -2369,1004 +1675,18 @@ onMounted(async () => {
           }
         }
       }
-    }
 
-    .config-card {
-      .config-content {
-        .config-section {
-          margin-bottom: 24px;
-
-          .config-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1a202c;
-            margin: 0 0 12px 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-          }
-
-          .model-config {
-            .model-item {
-              margin-bottom: 16px;
-
-              .model-label {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                margin-bottom: 8px;
-                font-size: 13px;
-                color: #374151;
-
-                .help-icon {
-                  color: #9ca3af;
-                  cursor: help;
-                }
-              }
-            }
-          }
-
-          .option-list {
-            .option-item {
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-              padding: 12px 0;
-              border-bottom: 1px solid #f3f4f6;
-
-              &:last-child {
-                border-bottom: none;
-              }
-
-              .option-info {
-                .option-name {
-                  font-size: 14px;
-                  font-weight: 500;
-                  color: #374151;
-                  display: block;
-                  margin-bottom: 2px;
-                }
-
-                .option-desc {
-                  font-size: 12px;
-                  color: #6b7280;
-                }
-              }
-            }
-          }
-
-          .custom-input {
-            :deep(.el-textarea__inner) {
-              border-radius: 8px;
-              border: 1px solid #d1d5db;
-
-              &:focus {
-                border-color: #3b82f6;
-                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-              }
-            }
-          }
-
-          .input-help {
-            font-size: 12px;
-            color: #6b7280;
-            margin-top: 8px;
-          }
-
-          .action-buttons {
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            margin-top: 24px !important;
-            width: 100% !important;
-            text-align: center !important;
-
-            .submit-btn.el-button {
-              width: 280px !important;
-              height: 56px !important;
-              font-size: 18px !important;
-              font-weight: 700 !important;
-              background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-              border: none !important;
-              border-radius: 16px !important;
-              transition: all 0.3s ease !important;
-              box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2) !important;
-              min-width: 280px !important;
-              max-width: 280px !important;
-
-              &:hover {
-                transform: translateY(-3px) !important;
-                box-shadow: 0 12px 30px rgba(59, 130, 246, 0.4) !important;
-                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-              }
-
-              &:disabled {
-                opacity: 0.6 !important;
-                transform: none !important;
-                box-shadow: 0 4px 15px rgba(59, 130, 246, 0.1) !important;
-              }
-
-              .el-icon {
-                margin-right: 8px !important;
-                font-size: 20px !important;
-              }
-
-              span {
-                font-size: 18px !important;
-                font-weight: 700 !important;
-              }
-            }
+      .action-buttons {
+        margin-top: 16px;
+        .submit-btn.large-analysis-btn {
+          transition: all 0.3s ease;
+          &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(64, 158, 255, 0.35);
           }
         }
       }
     }
-
-    .action-section {
-      margin-top: 24px;
-      display: flex;
-      gap: 16px;
-
-      .submit-btn {
-        flex: 1;
-        height: 48px;
-        font-size: 16px;
-        font-weight: 600;
-        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-        border: none;
-        border-radius: 12px;
-        transition: all 0.3s ease;
-
-        &:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
-        }
-
-        &:disabled {
-          opacity: 0.6;
-          transform: none;
-          box-shadow: none;
-        }
-      }
-
-      .reset-btn {
-        height: 48px;
-        font-size: 16px;
-        border-radius: 12px;
-        border: 2px solid #e5e7eb;
-        color: #6b7280;
-        transition: all 0.3s ease;
-
-        &:hover {
-          border-color: #d1d5db;
-          color: #374151;
-          transform: translateY(-1px);
-        }
-      }
-    }
-  }
-}
-
-// 分析步骤样式
-.step-item {
-  display: flex;
-  align-items: flex-start;
-  padding: 12px 0;
-  border-left: 3px solid #e5e7eb;
-  margin-left: 15px;
-  position: relative;
-  transition: all 0.3s ease;
-
-  &.step-completed {
-    border-left-color: #10b981;
-
-    .step-icon {
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      color: white;
-      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-    }
-
-    .step-title {
-      color: #10b981;
-      font-weight: 600;
-    }
-
-    .step-description {
-      color: #059669;
-    }
-  }
-
-  &.step-current {
-    border-left-color: #3b82f6;
-    background: linear-gradient(90deg, rgba(59, 130, 246, 0.05) 0%, transparent 100%);
-
-    .step-icon {
-      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-      color: white;
-      box-shadow: 0 2px 12px rgba(59, 130, 246, 0.4);
-    }
-
-    .step-title {
-      color: #3b82f6;
-      font-weight: 700;
-    }
-
-    .step-description {
-      color: #1d4ed8;
-      font-weight: 500;
-    }
-  }
-
-  &.step-pending {
-    .step-icon {
-      background: #f3f4f6;
-      color: #9ca3af;
-      border: 2px solid #e5e7eb;
-    }
-
-    .step-title {
-      color: #6b7280;
-    }
-
-    .step-description {
-      color: #9ca3af;
-    }
-  }
-}
-
-.step-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: -16px;
-  margin-right: 16px;
-  font-size: 14px;
-  flex-shrink: 0;
-  z-index: 1;
-  transition: all 0.3s ease;
-}
-
-.completed-icon {
-  color: white;
-}
-
-.current-icon {
-  color: white;
-}
-
-.pending-icon {
-  color: #9ca3af;
-}
-
-.step-content {
-  flex: 1;
-  min-width: 0;
-  padding-right: 16px;
-}
-
-.step-title {
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 4px;
-  line-height: 1.4;
-}
-
-.step-description {
-  font-size: 12px;
-  line-height: 1.4;
-  opacity: 0.9;
-}
-
-/* 脉冲动画 */
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.05);
-  }
-}
-
-/* 为当前步骤图标添加脉冲效果 */
-.step-current .step-icon {
-  animation: pulse 2s ease-in-out infinite;
-}
-</style>
-
-<style>
-/* 全局样式确保按钮样式生效 */
-.action-buttons {
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-  width: 100% !important;
-  text-align: center !important;
-}
-
-.large-analysis-btn.el-button {
-  width: 280px !important;
-  height: 56px !important;
-  font-size: 18px !important;
-  font-weight: 700 !important;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-  border: none !important;
-  border-radius: 16px !important;
-  transition: all 0.3s ease !important;
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2) !important;
-  min-width: 280px !important;
-  max-width: 280px !important;
-}
-
-.large-analysis-btn.el-button:hover {
-  transform: translateY(-3px) !important;
-  box-shadow: 0 12px 30px rgba(59, 130, 246, 0.4) !important;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-}
-
-.large-analysis-btn.el-button:disabled {
-  opacity: 0.6 !important;
-  transform: none !important;
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.1) !important;
-}
-
-.large-analysis-btn.el-button .el-icon {
-  margin-right: 8px !important;
-  font-size: 20px !important;
-}
-
-.large-analysis-btn.el-button span {
-  font-size: 18px !important;
-  font-weight: 700 !important;
-}
-
-/* 进度显示样式 */
-.progress-section {
-  margin-top: 24px;
-}
-
-.progress-card .progress-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.progress-card .progress-header h4 {
-  margin: 0;
-  color: #1f2937;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* 旋转动画 */
-.rotating-icon {
-  animation: rotate 2s linear infinite;
-}
-
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* 总体进度信息 */
-.overall-progress-info {
-  margin-bottom: 24px;
-}
-
-.progress-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.stat-item {
-  text-align: center;
-  padding: 12px;
-  background: var(--el-fill-color-light);
-  border-radius: 8px;
-  border: 1px solid var(--el-border-color);
-}
-
-.stat-label {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  margin-bottom: 4px;
-  font-weight: 500;
-}
-
-.stat-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-
-/* 进度条区域 */
-.progress-bar-section {
-  margin-bottom: 24px;
-}
-
-.main-progress-bar {
-  :deep(.el-progress-bar__outer) {
-    background-color: var(--el-fill-color);
-    border-radius: 8px;
-  }
-
-  :deep(.el-progress-bar__inner) {
-    background: linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%);
-    border-radius: 8px;
-    transition: width 0.6s ease;
-  }
-
-  :deep(.el-progress__text) {
-    font-weight: 600;
-    color: var(--el-text-color-primary);
-  }
-}
-
-/* 当前任务信息 */
-.current-task-info {
-  background: var(--el-fill-color-light);
-  border: 1px solid #3b82f6;
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 24px;
-}
-
-.task-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #1e40af;
-  margin-bottom: 8px;
-}
-
-.task-icon {
-  color: #3b82f6;
-}
-
-.task-description {
-  font-size: 14px;
-  color: #1e40af;
-  line-height: 1.5;
-}
-
-/* 分析步骤 */
-.analysis-steps {
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color);
-  border-radius: 12px;
-  padding: 20px;
-}
-
-.steps-title {
-  margin: 0 0 16px 0;
-  color: #1e293b;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.steps-container {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-/* 结果显示样式 */
-.results-section {
-  margin-top: 24px;
-}
-
-.results-card .results-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.results-card .results-header h3 {
-  margin: 0;
-  color: #1f2937;
-}
-
-.results-card .result-meta {
-  display: flex;
-  gap: 8px;
-}
-
-/* 风险提示样式 */
-.risk-disclaimer {
-  margin-bottom: 24px;
-  animation: fadeInDown 0.5s ease-out;
-}
-
-.risk-disclaimer :deep(.el-alert) {
-  background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
-  border: 2px solid #ffc107;
-  border-radius: 12px;
-  padding: 16px 20px;
-  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.2);
-}
-
-.risk-disclaimer :deep(.el-alert__icon) {
-  font-size: 24px;
-  color: #ff6b00;
-}
-
-.disclaimer-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 15px;
-  line-height: 1.6;
-}
-
-.disclaimer-icon {
-  font-size: 24px;
-  color: #ff6b00;
-  flex-shrink: 0;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-.disclaimer-text {
-  color: #856404;
-  flex: 1;
-}
-
-.disclaimer-text strong {
-  color: #d63031;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 0.8;
-  }
-}
-
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.decision-section {
-  margin-bottom: 32px;
-}
-
-.decision-section h4 {
-  color: #1f2937;
-  margin-bottom: 16px;
-}
-
-.decision-card {
-  background: var(--el-fill-color-light);
-  border: 1px solid var(--el-border-color);
-  border-radius: 12px;
-  padding: 20px;
-}
-
-.decision-main {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 16px;
-}
-
-.decision-action {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.decision-action .label {
-  font-weight: 600;
-  color: #374151;
-}
-
-.decision-metrics {
-  display: flex;
-  gap: 24px;
-}
-
-.metric-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.metric-item .label {
-  font-size: 12px;
-  color: #6b7280;
-  margin-bottom: 4px;
-}
-
-.metric-item .value {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.decision-reasoning h5 {
-  margin: 0 0 8px 0;
-  color: #374151;
-  font-size: 14px;
-}
-
-.decision-reasoning p {
-  margin: 0;
-  color: #6b7280;
-  line-height: 1.6;
-}
-
-.reports-section {
-  margin-bottom: 32px;
-}
-
-.reports-section h4 {
-  color: #1f2937;
-  margin-bottom: 16px;
-}
-
-.report-content {
-  line-height: 1.6;
-  color: #374151;
-}
-
-.report-content h1,
-.report-content h2,
-.report-content h3 {
-  color: #1f2937;
-  margin: 16px 0 8px 0;
-}
-
-.report-content strong {
-  color: #1f2937;
-}
-
-.result-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  padding-top: 24px;
-  border-top: 1px solid #e5e7eb;
-}
-
-/* 分析报告标签页样式 */
-.analysis-tabs-container {
-  margin-top: 16px;
-}
-
-.analysis-tabs {
-  /* 标签页头部样式 */
-  :deep(.el-tabs__header) {
-    margin: 0 0 20px 0;
-    background: var(--el-fill-color-light);
-    padding: 12px;
-    border-radius: 15px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    border: 1px solid var(--el-border-color);
-  }
-
-  /* 标签页导航 */
-  :deep(.el-tabs__nav-wrap) {
-    &::after {
-      display: none; /* 隐藏默认的底部边框 */
-    }
-  }
-
-  /* 单个标签页样式 */
-  :deep(.el-tabs__item) {
-    height: 55px !important;
-    line-height: 55px !important;
-    padding: 0 20px !important;
-    margin-right: 8px !important;
-    background: var(--el-bg-color) !important;
-    border: 2px solid var(--el-border-color) !important;
-    border-radius: 12px !important;
-    color: var(--el-text-color-regular) !important;
-    font-weight: 600 !important;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-    position: relative !important;
-    overflow: hidden !important;
-    border-bottom: 2px solid var(--el-border-color) !important; /* 确保底部边框存在 */
-
-    &:hover {
-      background: var(--el-fill-color-light) !important;
-      border-color: #2196f3 !important;
-      transform: translateY(-2px) scale(1.02) !important;
-      box-shadow: 0 4px 15px rgba(33,150,243,0.3) !important;
-      color: #1976d2 !important;
-    }
-
-    &.is-active {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-      color: white !important;
-      border-color: #667eea !important;
-      box-shadow: 0 6px 20px rgba(102,126,234,0.4) !important;
-      transform: translateY(-3px) scale(1.05) !important;
-
-      &::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%);
-        border-radius: 10px;
-        pointer-events: none;
-      }
-    }
-  }
-
-  /* 标签页内容区域 */
-  :deep(.el-tabs__content) {
-    padding: 0;
-  }
-
-  :deep(.el-tab-pane) {
-    padding: 25px;
-    background: var(--el-bg-color);
-    border-radius: 15px;
-    border: 1px solid var(--el-border-color);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    margin-top: 10px;
-  }
-}
-
-/* 报告头部样式 */
-.report-header {
-  margin-bottom: 25px;
-  padding: 20px;
-  background: var(--el-fill-color-light);
-  border-radius: 15px;
-  border-left: 5px solid #667eea;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-
-  .report-title {
-    display: flex;
-    align-items: center;
-    margin-bottom: 8px;
-
-    .report-icon {
-      font-size: 24px;
-      margin-right: 12px;
-    }
-
-    .report-name {
-      font-size: 20px;
-      font-weight: 700;
-      color: #495057;
-    }
-  }
-
-  .report-description {
-    color: #6c757d;
-    font-size: 16px;
-    line-height: 1.5;
-    margin-left: 36px; /* 对齐图标后的文字 */
-  }
-}
-
-/* 报告内容包装器 */
-.report-content-wrapper {
-  background: var(--el-bg-color);
-  padding: 25px;
-  border-radius: 12px;
-  border: 1px solid var(--el-border-color);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-/* 报告内容样式增强 */
-.report-content {
-  line-height: 1.7;
-  color: #495057;
-  font-size: 16px;
-
-  /* 标题样式 */
-  h1, h2, h3, h4, h5, h6 {
-    color: #1f2937 !important;
-    margin: 20px 0 12px 0 !important;
-    font-weight: 600 !important;
-  }
-
-  h1 { font-size: 24px !important; }
-  h2 { font-size: 20px !important; }
-  h3 { font-size: 18px !important; }
-  h4 { font-size: 16px !important; }
-
-  /* 段落样式 */
-  p {
-    margin: 12px 0 !important;
-    line-height: 1.7 !important;
-  }
-
-  /* 强调文本 */
-  strong, b {
-    color: #1f2937 !important;
-    font-weight: 600 !important;
-  }
-
-  /* 斜体文本 */
-  em, i {
-    color: #4b5563 !important;
-    font-style: italic !important;
-  }
-
-  /* 列表样式 */
-  ul, ol {
-    margin: 12px 0 !important;
-    padding-left: 24px !important;
-
-    li {
-      margin: 6px 0 !important;
-      line-height: 1.6 !important;
-    }
-  }
-
-  /* 代码样式 */
-  code {
-    background: var(--el-fill-color-light) !important;
-    padding: 2px 6px !important;
-    border-radius: 4px !important;
-    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace !important;
-    font-size: 14px !important;
-    color: #e11d48 !important;
-  }
-
-  /* 引用样式 */
-  blockquote {
-    border-left: 4px solid #3b82f6 !important;
-    padding-left: 16px !important;
-    margin: 16px 0 !important;
-    background: var(--el-fill-color-light) !important;
-    padding: 12px 16px !important;
-    border-radius: 0 8px 8px 0 !important;
-    font-style: italic !important;
-    color: var(--el-text-color-regular) !important;
-  }
-}
-
-/* 风险提示样式 */
-.risk-disclaimer {
-  margin-top: 24px;
-  border-radius: 8px;
-
-  :deep(.el-alert__content) {
-    width: 100%;
-  }
-
-  :deep(.el-alert__title) {
-    font-size: 14px;
-    line-height: 1.6;
-    color: #e6a23c;
-  }
-}
-
-/* 五维量化因子评估卡片样式 */
-.quant-factors-section {
-  margin-top: 20px;
-  background: var(--el-bg-color-overlay, #ffffff);
-  border: 1px solid var(--el-border-color-light, #e4e7ed);
-  border-radius: 10px;
-  padding: 18px 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-.quant-section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-
-  .header-left {
-    display: flex;
-    align-items: center;
-
-    h4 {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--el-text-color-primary, #303133);
-    }
-  }
-
-  .quant-badge {
-    font-size: 12px;
-    padding: 3px 10px;
-    border-radius: 4px;
-    background: rgba(64, 158, 255, 0.1);
-    color: #409eff;
-    font-weight: 500;
-  }
-}
-
-.quant-factors-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 14px;
-}
-
-.quant-factor-card {
-  background: var(--el-fill-color-light, #f8fafc);
-  border-radius: 8px;
-  padding: 14px 16px;
-  border: 1px solid var(--el-border-color-lighter, #ebeef5);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  transition: all 0.25s ease;
-
-  &:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-    transform: translateY(-2px);
-    border-color: #c6e2ff;
-  }
-
-  .factor-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-
-    .factor-icon {
-      font-size: 16px;
-    }
-
-    .factor-name {
-      font-weight: 600;
-      font-size: 13px;
-      color: var(--el-text-color-primary, #303133);
-      flex: 1;
-    }
-  }
-
-  .factor-score-row {
-    display: flex;
-    align-items: baseline;
-    gap: 2px;
-
-    .factor-score {
-      font-size: 22px;
-      font-weight: 700;
-      color: var(--el-text-color-primary, #303133);
-    }
-
-    .factor-score-max {
-      font-size: 12px;
-      color: var(--el-text-color-secondary, #909399);
-    }
-
-    .factor-progress {
-      flex: 1;
-      margin-left: 10px;
-    }
-  }
-
-  .factor-desc {
-    font-size: 12px;
-    color: var(--el-text-color-secondary, #606266);
-    line-height: 1.45;
   }
 }
 </style>

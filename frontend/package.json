@@ -1,7 +1,7 @@
 {
-  "name": "tradingagents-frontend",
+  "name": "quantagent-invest-frontend",
   "version": "1.0.0-preview",
-  "description": "TradingAgents-CN 现代化前端界面",
+  "description": "QuantAgent-Invest 现代化智能投资与多智能体量化分析平台",
   "type": "module",
   "scripts": {
     "dev": "vite",

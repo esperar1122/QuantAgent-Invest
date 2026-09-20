@@ -52,7 +52,16 @@ class BaoStockAdapter(DataSourceAdapter):
                 if not data_list:
                     return None
                 df = pd.DataFrame(data_list, columns=rs.fields)
-                df = df[df['type'] == '1']
+                # 仅保留处于正常上市状态的A股标的（type='1' 股票，status='1' 上市中；剔除 status='0' 已退市标的）
+                if 'status' in df.columns:
+                    df = df[(df['type'] == '1') & (df['status'] == '1')]
+                else:
+                    df = df[df['type'] == '1']
+
+                # 剔除名称含“退”或“PT”的退市/整理期标的
+                if 'code_name' in df.columns:
+                    df = df[~df['code_name'].str.contains(r'退|PT', regex=True, na=False)]
+
                 df['symbol'] = df['code'].str.replace(r'^(sh|sz)\.', '', regex=True)
                 df['ts_code'] = (
                     df['code'].str.replace('sh.', '').str.replace('sz.', '')
@@ -61,40 +70,21 @@ class BaoStockAdapter(DataSourceAdapter):
                 df['name'] = df['code_name']
                 df['area'] = ''
 
-                # 获取行业信息
-                logger.info("BaoStock: Querying stock industry info...")
-                industry_rs = bs.query_stock_industry()
-                if industry_rs.error_code == '0':
-                    industry_list = []
-                    while (industry_rs.error_code == '0') & industry_rs.next():
-                        industry_list.append(industry_rs.get_row_data())
-                    if industry_list:
-                        industry_df = pd.DataFrame(industry_list, columns=industry_rs.fields)
+                # 行业信息通过基础信息或快速映射获取，跳过可能无响应的服务端 industry 接口
+                df['industry'] = ''
+                logger.info(f"BaoStock: 正常上市股票列表已就绪 ({len(df)} 只，已剔除退市标的)")
 
-                        # 去掉行业编码前缀（如 "I65软件和信息技术服务业" -> "软件和信息技术服务业"）
-                        def clean_industry_name(industry_str):
-                            if not industry_str or pd.isna(industry_str):
-                                return ''
-                            # 使用正则表达式去掉前面的字母和数字编码（如 I65、C31 等）
-                            import re
-                            cleaned = re.sub(r'^[A-Z]\d+', '', str(industry_str))
-                            return cleaned.strip()
+                def classify_market(sym: str) -> str:
+                    s = str(sym).strip()
+                    if s.startswith(('688', '689')):
+                        return '科创板'
+                    elif s.startswith(('300', '301')):
+                        return '创业板'
+                    elif s.startswith(('8', '4', '920')):
+                        return '北交所'
+                    return '主板'
 
-                        industry_df['industry_clean'] = industry_df['industry'].apply(clean_industry_name)
-
-                        # 创建行业映射字典 {code: industry_clean}
-                        industry_map = dict(zip(industry_df['code'], industry_df['industry_clean']))
-                        # 将行业信息合并到主DataFrame
-                        df['industry'] = df['code'].map(industry_map).fillna('')
-                        logger.info(f"BaoStock: Successfully mapped industry info for {len(industry_map)} stocks")
-                    else:
-                        df['industry'] = ''
-                        logger.warning("BaoStock: No industry data returned")
-                else:
-                    df['industry'] = ''
-                    logger.warning(f"BaoStock: Failed to query industry info: {industry_rs.error_msg}")
-
-                df['market'] = '\u4e3b\u677f'
+                df['market'] = df['symbol'].apply(classify_market)
                 df['list_date'] = ''
                 logger.info(f"BaoStock: Successfully fetched {len(df)} stocks")
                 return df[['symbol', 'name', 'ts_code', 'area', 'industry', 'market', 'list_date']]
@@ -134,14 +124,34 @@ class BaoStockAdapter(DataSourceAdapter):
                     logger.warning("BaoStock: No stocks found")
                     return None
 
-                total_stocks = len([s for s in stock_list if len(s) > 5 and s[4] == '1' and s[5] == '1'])
-                logger.info(f"📊 BaoStock: 找到 {total_stocks} 只活跃股票，开始处理{'全部' if max_stocks is None else f'前 {max_stocks} 只'}...")
+                # 过滤正常上市A股
+                active_stocks = []
+                for s in stock_list:
+                    c_name = s[1] if len(s) > 1 else ''
+                    s_type = s[4] if len(s) > 4 else '0'
+                    s_status = s[5] if len(s) > 5 else '0'
+                    if s_type == '1' and s_status == '1' and '退' not in c_name and not c_name.startswith('PT'):
+                        active_stocks.append(s)
+
+                stock_list = active_stocks
+                total_stocks = len(stock_list)
+
+                # 默认限制最大处理数量为 200 只，避免全量 5000 只无休止查询
+                actual_max = max_stocks if max_stocks is not None else 200
+                logger.info(f"📊 BaoStock: 找到 {total_stocks} 只活跃股票，开始处理 (上限: {actual_max} 只，最长30秒)...")
+
+                import time
+                start_time = time.time()
+                max_duration = 30.0  # 最多执行30秒，避免长时间挂起
 
                 basic_data = []
                 processed_count = 0
                 failed_count = 0
                 for stock in stock_list:
-                    if max_stocks and processed_count >= max_stocks:
+                    if processed_count >= actual_max:
+                        break
+                    if time.time() - start_time > max_duration:
+                        logger.warning(f"⏱️ BaoStock: 达到最大耗时限制 ({max_duration}秒)，已处理 {processed_count} 只股票，提前返回")
                         break
                     code = stock[0] if len(stock) > 0 else ''
                     name = stock[1] if len(stock) > 1 else ''
@@ -237,10 +247,66 @@ class BaoStockAdapter(DataSourceAdapter):
         return None
 
     def get_kline(self, code: str, period: str = "day", limit: int = 120, adj: Optional[str] = None):
-        """BaoStock not used for K-line here; return None to allow fallback"""
+        """BaoStock K-line implementation for day/week/month"""
         if not self.is_available():
             return None
-        return None
+        try:
+            import baostock as bs
+            code_str = str(code).strip()
+            # Normalize to BaoStock symbol (sh.600519 or sz.000001 or bj.xxxxxx)
+            if not (code_str.startswith("sh.") or code_str.startswith("sz.") or code_str.startswith("bj.")):
+                c6 = code_str.zfill(6)
+                if c6.startswith(("60", "68", "90")):
+                    bs_code = f"sh.{c6}"
+                elif c6.startswith(("00", "30", "20")):
+                    bs_code = f"sz.{c6}"
+                elif c6.startswith(("43", "83", "87", "88", "92")):
+                    bs_code = f"bj.{c6}"
+                else:
+                    bs_code = f"sh.{c6}"
+            else:
+                bs_code = code_str
+
+            freq_map = {"day": "d", "week": "w", "month": "m", "5m": "5", "15m": "15", "30m": "30", "60m": "60"}
+            freq = freq_map.get(period, "d")
+            # adjustflag: 1后复权 2前复权 3不复权
+            adj_flag = "2" if adj == "qfq" else "1" if adj == "hfq" else "3"
+
+            end_d = datetime.now().strftime("%Y-%m-%d")
+            start_d = (datetime.now() - timedelta(days=max(limit * 3, 100))).strftime("%Y-%m-%d")
+
+            lg = bs.login()
+            if lg.error_code != '0':
+                return None
+            try:
+                rs = bs.query_history_k_data_plus(
+                    bs_code,
+                    "date,open,high,low,close,volume,amount",
+                    start_date=start_d,
+                    end_date=end_d,
+                    frequency=freq,
+                    adjustflag=adj_flag
+                )
+                items = []
+                while (rs.error_code == '0') & rs.next():
+                    row = rs.get_row_data()
+                    items.append({
+                        "time": row[0],
+                        "open": self._safe_float(row[1]),
+                        "high": self._safe_float(row[2]),
+                        "low": self._safe_float(row[3]),
+                        "close": self._safe_float(row[4]),
+                        "volume": self._safe_float(row[5]),
+                        "amount": self._safe_float(row[6]),
+                    })
+                if items:
+                    return items[-limit:]
+                return None
+            finally:
+                bs.logout()
+        except Exception as e:
+            logger.error(f"BaoStock get_kline failed: {e}")
+            return None
 
     def get_news(self, code: str, days: int = 2, limit: int = 50, include_announcements: bool = True):
         """BaoStock does not provide news in this adapter; return None"""

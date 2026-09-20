@@ -1275,20 +1275,22 @@ class ConfigService:
                     # API Key 是完整的，直接使用
                     logger.info(f"✅ [TEST] Using complete API Key from config (length: {len(api_key)})")
 
-                # 测试 Tushare API
+                # 测试 Tushare API (线程隔离 + 8秒超时)
                 try:
                     logger.info(f"🔌 [TEST] Calling Tushare API with token (length: {len(api_key)})")
-                    import tushare as ts
-                    ts.set_token(api_key)
-                    pro = ts.pro_api()
-                    # 获取交易日历（轻量级测试）
-                    df = pro.trade_cal(exchange='SSE', start_date='20240101', end_date='20240101')
+                    
+                    def _test_tushare_sync():
+                        import tushare as ts
+                        ts.set_token(api_key)
+                        pro = ts.pro_api()
+                        return pro.trade_cal(exchange='SSE', start_date='20240101', end_date='20240101')
+
+                    df = await asyncio.wait_for(asyncio.to_thread(_test_tushare_sync), timeout=8.0)
 
                     if df is not None and len(df) > 0:
                         response_time = time.time() - start_time
                         logger.info(f"✅ [TEST] Tushare API call successful (response time: {response_time:.2f}s)")
 
-                        # 构建消息，说明使用了哪个来源的凭证
                         credential_source = "配置"
                         if used_db_credentials:
                             credential_source = "数据库"
@@ -1315,6 +1317,14 @@ class ConfigService:
                             "response_time": time.time() - start_time,
                             "details": None
                         }
+                except asyncio.TimeoutError:
+                    logger.error(f"⏱️ [TEST] Tushare API call timed out (8s)")
+                    return {
+                        "success": False,
+                        "message": "Tushare API 连接超时（8秒），外部网络响应缓慢",
+                        "response_time": time.time() - start_time,
+                        "details": {"error": "timeout"}
+                    }
                 except ImportError:
                     logger.error(f"❌ [TEST] Tushare library not installed")
                     return {
@@ -1333,12 +1343,30 @@ class ConfigService:
                     }
 
             elif ds_type == "akshare":
-                # AKShare 不需要 API Key，直接测试
+                # AKShare 不需要 API Key，直接测试 (线程隔离 + 8秒超时)
                 try:
-                    import akshare as ak
-                    # 使用更轻量级的接口测试 - 获取交易日历
-                    # 这个接口数据量小，响应快，更适合测试连接
-                    df = ak.tool_trade_date_hist_sina()
+                    def _test_akshare_sync():
+                        import akshare as ak
+                        # 1. 优先尝试上交所轻量股票代码接口
+                        try:
+                            df = ak.stock_info_sh_name_code(symbol="主板A股")
+                            if df is not None and len(df) > 0:
+                                return df, f"获取上交所主板股票成功（{len(df)} 只）"
+                        except Exception as e:
+                            logger.warning(f"AKShare 上交所股票接口测试失败 ({e})，尝试新浪日历备用接口...")
+
+                        # 2. 备用尝试新浪交易日历
+                        try:
+                            df = ak.tool_trade_date_hist_sina()
+                            if df is not None and len(df) > 0:
+                                return df, f"获取交易日历成功（{len(df)} 条记录）"
+                        except Exception as e:
+                            logger.warning(f"AKShare 新浪交易日历备用接口失败: {e}")
+                            raise
+
+                        return None, "返回数据为空"
+
+                    df, test_result = await asyncio.wait_for(asyncio.to_thread(_test_akshare_sync), timeout=8.0)
 
                     if df is not None and len(df) > 0:
                         response_time = time.time() - start_time
@@ -1348,7 +1376,7 @@ class ConfigService:
                             "response_time": response_time,
                             "details": {
                                 "type": ds_type,
-                                "test_result": f"获取交易日历成功（{len(df)} 条记录）"
+                                "test_result": test_result
                             }
                         }
                     else:
@@ -1358,6 +1386,14 @@ class ConfigService:
                             "response_time": time.time() - start_time,
                             "details": None
                         }
+                except asyncio.TimeoutError:
+                    logger.error(f"⏱️ [TEST] AKShare API call timed out (8s)")
+                    return {
+                        "success": False,
+                        "message": "AKShare API 连接超时（8秒），外部网络接口无响应",
+                        "response_time": time.time() - start_time,
+                        "details": {"error": "timeout"}
+                    }
                 except ImportError:
                     return {
                         "success": False,
@@ -1374,53 +1410,50 @@ class ConfigService:
                     }
 
             elif ds_type == "baostock":
-                # BaoStock 不需要 API Key，直接测试登录
+                # BaoStock 不需要 API Key，直接测试登录 (线程隔离 + 8秒超时)
                 try:
-                    import baostock as bs
-                    # 测试登录
-                    lg = bs.login()
-
-                    if lg.error_code == '0':
-                        # 登录成功，测试获取数据
+                    def _test_baostock_sync():
+                        import baostock as bs
+                        lg = bs.login()
+                        if lg.error_code != '0':
+                            return False, f"BaoStock 登录失败: {lg.error_msg}"
                         try:
-                            # 获取交易日历（轻量级测试）
                             rs = bs.query_trade_dates(start_date="2024-01-01", end_date="2024-01-01")
-
                             if rs.error_code == '0':
-                                response_time = time.time() - start_time
-                                bs.logout()
-                                return {
-                                    "success": True,
-                                    "message": f"成功连接到 BaoStock 数据源",
-                                    "response_time": response_time,
-                                    "details": {
-                                        "type": ds_type,
-                                        "test_result": "登录成功，获取交易日历成功"
-                                    }
-                                }
+                                return True, "登录成功，获取交易日历成功"
                             else:
-                                bs.logout()
-                                return {
-                                    "success": False,
-                                    "message": f"BaoStock 数据获取失败: {rs.error_msg}",
-                                    "response_time": time.time() - start_time,
-                                    "details": None
-                                }
-                        except Exception as e:
+                                return False, f"BaoStock 数据获取失败: {rs.error_msg}"
+                        finally:
                             bs.logout()
-                            return {
-                                "success": False,
-                                "message": f"BaoStock 数据获取异常: {str(e)}",
-                                "response_time": time.time() - start_time,
-                                "details": None
+
+                    is_ok, test_result = await asyncio.wait_for(asyncio.to_thread(_test_baostock_sync), timeout=8.0)
+
+                    response_time = time.time() - start_time
+                    if is_ok:
+                        return {
+                            "success": True,
+                            "message": f"成功连接到 BaoStock 数据源",
+                            "response_time": response_time,
+                            "details": {
+                                "type": ds_type,
+                                "test_result": test_result
                             }
+                        }
                     else:
                         return {
                             "success": False,
-                            "message": f"BaoStock 登录失败: {lg.error_msg}",
-                            "response_time": time.time() - start_time,
+                            "message": test_result,
+                            "response_time": response_time,
                             "details": None
                         }
+                except asyncio.TimeoutError:
+                    logger.error(f"⏱️ [TEST] BaoStock API call timed out (8s)")
+                    return {
+                        "success": False,
+                        "message": "BaoStock API 连接超时（8秒），服务器无响应",
+                        "response_time": time.time() - start_time,
+                        "details": {"error": "timeout"}
+                    }
                 except ImportError:
                     return {
                         "success": False,

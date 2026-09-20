@@ -173,7 +173,7 @@ class AKShareSyncService:
                     # 更新到数据库（使用 code + source 联合查询）
                     try:
                         await self.db.stock_basic_info.update_one(
-                            {"code": code, "source": "akshare"},
+                            {"code": code},
                             {"$set": basic_data},
                             upsert=True
                         )

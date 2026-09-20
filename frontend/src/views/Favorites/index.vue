@@ -26,10 +26,9 @@
         </el-col>
 
         <el-col :span="4">
-          <el-select v-model="selectedMarket" placeholder="市场" clearable>
-            <el-option label="A股" value="A股" />
-            <el-option label="港股" value="港股" />
-            <el-option label="美股" value="美股" />
+          <el-select v-model="selectedMarket" placeholder="类型" clearable>
+            <el-option label="A股个股" value="A股" />
+            <el-option label="指数" value="指数" />
           </el-select>
         </el-col>
 
@@ -231,9 +230,8 @@
       <el-form :model="addForm" :rules="addRules" ref="addFormRef" label-width="100px">
         <el-form-item label="市场类型" prop="market">
           <el-select v-model="addForm.market" @change="handleMarketChange">
-            <el-option label="A股" value="A股" />
-            <el-option label="港股" value="港股" />
-            <el-option label="美股" value="美股" />
+            <el-option label="A股个股" value="A股" />
+            <el-option label="指数" value="指数" />
           </el-select>
         </el-form-item>
 
@@ -250,9 +248,6 @@
 
         <el-form-item label="股票名称" prop="stock_name">
           <el-input v-model="addForm.stock_name" placeholder="股票名称" />
-          <div v-if="addForm.market !== 'A股'" style="font-size: 12px; color: #E6A23C; margin-top: 4px;">
-            {{ addForm.market }}不支持自动获取，请手动输入股票名称
-          </div>
         </el-form-item>
 
         <el-form-item label="标签">
@@ -517,7 +512,7 @@ import { ApiClient } from '@/api/request'
 
 import type { FavoriteItem } from '@/api/favorites'
 import { useAuthStore } from '@/stores/auth'
-
+import { useFavoritesStore } from '@/stores/favorites'
 
 // 颜色可选项（20种预设颜色）
 const COLOR_PALETTE = [
@@ -528,6 +523,7 @@ const COLOR_PALETTE = [
 ]
 
 const router = useRouter()
+const favoritesStore = useFavoritesStore()
 
 // 响应式数据
 const loading = ref(false)
@@ -587,26 +583,10 @@ const validateStockCode = (_rule: any, value: any, callback: any) => {
   }
 
   const code = value.trim()
-  const market = addForm.value.market
 
-  if (market === 'A股') {
-    // A股：6位数字
-    if (!/^\d{6}$/.test(code)) {
-      callback(new Error('A股代码必须是6位数字，如：000001'))
-      return
-    }
-  } else if (market === '港股') {
-    // 港股：4位数字 或 4-5位数字+.HK
-    if (!/^\d{4,5}$/.test(code) && !/^\d{4,5}\.HK$/i.test(code)) {
-      callback(new Error('港股代码格式：4位数字（如：0700）或带后缀（如：0700.HK）'))
-      return
-    }
-  } else if (market === '美股') {
-    // 美股：1-5个字母
-    if (!/^[A-Z]{1,5}$/i.test(code)) {
-      callback(new Error('美股代码必须是1-5个字母，如：AAPL'))
-      return
-    }
+  if (!/^\d{6}$/.test(code)) {
+    callback(new Error('A股/指数代码必须是6位数字，如：600519、000300'))
+    return
   }
 
   callback()
@@ -682,15 +662,14 @@ const filteredFavorites = computed<FavoriteItem[]>(() => {
   return result
 })
 
-// 判断是否有A股自选股
+// 判断是否有自选股
 const hasAStocks = computed(() => {
-  return favorites.value.some(item => item.market === 'A股')
+  return favorites.value.length > 0
 })
 
-// 判断选中的股票是否都是A股
+// 判断是否有选中的自选股
 const selectedStocksAreAllAShares = computed(() => {
-  if (selectedStocks.value.length === 0) return false
-  return selectedStocks.value.every(item => item.market === 'A股')
+  return selectedStocks.value.length > 0
 })
 
 // 方法
@@ -698,7 +677,10 @@ const loadFavorites = async () => {
   loading.value = true
   try {
     const res = await favoritesApi.list()
-    favorites.value = ((res as any)?.data || []) as FavoriteItem[]
+    const data = ((res as any)?.data || []) as FavoriteItem[]
+    favorites.value = data
+    favoritesStore.favorites = data
+    favoritesStore.initialized = true
   } catch (error: any) {
     console.error('加载自选股失败:', error)
     ElMessage.error(error.message || '加载自选股失败')
@@ -879,28 +861,12 @@ const handleMarketChange = () => {
 
 // 获取股票代码输入提示
 const getStockCodePlaceholder = () => {
-  const market = addForm.value.market
-  if (market === 'A股') {
-    return '请输入6位数字代码，如：000001'
-  } else if (market === '港股') {
-    return '请输入4位数字代码，如：0700'
-  } else if (market === '美股') {
-    return '请输入股票代码，如：AAPL'
-  }
-  return '请输入股票代码'
+  return '请输入6位代码，如：600519、000300'
 }
 
 // 获取股票代码输入提示文字
 const getStockCodeHint = () => {
-  const market = addForm.value.market
-  if (market === 'A股') {
-    return '输入代码后失焦，将自动填充股票名称'
-  } else if (market === '港股') {
-    return '港股不支持自动获取名称，请手动输入'
-  } else if (market === '美股') {
-    return '美股不支持自动获取名称，请手动输入'
-  }
-  return ''
+  return '输入6位代码后失焦，将自动填充股票/指数名称'
 }
 
 const fetchStockInfo = async () => {
@@ -908,28 +874,20 @@ const fetchStockInfo = async () => {
 
   try {
     const symbol = addForm.value.stock_code.trim()
-    const market = addForm.value.market
+    const res = await ApiClient.get(`/api/stock-data/basic-info/${symbol}`)
 
-    // 🔥 只有A股支持自动获取股票名称
-    if (market === 'A股') {
-      // 从后台获取股票基础信息
-      const res = await ApiClient.get(`/api/stock-data/basic-info/${symbol}`)
-
-      if ((res as any)?.success && (res as any)?.data) {
-        const stockInfo = (res as any).data
-        // 自动填充股票名称
-        if (stockInfo.name) {
-          addForm.value.stock_name = stockInfo.name
-          ElMessage.success(`已自动填充股票名称: ${stockInfo.name}`)
-        }
-      } else {
-        ElMessage.warning('未找到该股票信息，请手动输入股票名称')
+    if ((res as any)?.success && (res as any)?.data) {
+      const stockInfo = (res as any).data
+      if (stockInfo.name) {
+        addForm.value.stock_name = stockInfo.name
+        ElMessage.success(`已自动填充名称: ${stockInfo.name}`)
       }
+    } else {
+      ElMessage.warning('未找到该标的信息，请手动输入名称')
     }
-    // 港股和美股不调用API，用户需要手动输入
   } catch (error: any) {
-    console.error('获取股票信息失败:', error)
-    ElMessage.warning('获取股票信息失败，请手动输入股票名称')
+    console.error('获取信息失败:', error)
+    ElMessage.warning('获取信息失败，请手动输入名称')
   }
 }
 

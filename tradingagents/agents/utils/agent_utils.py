@@ -1119,15 +1119,9 @@ class Toolkit:
                     result_data.append(f"## 港股市场数据\n获取失败: {e}")
 
             else:
-                # 美股：优先使用FINNHUB API数据源
-                logger.info(f"🇺🇸 [统一市场工具] 处理美股市场数据...")
-
-                try:
-                    from tradingagents.dataflows.providers.us.optimized import get_us_stock_data_cached
-                    us_data = get_us_stock_data_cached(ticker, start_date, end_date)
-                    result_data.append(f"## 美股市场数据\n{us_data}")
-                except Exception as e:
-                    result_data.append(f"## 美股市场数据\n获取失败: {e}")
+                # 美股：已下线
+                logger.info("ℹ️ [统一市场工具] 美股模块已下线，仅支持中国A股市场")
+                result_data.append("## 市场数据提示\n当前系统已专一化运行为中国A股系统，美股模块已下线，请使用6位中国A股股票代码。")
 
             # 组合所有数据
             combined_result = f"""# {ticker} 市场数据分析

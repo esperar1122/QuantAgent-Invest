@@ -213,11 +213,11 @@
                   <div style="background: #f5f7fa; padding: 12px; border-radius: 4px; margin: 8px 0;">
                     <p style="margin: 4px 0; font-weight: bold;">📦 备份命令：</p>
                     <code style="display: block; margin: 4px 0; color: #409eff;">
-                      mongodump --uri="mongodb://localhost:27017" --db=tradingagents --out=./backup --gzip
+                      mongodump --uri="mongodb://localhost:27017" --db=quantagent_invest --out=./backup --gzip
                     </code>
                     <p style="margin: 12px 0 4px 0; font-weight: bold;">🔄 还原命令：</p>
                     <code style="display: block; margin: 4px 0; color: #409eff;">
-                      mongorestore --uri="mongodb://localhost:27017" --db=tradingagents --gzip ./backup/tradingagents
+                      mongorestore --uri="mongodb://localhost:27017" --db=quantagent_invest --gzip ./backup/quantagent_invest
                     </code>
                   </div>
                   <p style="margin: 8px 0; font-size: 12px; color: #909399;">
@@ -326,7 +326,7 @@ const mongoStatus = computed(() => databaseStatus.value?.mongodb || {
   connected: false,
   host: 'localhost',
   port: 27017,
-  database: 'tradingagents'
+  database: 'quantagent_invest'
 })
 
 const redisStatus = computed(() => databaseStatus.value?.redis || {

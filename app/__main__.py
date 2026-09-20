@@ -1,5 +1,5 @@
 """
-TradingAgents-CN Backend Entry Point
+QuantAgent-Invest Backend Entry Point
 支持 python -m app 启动方式
 """
 
@@ -115,7 +115,7 @@ def main():
     import logging
     logger = logging.getLogger("app.startup")
     
-    logger.info("🚀 Starting TradingAgents-CN Backend...")
+    logger.info("🚀 Starting QuantAgent-Invest Backend...")
     logger.info(f"📍 Host: {settings.HOST}")
     logger.info(f"🔌 Port: {settings.PORT}")
     logger.info(f"🐛 Debug Mode: {settings.DEBUG}")
@@ -133,7 +133,7 @@ def main():
     env_vars_to_check = [
         ('MONGODB_HOST', settings.MONGODB_HOST, 'localhost'),
         ('MONGODB_PORT', str(settings.MONGODB_PORT), '27017'),
-        ('MONGODB_DATABASE', settings.MONGODB_DATABASE, 'tradingagents'),
+        ('MONGODB_DATABASE', settings.MONGODB_DATABASE, 'quantagent'),
         ('REDIS_HOST', settings.REDIS_HOST, 'localhost'),
         ('REDIS_PORT', str(settings.REDIS_PORT), '6379'),
         ('JWT_SECRET', '***' if settings.JWT_SECRET != 'change-me-in-production' else settings.JWT_SECRET, 'change-me-in-production')

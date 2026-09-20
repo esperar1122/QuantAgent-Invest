@@ -242,7 +242,7 @@ class BaoStockSyncService:
 
             # 🔥 使用 (code, source) 联合查询条件
             await collection.update_one(
-                {"code": basic_info["code"], "source": "baostock"},
+                {"code": basic_info["code"]},
                 {"$set": basic_info},
                 upsert=True
             )

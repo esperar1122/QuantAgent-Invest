@@ -1,11 +1,47 @@
-// SCSS变量定义
+// SCSS变量定义 - QuantAgent-Invest 金融量化级设计系统规范
 
-// 颜色变量
-$primary-color: #409EFF;
-$success-color: #67C23A;
-$warning-color: #E6A23C;
-$danger-color: #F56C6C;
-$info-color: #909399;
+// 品牌与通用色彩变量
+$primary-color: #2563eb;
+$primary-hover: #1d4ed8;
+$primary-light: #eff6ff;
+$primary-dark: #1e40af;
+$success-color: #10b981;
+$warning-color: #f59e0b;
+$danger-color: #ef4444;
+$info-color: #64748b;
+
+// 中国A股专业金融红涨绿跌色彩规范 (Standard Financial Tokens)
+$stock-up: #ef4444;
+$stock-up-hover: #dc2626;
+$stock-up-bg: #fef2f2;
+$stock-up-border: #fecaca;
+$stock-up-badge: rgba(239, 68, 68, 0.12);
+
+$stock-down: #16a34a;
+$stock-down-hover: #15803d;
+$stock-down-bg: #f0fdf4;
+$stock-down-border: #bbf7d0;
+$stock-down-badge: rgba(22, 163, 74, 0.12);
+
+$stock-flat: #64748b;
+$stock-flat-bg: #f8fafc;
+$stock-flat-border: #e2e8f0;
+$stock-flat-badge: rgba(100, 116, 139, 0.1);
+
+// 金融图表专业色板
+$chart-ma5: #f59e0b;
+$chart-ma10: #3b82f6;
+$chart-ma20: #8b5cf6;
+$chart-ma60: #10b981;
+$chart-macd-dif: #3b82f6;
+$chart-macd-dea: #f59e0b;
+$chart-boll-upper: #06b6d4;
+$chart-boll-mid: #f59e0b;
+$chart-boll-lower: #8b5cf6;
+
+// 字体族与等宽数值字体 (Tabular Numbers)
+$font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+$font-family-mono: 'JetBrains Mono', 'Fira Code', 'Roboto Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
 
 // 间距变量
 $spacing-xs: 4px;
@@ -16,21 +52,26 @@ $spacing-xl: 32px;
 
 // 字体大小
 $font-size-xs: 12px;
-$font-size-sm: 14px;
+$font-size-sm: 13px;
+$font-size-base: 14px;
 $font-size-md: 16px;
 $font-size-lg: 18px;
 $font-size-xl: 20px;
+$font-size-2xl: 24px;
 
 // 边框圆角
-$border-radius-sm: 4px;
-$border-radius-md: 6px;
-$border-radius-lg: 8px;
-$border-radius-xl: 12px;
+$border-radius-xs: 4px;
+$border-radius-sm: 6px;
+$border-radius-md: 8px;
+$border-radius-lg: 12px;
+$border-radius-xl: 16px;
+$border-radius-full: 9999px;
 
-// 阴影
-$box-shadow-light: 0 2px 4px rgba(0, 0, 0, 0.1);
-$box-shadow-medium: 0 4px 8px rgba(0, 0, 0, 0.15);
-$box-shadow-heavy: 0 8px 16px rgba(0, 0, 0, 0.2);
+// 阴影系统
+$box-shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
+$box-shadow-light: 0 2px 8px -1px rgba(0, 0, 0, 0.06), 0 1px 4px -1px rgba(0, 0, 0, 0.04);
+$box-shadow-medium: 0 6px 16px -2px rgba(0, 0, 0, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.05);
+$box-shadow-heavy: 0 14px 28px -4px rgba(0, 0, 0, 0.12), 0 6px 12px -2px rgba(0, 0, 0, 0.06);
 
 // 断点
 $breakpoint-xs: 480px;
@@ -38,3 +79,34 @@ $breakpoint-sm: 768px;
 $breakpoint-md: 992px;
 $breakpoint-lg: 1200px;
 $breakpoint-xl: 1920px;
+
+// 注入核心 CSS 变量系统
+:root {
+  --qa-primary: #{$primary-color};
+  --qa-primary-hover: #{$primary-hover};
+  --qa-primary-light: #{$primary-light};
+  --qa-success: #{$success-color};
+  --qa-warning: #{$warning-color};
+  --qa-danger: #{$danger-color};
+  --qa-info: #{$info-color};
+
+  --qa-stock-up: #{$stock-up};
+  --qa-stock-up-bg: #{$stock-up-bg};
+  --qa-stock-up-border: #{$stock-up-border};
+  --qa-stock-down: #{$stock-down};
+  --qa-stock-down-bg: #{$stock-down-bg};
+  --qa-stock-down-border: #{$stock-down-border};
+  --qa-stock-flat: #{$stock-flat};
+
+  --qa-font-sans: #{$font-family-sans};
+  --qa-font-mono: #{$font-family-mono};
+
+  --qa-radius-sm: #{$border-radius-sm};
+  --qa-radius-md: #{$border-radius-md};
+  --qa-radius-lg: #{$border-radius-lg};
+  --qa-radius-xl: #{$border-radius-xl};
+
+  --qa-shadow-sm: #{$box-shadow-subtle};
+  --qa-shadow-md: #{$box-shadow-medium};
+  --qa-shadow-lg: #{$box-shadow-heavy};
+}

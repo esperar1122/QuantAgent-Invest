@@ -23,7 +23,7 @@ export interface AppState {
 
   // 用户偏好
   preferences: {
-    defaultMarket: 'A股' | '美股' | '港股'
+    defaultMarket: 'A股' | '指数' | string
     defaultDepth: '1' | '2' | '3' | '4' | '5'  // 1-5级分析深度
     autoRefresh: boolean
     refreshInterval: number
@@ -85,7 +85,7 @@ export const useAppStore = defineStore('app', {
     
     // 当前页面标题
     currentPageTitle(): string {
-      return this.currentRoute?.meta?.title as string || 'TradingAgents-CN'
+      return this.currentRoute?.meta?.title as string || 'QuantAgent-Invest'
     },
     
     // 应用信息

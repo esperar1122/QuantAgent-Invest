@@ -1,90 +1,271 @@
-// 全局样式文件
+// QuantAgent-Invest 全局核心样式文件
+@use "./variables.scss" as *;
+@use "./financial.scss" as *;
 
-// 重置样式
-* {
+// 1. 基础重置与现代化排版
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 html, body {
   margin: 0;
   padding: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  width: 100%;
+  height: 100%;
+  font-family: var(--qa-font-sans, $font-family-sans);
+  background-color: var(--el-bg-color-page, #f8fafc);
+  color: var(--el-text-color-primary, #1e293b);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
 }
 
-// 优化标题样式（浅色主题）
-h1, h2, h3, h4, h5, h6 {
-  color: #1a202c;
-  font-weight: 600;
+// 2. 现代极细悬浮滚动条 (Sleek Modern Scrollbar)
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-h1 {
-  font-size: 32px;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-h2 {
-  font-size: 28px;
-}
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.35);
+  border-radius: 9999px;
+  transition: background 0.2s ease;
 
-h3 {
-  font-size: 24px;
-}
-
-h4 {
-  font-size: 20px;
-}
-
-h5 {
-  font-size: 18px;
-}
-
-h6 {
-  font-size: 16px;
-}
-
-// 优化卡片标题
-.el-card__header {
-  h1, h2, h3, h4, h5, h6 {
-    color: #1a202c;
-    font-weight: 600;
-    margin: 0;
+  &:hover {
+    background: rgba(107, 114, 128, 0.6);
   }
 }
 
-// 优化页面标题
-.page-title,
-.section-title,
-.card-title {
-  color: #1a202c !important;
-  font-weight: 600 !important;
+// 3. 标题排版规范 (基于CSS变量自适应明暗主题)
+h1, h2, h3, h4, h5, h6 {
+  color: var(--el-text-color-primary, #0f172a);
+  font-weight: 600;
+  margin-top: 0;
+  line-height: 1.25;
 }
 
-// 全局工具类
-.text-center {
-  text-align: center;
+h1 { font-size: 28px; }
+h2 { font-size: 24px; }
+h3 { font-size: 20px; }
+h4 { font-size: 16px; }
+h5 { font-size: 14px; }
+h6 { font-size: 12px; }
+
+// 页面标题与卡片标题通用类
+.page-title {
+  color: var(--el-text-color-primary, #0f172a);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
-.text-left {
-  text-align: left;
+.section-title {
+  color: var(--el-text-color-primary, #0f172a);
+  font-size: 16px;
+  font-weight: 600;
 }
 
-.text-right {
-  text-align: right;
+// 4. Element-Plus 全局组件质感提升
+// 卡片现代化
+.el-card {
+  --el-card-border-radius: 12px;
+  --el-card-border-color: var(--el-border-color-lighter, #e2e8f0);
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color-lighter, #e2e8f0);
+  background-color: var(--el-bg-color, #ffffff);
+  box-shadow: var(--qa-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.04));
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &.is-hover-shadow:hover {
+    box-shadow: var(--qa-shadow-md, 0 6px 16px -2px rgba(0, 0, 0, 0.08));
+    transform: translateY(-2px);
+  }
+
+  .el-card__header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--el-border-color-lighter, #f1f5f9);
+
+    h1, h2, h3, h4, h5, h6 {
+      margin: 0;
+      color: var(--el-text-color-primary);
+    }
+  }
+
+  .el-card__body {
+    padding: 20px;
+  }
 }
 
-.flex {
-  display: flex;
+// 按钮微质感提升
+.el-button {
+  font-weight: 500;
+  border-radius: 8px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  // 主按钮金融蓝渐变微光
+  &.el-button--primary:not(.is-link):not(.is-text) {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    border: none;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+
+    &:hover,
+    &:focus {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+      transform: translateY(-1px);
+    }
+
+    &:disabled,
+    &.is-disabled {
+      background: #93c5fd !important;
+      box-shadow: none !important;
+      transform: none !important;
+    }
+  }
+
+  // 成功/买入按钮微光
+  &.el-button--success:not(.is-link):not(.is-text) {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border: none;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+
+    &:hover,
+    &:focus {
+      background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+      transform: translateY(-1px);
+    }
+  }
+
+  // 危险/卖出按钮微光
+  &.el-button--danger:not(.is-link):not(.is-text) {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    border: none;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+
+    &:hover,
+    &:focus {
+      background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+      transform: translateY(-1px);
+    }
+  }
 }
 
-.flex-center {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+// 表单输入框圆角与聚集环
+.el-input__wrapper,
+.el-select .el-input__wrapper {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--el-border-color, #dcdfe6) inset;
+  transition: all 0.2s ease;
+
+  &.is-focus {
+    box-shadow: 0 0 0 1px #2563eb inset, 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+  }
 }
 
-.flex-between {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+// 表格现代化与等宽数字自适应
+.el-table {
+  --el-table-header-bg-color: var(--el-fill-color-light, #f8fafc);
+  --el-table-border-color: var(--el-border-color-lighter, #f1f5f9);
+  border-radius: 8px;
+
+  th.el-table__cell {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--el-text-color-primary, #334155);
+    background-color: var(--el-table-header-bg-color);
+  }
+
+  td.el-table__cell {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .el-table__row {
+    transition: background-color 0.15s ease;
+  }
+}
+
+// 弹窗与抽屉现代圆角
+.el-dialog {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--qa-shadow-lg, 0 20px 25px -5px rgba(0, 0, 0, 0.1));
+
+  .el-dialog__header {
+    margin-right: 0;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--el-border-color-lighter, #f1f5f9);
+  }
+
+  .el-dialog__body {
+    padding: 24px;
+  }
+
+  .el-dialog__footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--el-border-color-lighter, #f1f5f9);
+  }
+}
+
+// Tag 标签圆角与字重
+.el-tag {
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+// 5. 常用布局与实用工具类
+.flex { display: flex; }
+.inline-flex { display: inline-flex; }
+.flex-col { display: flex; flex-direction: column; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.items-end { align-items: flex-end; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.justify-end { justify-content: flex-end; }
+.flex-1 { flex: 1 1 0%; }
+.flex-wrap { flex-wrap: wrap; }
+
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+.gap-6 { gap: 24px; }
+
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+
+.text-xs { font-size: 12px; }
+.text-sm { font-size: 13px; }
+.text-base { font-size: 14px; }
+.text-lg { font-size: 16px; }
+.text-xl { font-size: 18px; }
+.font-bold { font-weight: 700; }
+.font-semibold { font-weight: 600; }
+.font-medium { font-weight: 500; }
+
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+
+// 现代化磨砂玻璃拟态
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 // 响应式工具类

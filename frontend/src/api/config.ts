@@ -558,7 +558,7 @@ export const CONFIG_PROVIDERS = {
  * 数据源类型常量
  *
  * 注意：这些常量与后端 DataSourceType 枚举保持同步
- * 添加新数据源时，请先在后端 tradingagents/constants/data_sources.py 中注册
+ * 添加新数据源时，请先在后端 constants/data_sources.py 中注册
  */
 export const DATA_SOURCE_TYPES = {
   // 缓存数据源
@@ -610,47 +610,30 @@ export const DEFAULT_DATA_SOURCE_CONFIG: Partial<DataSourceConfig> = {
   market_categories: []
 }
 
-// 默认市场分类
 export const DEFAULT_MARKET_CATEGORIES: Partial<MarketCategory>[] = [
   {
     id: 'a_shares',
     name: 'a_shares',
     display_name: 'A股',
-    description: '中国A股市场数据源',
+    description: '中国A股股票市场数据源',
     enabled: true,
     sort_order: 1
   },
   {
-    id: 'us_stocks',
-    name: 'us_stocks',
-    display_name: '美股',
-    description: '美国股票市场数据源',
+    id: 'indices',
+    name: 'indices',
+    display_name: '核心指数',
+    description: '沪深300、中证500、科创综指等中国核心指数',
     enabled: true,
     sort_order: 2
   },
   {
-    id: 'hk_stocks',
-    name: 'hk_stocks',
-    display_name: '港股',
-    description: '香港股票市场数据源',
+    id: 'etf',
+    name: 'etf',
+    display_name: '行业与ETF',
+    description: '行业板块与ETF基金数据源',
     enabled: true,
     sort_order: 3
-  },
-  {
-    id: 'crypto',
-    name: 'crypto',
-    display_name: '数字货币',
-    description: '数字货币市场数据源',
-    enabled: true,
-    sort_order: 4
-  },
-  {
-    id: 'futures',
-    name: 'futures',
-    display_name: '期货',
-    description: '期货市场数据源',
-    enabled: true,
-    sort_order: 5
   }
 ]
 

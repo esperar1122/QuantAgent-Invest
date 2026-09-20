@@ -1,6 +1,6 @@
-# TradingAgents-CN 前端应用
+# QuantAgent-Invest 前端应用
 
-现代化的Vue3前端界面，为TradingAgents-CN提供优秀的用户体验。
+现代化的Vue3前端界面，为QuantAgent-Invest提供优秀的用户体验。
 
 ## 🚀 快速开始
 
@@ -177,7 +177,7 @@ frontend/
 VITE_API_BASE_URL=http://localhost:8000/api
 
 # 应用标题
-VITE_APP_TITLE=TradingAgents-CN
+VITE_APP_TITLE=QuantAgent-Invest
 ```
 
 ### 代理配置

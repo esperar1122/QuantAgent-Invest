@@ -355,7 +355,7 @@ const paramKeys = ref<string[]>([])
  * 数据源类型选项
  *
  * 注意：这些选项与后端 DataSourceType 枚举保持同步
- * 添加新数据源时，请先在后端 tradingagents/constants/data_sources.py 中注册
+ * 添加新数据源时，请先在后端 constants/data_sources.py 中注册
  */
 const dataSourceTypes = [
   // 中国市场数据源

@@ -156,7 +156,7 @@ class ReportExporter:
         content_parts.append("")
         content_parts.append("---")
         content_parts.append("")
-        content_parts.append("*本报告由 TradingAgents-CN 自动生成*")
+        content_parts.append("*本报告由 QuantAgent-Invest 自动生成*")
         content_parts.append("")
         
         markdown_content = "\n".join(content_parts)

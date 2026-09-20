@@ -31,21 +31,21 @@
       <div class="suggestions">
         <h3>您可能想要访问：</h3>
         <div class="suggestion-links">
-          <el-link type="primary" @click="$router.push('/dashboard')">
+          <el-link type="primary" @click="$router.push('/terminal/overview')">
             <el-icon><House /></el-icon>
-            仪表板
+            市场总览
           </el-link>
-          <el-link type="primary" @click="$router.push('/analysis/single')">
+          <el-link type="primary" @click="$router.push('/terminal/stock')">
             <el-icon><TrendCharts /></el-icon>
-            单股分析
+            个股研究
           </el-link>
-          <el-link type="primary" @click="$router.push('/screening')">
-            <el-icon><Search /></el-icon>
-            股票筛选
+          <el-link type="primary" @click="$router.push('/terminal/screening')">
+            <el-icon><Collection /></el-icon>
+            A股股票池
           </el-link>
-          <el-link type="primary" @click="$router.push('/queue')">
+          <el-link type="primary" @click="$router.push('/terminal/workflow')">
             <el-icon><Document /></el-icon>
-            队列管理
+            Agent 工作流
           </el-link>
         </div>
       </div>
@@ -60,7 +60,7 @@ import {
   ArrowLeft,
   House,
   TrendCharts,
-  Search,
+  Collection,
   Document
 } from '@element-plus/icons-vue'
 

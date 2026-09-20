@@ -65,7 +65,7 @@ class StartupValidator:
             key="MONGODB_DATABASE",
             level=ConfigLevel.REQUIRED,
             description="MongoDB数据库名称",
-            example="tradingagents"
+            example="quantagent"
         ),
         ConfigItem(
             key="REDIS_HOST",
@@ -261,7 +261,7 @@ class StartupValidator:
     def _print_validation_result(self):
         """输出验证结果"""
         logger.info("\n" + "=" * 70)
-        logger.info("TradingAgents-CN Configuration Validation Result")
+        logger.info("QuantAgent-Invest Configuration Validation Result")
         logger.info("=" * 70)
         
         # 必需配置

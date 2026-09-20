@@ -40,8 +40,8 @@ class QuotesIngestionService:
         self._tushare_call_count = 0  # 当前小时内调用次数
         self._tushare_call_times = deque()  # 记录调用时间的队列（用于限流）
 
-        # 接口轮换相关属性
-        self._rotation_sources = ["tushare", "akshare_eastmoney", "akshare_sina"]
+        # 接口轮换相关属性（优先使用速度极快且包含换手率量比的腾讯接口）
+        self._rotation_sources = ["akshare_tencent", "tushare", "akshare_sina", "akshare_eastmoney"]
         self._rotation_index = 0  # 当前轮换索引
 
     @staticmethod
@@ -307,6 +307,8 @@ class QuotesIngestionService:
 
         if current_source == "tushare":
             return "tushare", None
+        elif current_source == "akshare_tencent":
+            return "akshare", "tencent"
         elif current_source == "akshare_eastmoney":
             return "akshare", "eastmoney"
         else:  # akshare_sina
@@ -382,23 +384,33 @@ class QuotesIngestionService:
             if code6 in ["300750", "000001", "600000"]:  # 只记录几个示例股票
                 logger.info(f"📊 [写入market_quotes] {code6} - volume={volume}, amount={q.get('amount')}, source={source}")
 
+            doc_set = {
+                "code": code6,
+                "symbol": code6,  # 添加 symbol 字段，与 code 保持一致
+                "close": q.get("close"),
+                "pct_chg": q.get("pct_chg"),
+                "amount": q.get("amount"),
+                "volume": volume,
+                "open": q.get("open"),
+                "high": q.get("high"),
+                "low": q.get("low"),
+                "pre_close": q.get("pre_close"),
+                "trade_date": trade_date,
+                "updated_at": updated_at,
+            }
+            if q.get("turnover_rate") is not None:
+                doc_set["turnover_rate"] = q.get("turnover_rate")
+            if q.get("volume_ratio") is not None:
+                doc_set["volume_ratio"] = q.get("volume_ratio")
+            if q.get("circ_mv") is not None:
+                doc_set["circ_mv"] = q.get("circ_mv")
+            if q.get("total_mv") is not None:
+                doc_set["total_mv"] = q.get("total_mv")
+
             ops.append(
                 UpdateOne(
                     {"code": code6},
-                    {"$set": {
-                        "code": code6,
-                        "symbol": code6,  # 添加 symbol 字段，与 code 保持一致
-                        "close": q.get("close"),
-                        "pct_chg": q.get("pct_chg"),
-                        "amount": q.get("amount"),
-                        "volume": volume,
-                        "open": q.get("open"),
-                        "high": q.get("high"),
-                        "low": q.get("low"),
-                        "pre_close": q.get("pre_close"),
-                        "trade_date": trade_date,
-                        "updated_at": updated_at,
-                    }},
+                    {"$set": doc_set},
                     upsert=True,
                 )
             )

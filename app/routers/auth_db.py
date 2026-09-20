@@ -113,6 +113,31 @@ async def get_current_user(authorization: Optional[str] = Header(default=None)) 
         "preferences": user.preferences.model_dump() if user.preferences else {}
     }
 
+
+async def get_optional_current_user(authorization: Optional[str] = Header(default=None)) -> Optional[dict]:
+    """获取当前用户信息（可选认证，未登录返回 None）"""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    try:
+        token = authorization.split(" ", 1)[1]
+        token_data = AuthService.verify_token(token)
+        if not token_data:
+            return None
+        user = await user_service.get_user_by_username(token_data.sub)
+        if not user or not user.is_active:
+            return None
+        return {
+            "id": str(user.id),
+            "username": user.username,
+            "email": user.email,
+            "name": user.username,
+            "is_admin": user.is_admin,
+            "roles": ["admin"] if user.is_admin else ["user"],
+            "preferences": user.preferences.model_dump() if user.preferences else {}
+        }
+    except Exception:
+        return None
+
 @router.post("/login")
 async def login(payload: LoginRequest, request: Request):
     """用户登录"""

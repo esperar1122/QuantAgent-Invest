@@ -180,7 +180,16 @@ class MultiSourceBasicsSyncService:
                 manager.get_stock_list_with_fallback, preferred_sources
             )
             if stock_df is None or getattr(stock_df, "empty", True):
-                raise RuntimeError("All data sources failed to provide stock list")
+                # 终极兜底：如果所有外部数据源网络受阻，检查本地 MongoDB 是否已有缓存数据
+                local_count = await db[COLLECTION_NAME].count_documents({})
+                if local_count > 0:
+                    logger.info(f"💾 所有外部数据源网络连接受限，使用本地 MongoDB 已有的 {local_count} 只股票缓存数据继续同步")
+                    local_stocks = await db[COLLECTION_NAME].find({}, {"_id": 0}).to_list(length=10000)
+                    import pandas as pd
+                    stock_df = pd.DataFrame(local_stocks)
+                    source_used = "mongodb_cache"
+                else:
+                    raise RuntimeError("All data sources failed to provide stock list and no local cache available")
 
             stats.data_sources_used.append(f"stock_list:{source_used}")
             logger.info(f"Successfully fetched {len(stock_df)} stocks from {source_used}")
@@ -280,8 +289,8 @@ class MultiSourceBasicsSyncService:
                     # 添加财务指标
                     self._add_financial_metrics(doc, daily_metrics)
 
-                    # 🔥 使用 (code, source) 联合查询条件
-                    ops.append(UpdateOne({"code": code, "source": data_source}, {"$set": doc}, upsert=True))
+                    # 🔥 以股票代码 code 作为唯一标识进行 upsert，确保全市场单标的全局唯一，以最新获取信息为主
+                    ops.append(UpdateOne({"code": code}, {"$set": doc}, upsert=True))
 
                 except Exception as e:
                     logger.error(f"Error processing stock {row.get('ts_code', 'unknown')}: {e}")

@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tradingagents"
+name = "quantagent-invest"
 version = "1.0.0-preview"
-description = "Add your description here"
+description = "QuantAgent-Invest: A股 AI 智能多智能体自主量化投研与投资决策系统"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

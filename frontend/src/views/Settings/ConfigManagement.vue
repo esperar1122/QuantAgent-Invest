@@ -672,58 +672,15 @@
               </el-tooltip>
             </el-form-item>
 
-            <!-- TradingAgents（可选） -->
-            <el-divider content-position="left">TradingAgents（可选）</el-divider>
+            <!-- 量化与数据源节流设置 -->
+            <el-divider content-position="left">量化与数据源节流设置</el-divider>
             <el-form-item label="使用 App 缓存优先">
               <el-switch v-model="systemSettings.ta_use_app_cache" :disabled="!isEditable('ta_use_app_cache')" />
               <div class="setting-description">优先使用 App 缓存（stock_basic_info / market_quotes），未命中自动回退直连数据源</div>
             </el-form-item>
 
-
-            <el-form-item label="港股最小请求间隔">
-              <el-input-number v-model="systemSettings.ta_hk_min_request_interval_seconds" :min="0.1" :step="0.1" :disabled="!isEditable('ta_hk_min_request_interval_seconds')" />
-              <span class="setting-description">秒</span>
-              <el-tooltip effect="dark" content="港股数据请求的最小间隔，用于节流" placement="top">
-                <i class="el-icon-info" style="margin-left:8px; color:#909399;" />
-              </el-tooltip>
-            </el-form-item>
-
-            <el-form-item label="港股请求超时">
-              <el-input-number v-model="systemSettings.ta_hk_timeout_seconds" :min="1" :step="1" :disabled="!isEditable('ta_hk_timeout_seconds')" />
-              <span class="setting-description">秒</span>
-            </el-form-item>
-
-            <el-form-item label="港股最大重试">
-              <el-input-number v-model="systemSettings.ta_hk_max_retries" :min="0" :step="1" :disabled="!isEditable('ta_hk_max_retries')" />
-            </el-form-item>
-
-            <el-form-item label="港股限速等待">
-              <el-input-number v-model="systemSettings.ta_hk_rate_limit_wait_seconds" :min="1" :step="1" :disabled="!isEditable('ta_hk_rate_limit_wait_seconds')" />
-              <span class="setting-description">秒</span>
-            </el-form-item>
-
-            <el-form-item label="港股缓存TTL">
-              <el-input-number v-model="systemSettings.ta_hk_cache_ttl_seconds" :min="10" :step="10" :disabled="!isEditable('ta_hk_cache_ttl_seconds')" />
-              <span class="setting-description">秒</span>
-            </el-form-item>
-
             <el-form-item label="A股最小调用间隔">
               <el-input-number v-model="systemSettings.ta_china_min_api_interval_seconds" :min="0.1" :step="0.1" :disabled="!isEditable('ta_china_min_api_interval_seconds')" />
-              <span class="setting-description">秒</span>
-            </el-form-item>
-
-            <el-form-item label="美股最小调用间隔">
-              <el-input-number v-model="systemSettings.ta_us_min_api_interval_seconds" :min="0.1" :step="0.1" :disabled="!isEditable('ta_us_min_api_interval_seconds')" />
-              <span class="setting-description">秒</span>
-            </el-form-item>
-
-            <el-form-item label="GoogleNews最小延时">
-              <el-input-number v-model="systemSettings.ta_google_news_sleep_min_seconds" :min="0.1" :step="0.1" :disabled="!isEditable('ta_google_news_sleep_min_seconds')" />
-              <span class="setting-description">秒</span>
-            </el-form-item>
-
-            <el-form-item label="GoogleNews最大延时">
-              <el-input-number v-model="systemSettings.ta_google_news_sleep_max_seconds" :min="0.1" :step="0.1" :disabled="!isEditable('ta_google_news_sleep_max_seconds')" />
               <span class="setting-description">秒</span>
             </el-form-item>
 
@@ -1502,7 +1459,7 @@ const loadSystemSettings = async () => {
       sse_task_max_idle_seconds: 300,
       sse_batch_poll_interval_seconds: 2.0,
       sse_batch_max_idle_seconds: 600,
-      // TradingAgents（可选）默认
+      // QuantAgent 默认
       ta_use_app_cache: false,
       ta_hk_min_request_interval_seconds: 2.0,
       ta_hk_timeout_seconds: 60,
@@ -2081,7 +2038,7 @@ const saveSystemSettings = async () => {
       { key: 'sse_task_max_idle_seconds', min: 1 },
       { key: 'sse_batch_poll_interval_seconds', min: 0.000001 },
       { key: 'sse_batch_max_idle_seconds', min: 1 },
-      // TradingAgents（可选）
+      // QuantAgent 节流参数校验
       { key: 'ta_hk_min_request_interval_seconds', min: 0.000001 },
       { key: 'ta_hk_timeout_seconds', min: 1 },
       { key: 'ta_hk_max_retries', min: 0 },
@@ -2136,7 +2093,7 @@ const exportConfig = async () => {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `tradingagents-config-${new Date().toISOString().split('T')[0]}.json`
+    link.download = `quantagent-invest-config-${new Date().toISOString().split('T')[0]}.json`
     link.click()
     URL.revokeObjectURL(url)
 

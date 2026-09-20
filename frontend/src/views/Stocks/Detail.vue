@@ -11,9 +11,7 @@
         <el-button @click="onToggleFavorite">
           <el-icon><Star /></el-icon> {{ isFav ? '已自选' : '加自选' }}
         </el-button>
-        <!-- 🔥 港股和美股不显示"同步数据"按钮 -->
         <el-button
-          v-if="market !== 'HK' && market !== 'US'"
           type="primary"
           @click="showSyncDialog"
           :loading="syncLoading"
@@ -107,16 +105,45 @@
     <el-row :gutter="16" class="body">
       <el-col :span="18">
         <!-- K线蜡烛图 -->
+        <!-- K线蜡烛图与技术指标 -->
         <el-card shadow="hover">
           <template #header>
             <div class="card-hd">
-              <div>价格K线</div>
-              <div class="periods">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span>价格K线与技术指标</span>
+                <el-tag
+                  v-if="techSnapshot"
+                  :type="techSnapshot.overall.type === 'bullish' ? 'danger' : techSnapshot.overall.type === 'bearish' ? 'success' : 'info'"
+                  size="small"
+                  effect="dark"
+                >
+                  {{ techSnapshot.overall.rating }} ({{ techSnapshot.overall.score }}分)
+                </el-tag>
+              </div>
+              <div class="periods" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <el-radio-group v-model="mainIndicator" size="small" @change="renderTechChart">
+                  <el-radio-button label="ma">MA均线</el-radio-button>
+                  <el-radio-button label="boll">BOLL</el-radio-button>
+                  <el-radio-button label="none">纯K线</el-radio-button>
+                </el-radio-group>
+                <el-radio-group v-model="subIndicator" size="small" @change="renderTechChart">
+                  <el-radio-button label="macd">MACD</el-radio-button>
+                  <el-radio-button label="rsi">RSI</el-radio-button>
+                  <el-radio-button label="kdj">KDJ</el-radio-button>
+                  <el-radio-button label="vol">成交量</el-radio-button>
+                </el-radio-group>
                 <el-segmented v-model="period" :options="periodOptions" size="small" />
               </div>
             </div>
           </template>
           <div class="kline-container">
+            <div v-if="techSnapshot" class="tech-strip">
+              <span class="strip-item"><b>MACD:</b> {{ techSnapshot.macd.signal }} (DIF:{{ techSnapshot.macd.dif }})</span>
+              <span class="strip-item"><b>RSI(6):</b> {{ techSnapshot.rsi.rsi6 }} ({{ techSnapshot.rsi.status }})</span>
+              <span class="strip-item"><b>KDJ:</b> {{ techSnapshot.kdj.signal }} (J:{{ techSnapshot.kdj.j }})</span>
+              <span class="strip-item"><b>BOLL:</b> {{ techSnapshot.boll.signal }}</span>
+              <span class="strip-item"><b>均线:</b> {{ techSnapshot.ma.arrangement }}</span>
+            </div>
             <v-chart class="k-chart" :option="kOption" autoresize />
             <div class="legend">当前周期：{{ period }} · 数据源：{{ klineSource || '-' }} · 最近：{{ lastKTime || '-' }} · 收：{{ fmtPrice(lastKClose) }}</div>
           </div>
@@ -363,16 +390,16 @@ import { ApiClient } from '@/api/request'
 import { stockSyncApi } from '@/api/stockSync'
 import { clearAllCache } from '@/api/cache'
 import { use as echartsUse } from 'echarts/core'
-import { CandlestickChart } from 'echarts/charts'
+import { CandlestickChart, LineChart, BarChart } from 'echarts/charts'
 
-import { GridComponent, TooltipComponent, DataZoomComponent, LegendComponent, TitleComponent } from 'echarts/components'
+import { GridComponent, TooltipComponent, DataZoomComponent, LegendComponent, TitleComponent, MarkLineComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 import type { EChartsOption } from 'echarts'
 import { favoritesApi } from '@/api/favorites'
 
 
-echartsUse([CandlestickChart, GridComponent, TooltipComponent, DataZoomComponent, LegendComponent, TitleComponent, CanvasRenderer])
+echartsUse([CandlestickChart, LineChart, BarChart, GridComponent, TooltipComponent, DataZoomComponent, LegendComponent, TitleComponent, MarkLineComponent, CanvasRenderer])
 
 const route = useRoute()
 const router = useRouter()
@@ -779,9 +806,13 @@ watch(() => route.params.code, async (newCode, oldCode) => {
 
 
 
-// K线占位相关
+// K线占位与技术指标相关
 const periodOptions = ['日K','周K','月K']
 const period = ref('日K')
+const mainIndicator = ref<'ma' | 'boll' | 'none'>('ma')
+const subIndicator = ref<'macd' | 'rsi' | 'kdj' | 'vol'>('macd')
+const techSnapshot = ref<any>(null)
+const techSeries = ref<any[]>([])
 
 const klineSource = ref<string | undefined>(undefined)
 
@@ -795,12 +826,254 @@ function periodLabelToParam(p: string): string {
   return '5m'
 }
 
+function renderTechChart() {
+  if (!techSeries.value || techSeries.value.length === 0) return
+
+  const s = techSeries.value
+  const times = s.map((item: any) => item.time)
+  const kData = s.map((item: any) => [item.open, item.close, item.low, item.high])
+  const volumes = s.map((item: any) => ({
+    value: item.volume,
+    itemStyle: {
+      color: (item.close ?? 0) >= (item.open ?? 0) ? '#ef4444' : '#16a34a'
+    }
+  }))
+
+  const mainSeries: any[] = [
+    {
+      type: 'candlestick',
+      name: 'K线',
+      data: kData,
+      itemStyle: {
+        color: '#ef4444',
+        color0: '#16a34a',
+        borderColor: '#ef4444',
+        borderColor0: '#16a34a'
+      }
+    }
+  ]
+
+  if (mainIndicator.value === 'ma') {
+    mainSeries.push(
+      { type: 'line', name: 'MA5', data: s.map((i: any) => i.ma5), itemStyle: { color: '#eab308' }, smooth: true, symbol: 'none', lineStyle: { width: 1.5 } },
+      { type: 'line', name: 'MA10', data: s.map((i: any) => i.ma10), itemStyle: { color: '#3b82f6' }, smooth: true, symbol: 'none', lineStyle: { width: 1.5 } },
+      { type: 'line', name: 'MA20', data: s.map((i: any) => i.ma20), itemStyle: { color: '#a855f7' }, smooth: true, symbol: 'none', lineStyle: { width: 1.5 } },
+      { type: 'line', name: 'MA60', data: s.map((i: any) => i.ma60), itemStyle: { color: '#06b6d4' }, smooth: true, symbol: 'none', lineStyle: { width: 1.5 } }
+    )
+  } else if (mainIndicator.value === 'boll') {
+    mainSeries.push(
+      { type: 'line', name: 'BOLL上轨', data: s.map((i: any) => i.boll_upper), itemStyle: { color: '#ec4899' }, smooth: true, symbol: 'none', lineStyle: { width: 1.5, type: 'dashed' } },
+      { type: 'line', name: 'BOLL中轨', data: s.map((i: any) => i.boll_mid), itemStyle: { color: '#3b82f6' }, smooth: true, symbol: 'none', lineStyle: { width: 1.5 } },
+      { type: 'line', name: 'BOLL下轨', data: s.map((i: any) => i.boll_lower), itemStyle: { color: '#10b981' }, smooth: true, symbol: 'none', lineStyle: { width: 1.5, type: 'dashed' } }
+    )
+  }
+
+  const subSeries: any[] = []
+  if (subIndicator.value === 'macd') {
+    subSeries.push(
+      {
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        type: 'bar',
+        name: 'MACD柱',
+        data: s.map((i: any) => ({
+          value: i.macd_hist,
+          itemStyle: { color: (i.macd_hist ?? 0) >= 0 ? '#ef4444' : '#16a34a' }
+        }))
+      },
+      {
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        type: 'line',
+        name: 'DIF',
+        data: s.map((i: any) => i.dif),
+        itemStyle: { color: '#3b82f6' },
+        symbol: 'none',
+        lineStyle: { width: 1.5 }
+      },
+      {
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        type: 'line',
+        name: 'DEA',
+        data: s.map((i: any) => i.dea),
+        itemStyle: { color: '#f59e0b' },
+        symbol: 'none',
+        lineStyle: { width: 1.5 }
+      }
+    )
+  } else if (subIndicator.value === 'rsi') {
+    subSeries.push(
+      {
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        type: 'line',
+        name: 'RSI6',
+        data: s.map((i: any) => i.rsi6),
+        itemStyle: { color: '#ec4899' },
+        symbol: 'none',
+        lineStyle: { width: 1.5 },
+        markLine: {
+          symbol: 'none',
+          data: [
+            { yAxis: 80, lineStyle: { color: '#ef4444', type: 'dashed' } },
+            { yAxis: 20, lineStyle: { color: '#10b981', type: 'dashed' } }
+          ]
+        }
+      },
+      {
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        type: 'line',
+        name: 'RSI12',
+        data: s.map((i: any) => i.rsi12),
+        itemStyle: { color: '#3b82f6' },
+        symbol: 'none',
+        lineStyle: { width: 1.5 }
+      },
+      {
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        type: 'line',
+        name: 'RSI24',
+        data: s.map((i: any) => i.rsi24),
+        itemStyle: { color: '#a855f7' },
+        symbol: 'none',
+        lineStyle: { width: 1.5 }
+      }
+    )
+  } else if (subIndicator.value === 'kdj') {
+    subSeries.push(
+      {
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        type: 'line',
+        name: 'K',
+        data: s.map((i: any) => i.kdj_k),
+        itemStyle: { color: '#f59e0b' },
+        symbol: 'none',
+        lineStyle: { width: 1.5 },
+        markLine: {
+          symbol: 'none',
+          data: [
+            { yAxis: 80, lineStyle: { color: '#ef4444', type: 'dashed' } },
+            { yAxis: 20, lineStyle: { color: '#10b981', type: 'dashed' } }
+          ]
+        }
+      },
+      {
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        type: 'line',
+        name: 'D',
+        data: s.map((i: any) => i.kdj_d),
+        itemStyle: { color: '#3b82f6' },
+        symbol: 'none',
+        lineStyle: { width: 1.5 }
+      },
+      {
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        type: 'line',
+        name: 'J',
+        data: s.map((i: any) => i.kdj_j),
+        itemStyle: { color: '#ec4899' },
+        symbol: 'none',
+        lineStyle: { width: 1.5 }
+      }
+    )
+  } else if (subIndicator.value === 'vol') {
+    subSeries.push({
+      xAxisIndex: 1,
+      yAxisIndex: 1,
+      type: 'bar',
+      name: '成交量',
+      data: volumes
+    })
+  }
+
+  kOption.value = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' }
+    },
+    axisPointer: {
+      link: [{ xAxisIndex: 'all' }]
+    },
+    legend: {
+      top: 5,
+      left: 'center',
+      textStyle: { fontSize: 12 }
+    },
+    grid: [
+      { left: 50, right: 30, top: 35, height: '52%' },
+      { left: 50, right: 30, top: '68%', height: '22%' }
+    ],
+    xAxis: [
+      {
+        type: 'category',
+        data: times,
+        gridIndex: 0,
+        boundaryGap: true,
+        axisLine: { onZero: false },
+        axisLabel: { show: false }
+      },
+      {
+        type: 'category',
+        data: times,
+        gridIndex: 1,
+        boundaryGap: true,
+        axisLine: { onZero: false },
+        axisLabel: { fontSize: 11, color: '#64748b' }
+      }
+    ],
+    yAxis: [
+      {
+        scale: true,
+        gridIndex: 0,
+        splitLine: { show: true, lineStyle: { color: '#f1f5f9' } }
+      },
+      {
+        scale: true,
+        gridIndex: 1,
+        splitLine: { show: true, lineStyle: { color: '#f1f5f9' } }
+      }
+    ],
+    dataZoom: [
+      { type: 'inside', xAxisIndex: [0, 1], start: 60, end: 100 },
+      { show: true, xAxisIndex: [0, 1], type: 'slider', bottom: 5, height: 18, start: 60, end: 100 }
+    ],
+    series: [...mainSeries, ...subSeries]
+  }
+
+  if (times.length) {
+    lastKTime.value = times[times.length - 1]
+    lastKClose.value = Number(s[s.length - 1].close)
+  }
+}
+
 // 当周期切换时刷新K线
 watch(period, () => { fetchKline() })
 
 async function fetchKline() {
   try {
     const param = periodLabelToParam(period.value)
+    if (param === 'day' || param === 'week') {
+      try {
+        const indRes = await stocksApi.getIndicators(code.value, param, 120)
+        if (indRes.data && indRes.data.series && indRes.data.series.length > 0) {
+          techSnapshot.value = indRes.data.snapshot
+          techSeries.value = indRes.data.series
+          klineSource.value = '技术指标集成引擎'
+          renderTechChart()
+          return
+        }
+      } catch (err) {
+        console.warn('获取指标时序失败，回退到标准K线', err)
+      }
+    }
+
+    // 回退标准K线获取
     const res = await stocksApi.getKline(code.value, param as any, 200, 'none')
     const d: any = (res as any)?.data || {}
     klineSource.value = d.source
@@ -1535,5 +1808,26 @@ function exportReport() {
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
+}
+
+/* 技术指标横幅提示 */
+.tech-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  background: #f8fafc;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #475569;
+
+  .strip-item {
+    b {
+      color: #1e293b;
+    }
+  }
 }
 </style>

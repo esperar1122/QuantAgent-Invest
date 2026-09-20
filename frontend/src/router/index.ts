@@ -19,323 +19,187 @@ NProgress.configure({
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: '/dashboard'
-  },
-  // 兼容文档链接：将 /paper/<name>.md 重定向到学习中心文章路由
-  {
-    path: '/paper/:name.md',
-    name: 'PaperMdRedirect',
-    redirect: (to) => `/learning/article/${to.params.name as string}`,
-    meta: { title: '文档跳转', hideInMenu: true, requiresAuth: false }
+    redirect: '/terminal/overview'
   },
   {
-    path: '/dashboard',
-    name: 'Dashboard',
-    component: () => import('@/layouts/BasicLayout.vue'),
+    path: '/terminal',
+    name: 'Terminal',
+    component: () => import('@/layouts/TerminalLayout.vue'),
+    redirect: '/terminal/overview',
     meta: {
-      title: '仪表板',
-      icon: 'Dashboard',
-      requiresAuth: true,
-      transition: 'fade'
+      title: 'QuantAgent-Invest 智能投研终端',
+      requiresAuth: false
     },
     children: [
+      // 投研核心
       {
-        path: '',
-        name: 'DashboardHome',
+        path: 'overview',
+        name: 'TerminalOverview',
+        component: () => import('@/views/Terminal/Overview/index.vue'),
+        meta: { title: '市场总览', requiresAuth: false }
+      },
+      {
+        path: 'dashboard',
+        name: 'TerminalDashboard',
         component: () => import('@/views/Dashboard/index.vue'),
-        meta: {
-          title: '仪表板',
-          requiresAuth: true
-        }
-      }
-    ]
-  },
-  {
-    path: '/analysis',
-    name: 'Analysis',
-    component: () => import('@/layouts/BasicLayout.vue'),
-    redirect: '/analysis/single',
-    children: [
-      {
-        path: 'single',
-        name: 'SingleAnalysis',
-        component: () => import('@/views/Analysis/SingleAnalysis.vue')
+        meta: { title: '系统仪表盘', requiresAuth: true }
       },
       {
-        path: 'batch',
-        name: 'BatchAnalysis',
-        component: () => import('@/views/Analysis/BatchAnalysis.vue')
+        path: 'screening',
+        name: 'TerminalScreening',
+        component: () => import('@/views/StockPool/index.vue'),
+        meta: { title: '量化选股 (A股股票池)', requiresAuth: false }
       },
-
-    ]
-  },
-  {
-    path: '/screening',
-    name: 'StockScreening',
-    component: () => import('@/layouts/BasicLayout.vue'),
-    meta: {
-      title: '股票筛选',
-      icon: 'Search',
-      requiresAuth: true,
-      transition: 'slide-up'
-    },
-    children: [
       {
-        path: '',
-        name: 'StockScreeningHome',
-        component: () => import('@/views/Screening/index.vue'),
-        meta: {
-          title: '股票筛选',
-          requiresAuth: true
-        }
-      }
-    ]
-  },
-
-  {
-    path: '/favorites',
-    name: 'Favorites',
-    component: () => import('@/layouts/BasicLayout.vue'),
-    meta: {
-      title: '我的自选股',
-      icon: 'Star',
-      requiresAuth: true,
-      transition: 'slide-up'
-    },
-    children: [
+        path: 'stock',
+        name: 'TerminalStockResearch',
+        component: () => import('@/views/Terminal/StockResearch/index.vue'),
+        meta: { title: '个股与指数研究', requiresAuth: false }
+      },
       {
-        path: '',
-        name: 'FavoritesHome',
+        path: 'favorites',
+        name: 'TerminalFavorites',
         component: () => import('@/views/Favorites/index.vue'),
-        meta: {
-          title: '我的自选股',
-          requiresAuth: true
-        }
-      }
-    ]
-  },
-  {
-    path: '/learning',
-    name: 'Learning',
-    component: () => import('@/layouts/BasicLayout.vue'),
-    meta: {
-      title: '学习中心',
-      icon: 'Reading',
-      requiresAuth: false,
-      transition: 'fade'
-    },
-    children: [
-      {
-        path: '',
-        name: 'LearningHome',
-        component: () => import('@/views/Learning/index.vue'),
-        meta: {
-          title: '学习中心',
-          requiresAuth: false
-        }
+        meta: { title: '我的自选股', requiresAuth: true }
       },
       {
-        path: ':category',
-        name: 'LearningCategory',
-        component: () => import('@/views/Learning/Category.vue'),
-        meta: {
-          title: '学习分类',
-          requiresAuth: false
-        }
-      },
-      {
-        path: 'article/:id',
-        name: 'LearningArticle',
-        component: () => import('@/views/Learning/Article.vue'),
-        meta: {
-          title: '文章详情',
-          requiresAuth: false
-        }
-      }
-    ]
-  },
-  {
-    path: '/stocks',
-    name: 'Stocks',
-    component: () => import('@/layouts/BasicLayout.vue'),
-    meta: {
-      title: '股票详情',
-      icon: 'TrendCharts',
-      requiresAuth: true,
-      hideInMenu: true,
-      transition: 'fade'
-    },
-    children: [
-      {
-        path: ':code',
-        name: 'StockDetail',
+        path: 'stocks/:code',
+        name: 'TerminalStockDetail',
         component: () => import('@/views/Stocks/Detail.vue'),
-        meta: {
-          title: '股票详情',
-          requiresAuth: true,
-          hideInMenu: true,
-          transition: 'fade'
-        }
-      }
-    ]
-  },
+        meta: { title: '股票详情', requiresAuth: true }
+      },
 
-
-  {
-    path: '/tasks',
-    name: 'TaskCenter',
-    component: () => import('@/layouts/BasicLayout.vue'),
-    meta: {
-      title: '任务中心',
-      icon: 'List',
-      requiresAuth: true,
-      transition: 'slide-up'
-    },
-    children: [
+      // 智能体与大模型
       {
-        path: '',
-        name: 'TaskCenterHome',
+        path: 'workflow',
+        name: 'TerminalWorkflow',
+        component: () => import('@/views/Terminal/Workflow/index.vue'),
+        meta: { title: 'Agent 工作流', requiresAuth: false }
+      },
+      {
+        path: 'analysis/single',
+        name: 'TerminalSingleAnalysis',
+        component: () => import('@/views/Analysis/SingleAnalysis.vue'),
+        meta: { title: '单股深度分析 (LLM)', requiresAuth: true }
+      },
+      {
+        path: 'analysis/batch',
+        name: 'TerminalBatchAnalysis',
+        component: () => import('@/views/Analysis/BatchAnalysis.vue'),
+        meta: { title: '批量并发分析 (LLM)', requiresAuth: true }
+      },
+      {
+        path: 'report',
+        name: 'TerminalReport',
+        component: () => import('@/views/Terminal/Report/index.vue'),
+        meta: { title: '全息投研研报', requiresAuth: false }
+      },
+      {
+        path: 'reports',
+        name: 'TerminalReports',
+        component: () => import('@/views/Reports/index.vue'),
+        meta: { title: '分析报告库', requiresAuth: true }
+      },
+      {
+        path: 'reports/view/:id',
+        name: 'TerminalReportDetail',
+        component: () => import('@/views/Reports/ReportDetail.vue'),
+        meta: { title: '报告详情', requiresAuth: true }
+      },
+      {
+        path: 'reports/token',
+        name: 'TerminalTokenStatistics',
+        component: () => import('@/views/Reports/TokenStatistics.vue'),
+        meta: { title: 'Token统计', requiresAuth: true }
+      },
+
+      // 任务与调度运维
+      {
+        path: 'tasks',
+        name: 'TerminalTasks',
         component: () => import('@/views/Tasks/TaskCenter.vue'),
         meta: { title: '任务中心', requiresAuth: true }
-      }
-    ]
-  },
-  { path: '/queue', redirect: '/tasks' },
-  { path: '/analysis/history', redirect: '/tasks?tab=completed' },
-  {
-    path: '/reports',
-    name: 'Reports',
-    component: () => import('@/layouts/BasicLayout.vue'),
-    meta: {
-      title: '分析报告',
-      icon: 'Document',
-      requiresAuth: true,
-      transition: 'fade'
-    },
-    children: [
-      {
-        path: '',
-        name: 'ReportsHome',
-        component: () => import('@/views/Reports/index.vue'),
-        meta: {
-          title: '分析报告',
-          requiresAuth: true
-        }
       },
       {
-        path: 'view/:id',
-        name: 'ReportDetail',
-        component: () => import('@/views/Reports/ReportDetail.vue'),
-        meta: {
-          title: '报告详情',
-          requiresAuth: true
-        }
-      },
-      {
-        path: 'token',
-        name: 'TokenStatistics',
-        component: () => import('@/views/Reports/TokenStatistics.vue'),
-        meta: {
-          title: 'Token统计',
-          requiresAuth: true
-        }
-      }
-    ]
-  },
-  {
-    path: '/settings',
-    name: 'Settings',
-    component: () => import('@/layouts/BasicLayout.vue'),
-    meta: {
-      title: '设置',
-      icon: 'Setting',
-      requiresAuth: true,
-      transition: 'slide-left'
-    },
-    children: [
-      {
-        path: '',
-        name: 'SettingsHome',
-        component: () => import('@/views/Settings/index.vue'),
-        meta: {
-          title: '设置',
-          requiresAuth: true
-        }
-      },
-      {
-        path: 'config',
-        name: 'ConfigManagement',
-        component: () => import('@/views/Settings/ConfigManagement.vue'),
-        meta: {
-          title: '配置管理',
-          requiresAuth: true
-        }
-      },
-      {
-        path: 'database',
-        name: 'DatabaseManagement',
-        component: () => import('@/views/System/DatabaseManagement.vue'),
-        meta: {
-          title: '数据库管理',
-          requiresAuth: true
-        }
-      },
-      {
-        path: 'logs',
-        name: 'OperationLogs',
-        component: () => import('@/views/System/OperationLogs.vue'),
-        meta: {
-          title: '操作日志',
-          requiresAuth: true
-        }
-      },
-      {
-        path: 'system-logs',
-        name: 'LogManagement',
-        component: () => import('@/views/System/LogManagement.vue'),
-        meta: {
-          title: '系统日志',
-          requiresAuth: true
-        }
-      },
-      {
-        path: 'sync',
-        name: 'MultiSourceSync',
+        path: 'system/sync',
+        name: 'TerminalMultiSourceSync',
         component: () => import('@/views/System/MultiSourceSync.vue'),
-        meta: {
-          title: '多数据源同步',
-          requiresAuth: true
-        }
+        meta: { title: '多数据源同步', requiresAuth: true }
+      },
+
+      // 系统管理与设置
+      {
+        path: 'settings',
+        redirect: '/terminal/settings/config'
       },
       {
-        path: 'cache',
-        name: 'CacheManagement',
+        path: 'settings/config',
+        name: 'TerminalConfigManagement',
+        component: () => import('@/views/Settings/ConfigManagement.vue'),
+        meta: { title: '配置管理', requiresAuth: true }
+      },
+      {
+        path: 'settings/database',
+        name: 'TerminalDatabaseManagement',
+        component: () => import('@/views/System/DatabaseManagement.vue'),
+        meta: { title: '数据库管理', requiresAuth: true }
+      },
+      {
+        path: 'settings/logs',
+        name: 'TerminalOperationLogs',
+        component: () => import('@/views/System/OperationLogs.vue'),
+        meta: { title: '操作日志', requiresAuth: true }
+      },
+      {
+        path: 'settings/system-logs',
+        name: 'TerminalLogManagement',
+        component: () => import('@/views/System/LogManagement.vue'),
+        meta: { title: '系统日志', requiresAuth: true }
+      },
+      {
+        path: 'settings/cache',
+        name: 'TerminalCacheManagement',
         component: () => import('@/views/Settings/CacheManagement.vue'),
-        meta: {
-          title: '缓存管理',
-          requiresAuth: true
-        }
+        meta: { title: '缓存管理', requiresAuth: true }
       },
       {
-        path: 'usage',
-        name: 'UsageStatistics',
+        path: 'settings/usage',
+        name: 'TerminalUsageStatistics',
         component: () => import('@/views/Settings/UsageStatistics.vue'),
-        meta: {
-          title: '使用统计',
-          requiresAuth: true
-        }
+        meta: { title: '使用统计', requiresAuth: true }
       },
       {
-        path: 'scheduler',
-        name: 'SchedulerManagement',
+        path: 'settings/scheduler',
+        name: 'TerminalSchedulerManagement',
         component: () => import('@/views/System/SchedulerManagement.vue'),
-        meta: {
-          title: '定时任务',
-          requiresAuth: true
-        }
+        meta: { title: '定时任务', requiresAuth: true }
       }
     ]
   },
+
+  // 传统路由兼容平滑重定向
+  { path: '/dashboard', redirect: '/terminal/dashboard' },
+  { path: '/analysis', redirect: '/terminal/analysis/single' },
+  { path: '/analysis/single', redirect: '/terminal/analysis/single' },
+  { path: '/analysis/batch', redirect: '/terminal/analysis/batch' },
+  { path: '/analysis/history', redirect: '/terminal/tasks?tab=completed' },
+  { path: '/screening', redirect: '/terminal/screening' },
+  { path: '/stock-pool', redirect: '/terminal/screening' },
+  { path: '/favorites', redirect: '/terminal/favorites' },
+  { path: '/stocks/:code', redirect: to => `/terminal/stocks/${to.params.code}` },
+  { path: '/tasks', redirect: '/terminal/tasks' },
+  { path: '/reports', redirect: '/terminal/reports' },
+  { path: '/reports/view/:id', redirect: to => `/terminal/reports/view/${to.params.id}` },
+  { path: '/reports/token', redirect: '/terminal/reports/token' },
+  { path: '/settings', redirect: '/terminal/settings/config' },
+  { path: '/settings/config', redirect: '/terminal/settings/config' },
+  { path: '/settings/database', redirect: '/terminal/settings/database' },
+  { path: '/settings/logs', redirect: '/terminal/settings/logs' },
+  { path: '/settings/system-logs', redirect: '/terminal/settings/system-logs' },
+  { path: '/settings/sync', redirect: '/terminal/system/sync' },
+  { path: '/settings/cache', redirect: '/terminal/settings/cache' },
+  { path: '/settings/usage', redirect: '/terminal/settings/usage' },
+  { path: '/settings/scheduler', redirect: '/terminal/settings/scheduler' },
 
   {
     path: '/login',
@@ -344,18 +208,6 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: '登录',
       hideInMenu: true,
-      transition: 'fade'
-    }
-  },
-
-  {
-    path: '/about',
-    name: 'About',
-    component: () => import('@/views/About/index.vue'),
-    meta: {
-      title: '关于',
-      icon: 'InfoFilled',
-      requiresAuth: false, // 关于页面不需要认证
       transition: 'fade'
     }
   },
@@ -396,7 +248,7 @@ router.beforeEach(async (to, _from, next) => {
   // 设置页面标题
   const title = to.meta.title as string
   if (title) {
-    document.title = `${title} - TradingAgents-CN`
+    document.title = `${title} - QuantAgent-Invest`
   }
 
   console.log('🚦 路由守卫检查:', {
@@ -423,9 +275,9 @@ router.beforeEach(async (to, _from, next) => {
 
 
 
-  // 如果已登录且访问登录页，重定向到仪表板
+  // 如果已登录且访问登录页，重定向到终端市场总览
   if (authStore.isAuthenticated && to.name === 'Login') {
-    next('/dashboard')
+    next('/terminal/overview')
     return
   }
 

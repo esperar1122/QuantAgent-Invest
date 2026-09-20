@@ -67,7 +67,24 @@ export default defineConfig({
       output: {
         chunkFileNames: 'js/[name]-[hash].js',
         entryFileNames: 'js/[name]-[hash].js',
-        assetFileNames: '[ext]/[name]-[hash].[ext]'
+        assetFileNames: '[ext]/[name]-[hash].[ext]',
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('element-plus')) {
+              return 'element-plus'
+            }
+            if (id.includes('echarts') || id.includes('zrender') || id.includes('vue-echarts')) {
+              return 'echarts'
+            }
+            if (id.includes('mermaid')) {
+              return 'mermaid'
+            }
+            if (id.includes('marked') || id.includes('markdown-it')) {
+              return 'markdown'
+            }
+            return 'vendor'
+          }
+        }
       }
     }
   },

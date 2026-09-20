@@ -24,6 +24,7 @@ for _legacy, _new in _LEGACY_ENV_ALIASES.items():
 
 class Settings(BaseSettings):
     # 基础配置
+    PROJECT_NAME: str = Field(default="QuantAgent-Invest")
     DEBUG: bool = Field(default=True)
     HOST: str = Field(default="0.0.0.0")
     PORT: int = Field(default=8000)
@@ -148,7 +149,7 @@ class Settings(BaseSettings):
     # 日志配置
     LOG_LEVEL: str = Field(default="INFO")
     LOG_FORMAT: str = Field(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    LOG_FILE: str = Field(default="logs/tradingagents.log")
+    LOG_FILE: str = Field(default="logs/quantagent.log")
 
     # 代理配置
     # 用于配置需要绕过代理的域名（国内数据源）
@@ -300,7 +301,7 @@ class Settings(BaseSettings):
     BAOSTOCK_INIT_AUTO_START: bool = Field(default=False, description="应用启动时自动检查并初始化数据")
 
     # 数据目录配置
-    TRADINGAGENTS_DATA_DIR: str = Field(default="./data")
+    TRADINGAGENTS_DATA_DIR: str = Field(default="./data", alias="QUANTAGENT_DATA_DIR")
 
     @property
     def log_dir(self) -> str:
@@ -337,7 +338,7 @@ settings = Settings()
 
 
 def _read_major_version() -> str:
-    v = os.getenv("TRADINGAGENTS_VERSION", "").strip() or os.getenv("APP_VERSION", "").strip()
+    v = os.getenv("QUANTAGENT_VERSION", "").strip() or os.getenv("TRADINGAGENTS_VERSION", "").strip() or os.getenv("APP_VERSION", "").strip()
     if not v:
         try:
             v = Path(__file__).resolve().parents[3].joinpath("VERSION").read_text(encoding="utf-8").strip()
@@ -349,8 +350,8 @@ def _read_major_version() -> str:
 
 
 def _default_instance_tag() -> str:
-    user = os.getenv("TRADINGAGENTS_DB_USER", "").strip() or getpass.getuser()
-    host = os.getenv("TRADINGAGENTS_DB_HOST", "").strip() or os.getenv("COMPUTERNAME", "").strip() or os.getenv("HOSTNAME", "").strip()
+    user = os.getenv("QUANTAGENT_DB_USER", "").strip() or os.getenv("TRADINGAGENTS_DB_USER", "").strip() or getpass.getuser()
+    host = os.getenv("QUANTAGENT_DB_HOST", "").strip() or os.getenv("TRADINGAGENTS_DB_HOST", "").strip() or os.getenv("COMPUTERNAME", "").strip() or os.getenv("HOSTNAME", "").strip()
     tag = f"{user}-{host}" if host else user
     return _sanitize_mongo_db_name(tag).strip("_-").lower() or "local"
 

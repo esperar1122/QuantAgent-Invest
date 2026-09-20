@@ -94,10 +94,16 @@ class BaoStockProvider(BaseStockDataProvider):
                 import pandas as pd
                 df = pd.DataFrame(data_list, columns=rs.fields)
 
-                # 只保留股票类型（type=1）
-                df = df[df['type'] == '1']
+                # 只保留处于正常上市状态的股票（type=1 且 status=1，剔除退市标的）
+                if 'status' in df.columns:
+                    df = df[(df['type'] == '1') & (df['status'] == '1')]
+                else:
+                    df = df[df['type'] == '1']
 
-                logger.info(f"✅ BaoStock股票列表获取成功: {len(df)}只股票")
+                if 'code_name' in df.columns:
+                    df = df[~df['code_name'].str.contains(r'退|PT', regex=True, na=False)]
+
+                logger.info(f"✅ BaoStock正常上市股票列表获取成功: {len(df)}只股票（已剔除退市标的）")
                 return df
 
             finally:
@@ -153,8 +159,8 @@ class BaoStockProvider(BaseStockDataProvider):
                     stock_type = row[4] if len(row) > 4 else '0'  # type
                     status = row[5] if len(row) > 5 else '0'  # status
                     
-                    # 只保留A股股票 (type=1, status=1)
-                    if stock_type == '1' and status == '1':
+                    # 只保留正常上市A股股票 (type=1, status=1, 排除退市标的)
+                    if stock_type == '1' and status == '1' and '退' not in str(name) and not str(name).startswith('PT'):
                         # 转换代码格式 sh.600000 -> 600000
                         clean_code = code.replace('sh.', '').replace('sz.', '')
                         stock_list.append({

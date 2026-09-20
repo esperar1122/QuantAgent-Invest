@@ -1,4 +1,4 @@
-﻿# TradingAgents-CN Development Startup Script
+# QuantAgent-Invest Development Startup Script
 # 智能投研系统一键开发启动脚本
 
 [CmdletBinding(PositionalBinding=$false)]
@@ -49,7 +49,7 @@ if ($RemainingArgs.Count -gt 0) {
 if ($Help) {
     Write-Host ""
     Write-Host "========================================================" -ForegroundColor Cyan
-    Write-Host " TradingAgents-CN 智能投研系统启动指南" -ForegroundColor Cyan
+    Write-Host " QuantAgent-Invest 智能投研系统启动指南" -ForegroundColor Cyan
     Write-Host "========================================================" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "【常用命令】" -ForegroundColor Yellow
@@ -196,7 +196,7 @@ if ($WithWorker) {
 # 直接前台运行 Backend API，实时输出彩色日志，毫秒级响应 Ctrl+C，任务由内置协程池无阻塞处理
 Write-Host ""
 Write-Host "========================================================" -ForegroundColor Cyan
-Write-Host "TradingAgents-CN 智能投研系统后端启动中..." -ForegroundColor Cyan
+Write-Host "QuantAgent-Invest 智能投研系统后端启动中..." -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host "  服务地址: http://127.0.0.1:$Port" -ForegroundColor Gray
 Write-Host "  接口文档: http://127.0.0.1:$Port/docs" -ForegroundColor Gray

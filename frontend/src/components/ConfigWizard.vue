@@ -24,7 +24,7 @@
           <div class="welcome-icon">
             <el-icon :size="80" color="#409EFF"><Setting /></el-icon>
           </div>
-          <h2>欢迎使用 TradingAgents-CN</h2>
+          <h2>欢迎使用 QuantAgent-Invest</h2>
           <p class="welcome-text">
             让我们通过几个简单的步骤来配置您的系统。
             这将帮助您快速开始使用股票分析功能。
@@ -67,7 +67,7 @@
             <el-form-item label="数据库名">
               <el-input
                 v-model="wizardData.mongodb.database"
-                placeholder="tradingagents"
+                placeholder="quantagent_invest"
               />
             </el-form-item>
 
@@ -374,7 +374,7 @@ const wizardData = ref<WizardData>({
   mongodb: {
     host: 'localhost',
     port: 27017,
-    database: 'tradingagents'
+    database: 'quantagent_invest'
   },
   redis: {
     host: 'localhost',
