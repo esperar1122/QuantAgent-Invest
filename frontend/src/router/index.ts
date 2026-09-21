@@ -188,6 +188,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/favorites', redirect: '/terminal/favorites' },
   { path: '/stocks/:code', redirect: to => `/terminal/stocks/${to.params.code}` },
   { path: '/tasks', redirect: '/terminal/tasks' },
+  { path: '/queue', redirect: '/terminal/tasks' },
   { path: '/reports', redirect: '/terminal/reports' },
   { path: '/reports/view/:id', redirect: to => `/terminal/reports/view/${to.params.id}` },
   { path: '/reports/token', redirect: '/terminal/reports/token' },

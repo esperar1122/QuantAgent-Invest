@@ -943,8 +943,12 @@ const editFavorite = (row: any) => {
 
 const analyzeFavorite = (row: any) => {
   router.push({
-    name: 'SingleAnalysis',
-    query: { stock: row.stock_code, market: normalizeMarketForAnalysis(row.market || 'A股') }
+    path: '/terminal/analysis/single',
+    query: {
+      stock: row.stock_code,
+      name: row.stock_name,
+      market: normalizeMarketForAnalysis(row.market || 'A股')
+    }
   })
 }
 
@@ -970,8 +974,7 @@ const removeFavorite = async (row: any) => {
 
 const viewStockDetail = (row: any) => {
   router.push({
-    name: 'StockDetail',
-    params: { code: String(row.stock_code || '').toUpperCase() }
+    path: `/terminal/stocks/${String(row.stock_code || '').toUpperCase()}`
   })
 }
 

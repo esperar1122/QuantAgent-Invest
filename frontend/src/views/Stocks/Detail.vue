@@ -422,7 +422,7 @@ const code = computed(() => {
   const routeCode = String(route.params.code || '').toUpperCase()
   if (!routeCode) {
     ElMessage.error('股票代码不能为空')
-    router.push({ name: 'Dashboard' })
+    router.push('/terminal/dashboard')
     return ''
   }
   return routeCode
@@ -1173,7 +1173,14 @@ const basics = reactive({
 
 // 操作
 function onAnalyze() {
-  router.push({ name: 'SingleAnalysis', query: { stock: code.value } })
+  router.push({
+    path: '/terminal/analysis/single',
+    query: {
+      stock: code.value,
+      name: stockName.value,
+      market: market.value
+    }
+  })
 }
 async function onToggleFavorite() {
   try {

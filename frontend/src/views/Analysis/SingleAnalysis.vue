@@ -258,7 +258,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -1335,7 +1335,6 @@ const applyRecommendedModels = () => {
 }
 
 // 监听分析深度变化
-import { watch } from 'vue'
 watch(() => analysisForm.researchDepth, () => {
   checkModelSuitability()
 })
@@ -1344,6 +1343,51 @@ watch(() => analysisForm.researchDepth, () => {
 watch([() => modelSettings.value.quickAnalysisModel, () => modelSettings.value.deepAnalysisModel], () => {
   checkModelSuitability()
 })
+
+/**
+ * 解析并应用路由传入的股票及参数
+ */
+const applyRouteQuery = (q: any): boolean => {
+  const incomingStock = q?.stock || q?.stock_code || q?.code
+  if (incomingStock) {
+    const codeStr = String(incomingStock).trim()
+    if (!codeStr) return false
+
+    // 重置之前的分析状态与轮询，保证全新开始
+    restartAnalysis()
+
+    analysisForm.stockCode = codeStr
+
+    if (q?.market) {
+      analysisForm.market = normalizeMarketForAnalysis(q.market) as MarketType
+    } else {
+      const detectedMarket = getMarketByStockCode(codeStr)
+      analysisForm.market = detectedMarket as MarketType
+      console.log('🔍 自动识别市场类型:', codeStr, '->', detectedMarket)
+    }
+
+    // 执行股票代码验证，填充校验提示与标准化
+    validateStockCodeInput()
+
+    const displayName = q?.name ? `${q.name} (${codeStr})` : codeStr
+    ElMessage.success(`已载入分析标的：${displayName}，可直接开始智能研判`)
+    return true
+  } else if (q?.market) {
+    analysisForm.market = normalizeMarketForAnalysis(q.market) as MarketType
+  }
+  return false
+}
+
+// 监听路由参数变化（兼容组件复用、从自选股或详情页多轮跳转）
+watch(
+  () => route.query,
+  (newQuery) => {
+    if (newQuery?.stock || newQuery?.stock_code || newQuery?.code) {
+      applyRouteQuery(newQuery)
+    }
+  },
+  { deep: true }
+)
 
 // 页面初始化
 onMounted(async () => {
@@ -1387,28 +1431,10 @@ onMounted(async () => {
     console.log('✅ 已加载应用偏好设置（降级）')
   }
 
-  // 接收一次路由参数（从筛选页带入）- 路由参数优先级最高
-  const q = route.query as any
-  const hasNewStock = !!q?.stock
-  if (hasNewStock) {
-    analysisForm.stockCode = String(q.stock)
-    // 🔥 关键修复：如果有新的股票代码，清除旧任务缓存
-    clearTaskCache()
-    console.log('🔄 检测到新股票代码，已清除旧任务缓存:', q.stock)
+  // 接收路由参数（自选股、个股详情、选股池等传入）- 优先级最高
+  const hasNewStock = applyRouteQuery(route.query)
 
-    // 🆕 自动识别市场类型（如果URL中没有明确指定market参数）
-    if (!q?.market) {
-      const detectedMarket = getMarketByStockCode(analysisForm.stockCode)
-      analysisForm.market = detectedMarket as MarketType
-      console.log('🔍 自动识别市场类型:', analysisForm.stockCode, '->', detectedMarket)
-    }
-
-    const displayName = q?.name ? `${q.name} (${analysisForm.stockCode})` : analysisForm.stockCode
-    ElMessage.success(`已载入筛选标的：${displayName}，可直接开始智能研判`)
-  }
-  if (q?.market) analysisForm.market = normalizeMarketForAnalysis(q.market) as MarketType
-
-  // 尝试恢复任务状态（仅当没有新股票代码时）
+  // 尝试恢复任务状态（仅当没有新传入的股票代码时）
   if (!hasNewStock) {
     await restoreTaskFromCache()
   }

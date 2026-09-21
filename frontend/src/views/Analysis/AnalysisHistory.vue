@@ -286,6 +286,8 @@ import { analysisApi } from '@/api/analysis'
 import { useRouter } from 'vue-router'
 import { formatDateTime } from '@/utils/datetime'
 
+const router = useRouter()
+
 // 列表与分页状态
 const loading = ref(false)
 const currentPage = ref(1)
@@ -401,8 +403,7 @@ const viewTaskDetail = (_task: any) => {
 }
 
 const viewResult = (task: any) => {
-  const router = useRouter()
-  router.push(`/analysis/result/${task.task_id}`)
+  router.push(`/terminal/reports/view/${task.task_id}`)
 }
 
 const downloadReport = (task: any) => {

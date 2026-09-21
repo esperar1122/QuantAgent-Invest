@@ -241,36 +241,36 @@ const favoriteStocks = ref<any[]>([])
 // 方法
 
 const quickAnalysis = () => {
-  router.push('/analysis/single')
+  router.push('/terminal/analysis/single')
 }
 
 const goToSingleAnalysis = () => {
-  router.push('/analysis/single')
+  router.push('/terminal/analysis/single')
 }
 
 const goToBatchAnalysis = () => {
-  router.push('/analysis/batch')
+  router.push('/terminal/analysis/batch')
 }
 
 const goToStockPool = () => {
-  router.push('/stock-pool')
+  router.push('/terminal/screening')
 }
 
 const goToQueue = () => {
-  router.push('/queue')
+  router.push('/terminal/tasks')
 }
 
 const goToHistory = () => {
-  router.push('/tasks?tab=completed')
+  router.push('/terminal/tasks?tab=completed')
 }
 
 const viewAnalysis = (analysis: AnalysisTask) => {
   const status = (analysis as any)?.status
   if (status === 'completed') {
-    router.push({ name: 'ReportDetail', params: { id: analysis.task_id } })
+    router.push(`/terminal/reports/view/${analysis.task_id}`)
   } else {
     // 未完成任务跳转到任务中心的“进行中”标签页
-    router.push('/tasks?tab=running')
+    router.push('/terminal/tasks?tab=running')
   }
 }
 
@@ -340,12 +340,18 @@ const formatTime = (time: string) => {
 
 // 自选股相关方法
 const goToFavorites = () => {
-  router.push('/favorites')
+  router.push('/terminal/favorites')
 }
 
 const viewStockDetail = (stock: any) => {
-  // 可以跳转到股票详情页或分析页
-  router.push(`/analysis/single?stock_code=${stock.stock_code}`)
+  router.push({
+    path: '/terminal/analysis/single',
+    query: {
+      stock: stock.stock_code,
+      name: stock.stock_name,
+      market: stock.market || 'A股'
+    }
+  })
 }
 
 const getPriceChangeClass = (changePercent: number) => {

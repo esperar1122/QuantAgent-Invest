@@ -360,7 +360,7 @@ const openReport = (row:any): void => {
     ElMessage.warning('未找到报告ID')
     return
   }
-  void router.push({ name: 'ReportDetail', params: { id } })
+  void router.push(`/terminal/reports/view/${id}`)
 }
 
 const retryTask = (_row:any) => { ElMessage.info('重试功能待实现') }
