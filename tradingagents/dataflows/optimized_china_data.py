@@ -901,14 +901,14 @@ class OptimizedChinaDataProvider:
             akshare_provider = get_akshare_provider()
 
             if akshare_provider.connected:
-                # AKShare的get_financial_data是异步方法，需要使用asyncio运行
-                loop = asyncio.get_event_loop()
-                financial_data = loop.run_until_complete(akshare_provider.get_financial_data(symbol))
+                # AKShare的get_financial_data是异步方法，使用安全异步调度运行
+                from tradingagents.utils.async_utils import run_async_safely
+                financial_data = run_async_safely(akshare_provider.get_financial_data(symbol))
 
                 if financial_data and any(not v.empty if hasattr(v, 'empty') else bool(v) for v in financial_data.values()):
                     logger.info(f"✅ AKShare财务数据获取成功: {symbol}")
                     # 获取股票基本信息（也是异步方法）
-                    stock_info = loop.run_until_complete(akshare_provider.get_stock_basic_info(symbol))
+                    stock_info = run_async_safely(akshare_provider.get_stock_basic_info(symbol))
 
                     # 解析AKShare财务数据
                     logger.debug(f"🔧 调用AKShare解析函数，股价: {price_value}")
@@ -929,7 +929,7 @@ class OptimizedChinaDataProvider:
             # 第三优先级：使用Tushare数据源
             logger.info(f"🔄 使用Tushare备用数据源获取{symbol}财务数据")
             from .providers.china.tushare import get_tushare_provider
-            import asyncio
+            from tradingagents.utils.async_utils import run_async_safely
 
             provider = get_tushare_provider()
             if not provider.connected:
@@ -937,14 +937,13 @@ class OptimizedChinaDataProvider:
                 return None
 
             # 获取财务数据（异步方法）
-            loop = asyncio.get_event_loop()
-            financial_data = loop.run_until_complete(provider.get_financial_data(symbol))
+            financial_data = run_async_safely(provider.get_financial_data(symbol))
             if not financial_data:
                 logger.debug(f"未获取到{symbol}的财务数据")
                 return None
 
             # 获取股票基本信息（异步方法）
-            stock_info = loop.run_until_complete(provider.get_stock_basic_info(symbol))
+            stock_info = run_async_safely(provider.get_stock_basic_info(symbol))
 
             # 解析Tushare财务数据
             metrics = self._parse_financial_data(financial_data, stock_info, price_value)

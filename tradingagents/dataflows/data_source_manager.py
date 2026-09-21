@@ -23,6 +23,7 @@ logger = setup_dataflow_logging()
 
 # 导入统一数据源编码
 from tradingagents.constants import DataSourceCode
+from tradingagents.utils.async_utils import run_async_safely
 
 
 class ChinaDataSource(Enum):
@@ -151,6 +152,9 @@ class DataSourceManager:
                             result.append(source)
 
                 if result:
+                    # 如果 BaoStock 可用且未包含在列表中，将其作为兜底数据源追加到末尾
+                    if ChinaDataSource.BAOSTOCK in self.available_sources and ChinaDataSource.BAOSTOCK not in result:
+                        result.append(ChinaDataSource.BAOSTOCK)
                     logger.info(f"✅ [数据源优先级] 市场={market_category or '全部'}, 从数据库读取: {[s.value for s in result]}")
                     return result
                 else:
@@ -428,14 +432,18 @@ class DataSourceManager:
             if config_data and config_data.get('data_source_configs'):
                 data_source_configs = config_data.get('data_source_configs', [])
 
-                # 提取已启用的数据源类型
+                # 提取已启用的数据源类型以及显式禁用的数据源类型
+                explicitly_disabled = set()
                 for ds in data_source_configs:
+                    ds_type = ds.get('type', '').lower()
                     if ds.get('enabled', True):
-                        ds_type = ds.get('type', '').lower()
                         enabled_sources_in_db.add(ds_type)
+                    else:
+                        explicitly_disabled.add(ds_type)
 
                 logger.info(f"✅ [数据源配置] 从数据库读取到已启用的数据源: {enabled_sources_in_db}")
             else:
+                explicitly_disabled = set()
                 logger.warning("⚠️ [数据源配置] 数据库中没有数据源配置，将检查所有已安装的数据源")
                 # 如果数据库中没有配置，默认所有数据源都启用
                 enabled_sources_in_db = {'mongodb', 'tushare', 'akshare', 'baostock'}
@@ -490,8 +498,8 @@ class DataSourceManager:
         else:
             logger.info("ℹ️ AKShare数据源已在数据库中禁用")
 
-        # 检查BaoStock
-        if 'baostock' in enabled_sources_in_db:
+        # 检查BaoStock（如果库已安装且未在数据库中显式禁用，作为兜底源启用）
+        if 'baostock' in enabled_sources_in_db or ('baostock' not in explicitly_disabled):
             try:
                 import baostock as bs
                 available.append(ChinaDataSource.BAOSTOCK)
@@ -1118,13 +1126,21 @@ class DataSourceManager:
                               })
 
                 # 数据质量异常时也尝试降级到其他数据源
-                fallback_result = self._try_fallback_sources(symbol, start_date, end_date)
-                if fallback_result and "❌" not in fallback_result and "错误" not in fallback_result:
-                    logger.info(f"✅ [数据来源: 备用数据源] 降级成功获取数据: {symbol}")
-                    return fallback_result
+                fallback_res = self._try_fallback_sources(symbol, start_date, end_date, period)
+                fallback_source = None
+                if isinstance(fallback_res, tuple):
+                    fallback_text = fallback_res[0] if len(fallback_res) > 0 else ""
+                    fallback_source = fallback_res[1] if len(fallback_res) > 1 else None
+                else:
+                    fallback_text = str(fallback_res or "")
+
+                if fallback_text and "❌" not in fallback_text and "错误" not in fallback_text:
+                    src_label = fallback_source or "备用数据源"
+                    logger.info(f"✅ [数据来源: {src_label}] 降级成功获取数据: {symbol}")
+                    return fallback_text
                 else:
                     logger.error(f"❌ [数据来源: 所有数据源失败] 所有数据源都无法获取有效数据: {symbol}")
-                    return result  # 返回原始结果（包含错误信息）
+                    return fallback_text if fallback_text else result  # 返回原始结果（包含错误信息字符串）
 
         except Exception as e:
             duration = time.time() - start_time
@@ -1138,7 +1154,10 @@ class DataSourceManager:
                             'error': str(e),
                             'event_type': 'data_fetch_exception'
                         }, exc_info=True)
-            return self._try_fallback_sources(symbol, start_date, end_date)
+            fallback_res = self._try_fallback_sources(symbol, start_date, end_date, period)
+            if isinstance(fallback_res, tuple):
+                return fallback_res[0] if len(fallback_res) > 0 else f"❌ 获取股票数据异常: {e}"
+            return str(fallback_res or f"❌ 获取股票数据异常: {e}")
 
     def _get_mongodb_data(self, symbol: str, start_date: str, end_date: str, period: str = "daily") -> tuple[str, str | None]:
         """
@@ -1200,18 +1219,7 @@ class DataSourceManager:
                 # 获取股票基本信息
                 provider = self._get_tushare_adapter()
                 if provider:
-                    import asyncio
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_closed():
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                    except RuntimeError:
-                        # 在线程池中没有事件循环，创建新的
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-
-                    stock_info = loop.run_until_complete(provider.get_stock_basic_info(symbol))
+                    stock_info = run_async_safely(provider.get_stock_basic_info(symbol))
                     stock_name = stock_info.get('name', f'股票{symbol}') if stock_info else f'股票{symbol}'
                 else:
                     stock_name = f'股票{symbol}'
@@ -1227,26 +1235,15 @@ class DataSourceManager:
             if not provider:
                 return f"❌ Tushare提供器不可用"
 
-            # 使用异步方法获取历史数据
-            import asyncio
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_closed():
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-            except RuntimeError:
-                # 在线程池中没有事件循环，创建新的
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-
-            data = loop.run_until_complete(provider.get_historical_data(symbol, start_date, end_date))
+            # 使用安全异步调度获取历史数据
+            data = run_async_safely(provider.get_historical_data(symbol, start_date, end_date))
 
             if data is not None and not data.empty:
                 # 保存到缓存
                 self._save_to_cache(symbol, data, start_date, end_date)
 
                 # 获取股票基本信息（异步）
-                stock_info = loop.run_until_complete(provider.get_stock_basic_info(symbol))
+                stock_info = run_async_safely(provider.get_stock_basic_info(symbol))
                 stock_name = stock_info.get('name', f'股票{symbol}') if stock_info else f'股票{symbol}'
 
                 # 格式化返回
@@ -1282,26 +1279,15 @@ class DataSourceManager:
             from .providers.china.akshare import get_akshare_provider
             provider = get_akshare_provider()
 
-            # 使用异步方法获取历史数据
-            import asyncio
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_closed():
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-            except RuntimeError:
-                # 在线程池中没有事件循环，创建新的
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-
-            data = loop.run_until_complete(provider.get_historical_data(symbol, start_date, end_date, period))
+            # 使用安全异步调度获取历史数据
+            data = run_async_safely(provider.get_historical_data(symbol, start_date, end_date, period))
 
             duration = time.time() - start_time
 
             if data is not None and not data.empty:
                 # 🔧 修复：使用统一的格式化方法，包含技术指标计算
                 # 获取股票基本信息
-                stock_info = loop.run_until_complete(provider.get_stock_basic_info(symbol))
+                stock_info = run_async_safely(provider.get_stock_basic_info(symbol))
                 stock_name = stock_info.get('name', f'股票{symbol}') if stock_info else f'股票{symbol}'
 
                 # 调用统一的格式化方法（包含技术指标计算）
@@ -1326,24 +1312,13 @@ class DataSourceManager:
         from .providers.china.baostock import get_baostock_provider
         provider = get_baostock_provider()
 
-        # 使用异步方法获取历史数据
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_closed():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-        except RuntimeError:
-            # 在线程池中没有事件循环，创建新的
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        data = loop.run_until_complete(provider.get_historical_data(symbol, start_date, end_date, period))
+        # 使用安全异步调度获取历史数据
+        data = run_async_safely(provider.get_historical_data(symbol, start_date, end_date, period))
 
         if data is not None and not data.empty:
             # 🔧 修复：使用统一的格式化方法，包含技术指标计算
             # 获取股票基本信息
-            stock_info = loop.run_until_complete(provider.get_stock_basic_info(symbol))
+            stock_info = run_async_safely(provider.get_stock_basic_info(symbol))
             stock_name = stock_info.get('name', f'股票{symbol}') if stock_info else f'股票{symbol}'
 
             # 调用统一的格式化方法（包含技术指标计算）
@@ -2162,17 +2137,20 @@ def get_china_stock_data_unified(symbol: str, start_date: str, end_date: str) ->
     manager = get_data_source_manager()
     logger.info(f"🔍 [股票代码追踪] 调用 manager.get_stock_data，传入参数: symbol='{symbol}', start_date='{start_date}', end_date='{end_date}'")
     result = manager.get_stock_data(symbol, start_date, end_date)
+    # 防御性解包：如果返回了 tuple，提取第0项字符串
+    if isinstance(result, tuple):
+        result = result[0] if len(result) > 0 else ""
     # 分析返回结果的详细信息
-    if result:
+    if result and isinstance(result, str):
         lines = result.split('\n')
-        data_lines = [line for line in lines if '2025-' in line and symbol in line]
+        data_lines = [line for line in lines if symbol in line]
         logger.info(f"🔍 [股票代码追踪] 返回结果统计: 总行数={len(lines)}, 数据行数={len(data_lines)}, 结果长度={len(result)}字符")
         logger.info(f"🔍 [股票代码追踪] 返回结果前500字符: {result[:500]}")
         if len(data_lines) > 0:
             logger.info(f"🔍 [股票代码追踪] 数据行示例: 第1行='{data_lines[0][:100]}', 最后1行='{data_lines[-1][:100]}'")
     else:
-        logger.info(f"🔍 [股票代码追踪] 返回结果: None")
-    return result
+        logger.info(f"🔍 [股票代码追踪] 返回结果: {result}")
+    return result if isinstance(result, str) else str(result or "")
 
 
 def get_china_stock_info_unified(symbol: str) -> Dict:

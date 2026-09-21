@@ -128,18 +128,23 @@ class AKShareProvider(BaseStockDataProvider):
                         try:
                             return original_get(url, **kwargs)
                         except Exception as e:
-                            # 检查是否是SSL错误
+                            # 检查是否是网络或连接异常
                             error_str = str(e)
-                            is_ssl_error = ('SSL' in error_str or 'ssl' in error_str or
-                                          'UNEXPECTED_EOF_WHILE_READING' in error_str)
+                            is_retryable = ('SSL' in error_str or 'ssl' in error_str or
+                                          'UNEXPECTED_EOF_WHILE_READING' in error_str or
+                                          'Connection' in error_str or
+                                          'RemoteDisconnected' in error_str or
+                                          'reset' in error_str.lower() or
+                                          'timeout' in error_str.lower() or
+                                          'aborted' in error_str.lower())
 
-                            if is_ssl_error and attempt < max_retries - 1:
-                                # SSL错误，等待后重试
+                            if is_retryable and attempt < max_retries - 1:
+                                # 网络或连接异常，等待后重试
                                 wait_time = 0.5 * (attempt + 1)  # 递增等待时间
                                 time.sleep(wait_time)
                                 continue
                             else:
-                                # 非SSL错误或已达到最大重试次数，直接抛出
+                                # 不可重试或已达到最大重试次数，直接抛出
                                 raise
 
                 # 应用patch
@@ -1011,15 +1016,40 @@ class AKShareProvider(BaseStockDataProvider):
             start_date_formatted = start_date.replace('-', '')
             end_date_formatted = end_date.replace('-', '')
 
-            # 获取历史数据
+            # 获取历史数据（优先东财，东财失败或连接重置时自动回退到新浪日K）
             def fetch_historical_data():
-                return self.ak.stock_zh_a_hist(
-                    symbol=code,
-                    period=ak_period,
-                    start_date=start_date_formatted,
-                    end_date=end_date_formatted,
-                    adjust="qfq"  # 前复权
-                )
+                try:
+                    df = self.ak.stock_zh_a_hist(
+                        symbol=code,
+                        period=ak_period,
+                        start_date=start_date_formatted,
+                        end_date=end_date_formatted,
+                        adjust="qfq"  # 前复权
+                    )
+                    if df is not None and not df.empty:
+                        return df
+                except Exception as em_err:
+                    logger.warning(f"⚠️ 东财接口 stock_zh_a_hist 获取 {code} 失败 ({em_err})，尝试新浪日K兜底")
+
+                # 如果是日K数据，尝试新浪日K接口兜底
+                if ak_period == "daily":
+                    try:
+                        clean_code = str(code).strip()
+                        market_prefix = "sh" if clean_code.startswith(('6', '9')) or clean_code.startswith('688') else ("sz" if clean_code.startswith(('0', '3')) else "bj")
+                        sina_symbol = f"{market_prefix}{clean_code}"
+                        sina_df = self.ak.stock_zh_a_daily(
+                            symbol=sina_symbol,
+                            start_date=start_date_formatted,
+                            end_date=end_date_formatted,
+                            adjust="qfq"
+                        )
+                        if sina_df is not None and not sina_df.empty:
+                            logger.info(f"✅ 新浪接口 stock_zh_a_daily 兜底成功获取 {code} 历史数据 ({len(sina_df)}条)")
+                            return sina_df
+                    except Exception as sina_err:
+                        logger.warning(f"⚠️ 新浪接口 stock_zh_a_daily 兜底获取 {code} 失败: {sina_err}")
+
+                return None
 
             hist_df = await asyncio.to_thread(fetch_historical_data)
 

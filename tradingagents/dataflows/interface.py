@@ -1500,6 +1500,9 @@ def get_china_stock_data_unified(
         from .data_source_manager import get_china_stock_data_unified
 
         result = get_china_stock_data_unified(ticker, start_date, end_date)
+        if isinstance(result, tuple):
+            result = result[0] if len(result) > 0 else ""
+        result = result if isinstance(result, str) else str(result or "")
 
         # 记录详细的输出结果
         duration = time.time() - start_time
