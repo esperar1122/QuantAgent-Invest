@@ -1,4 +1,4 @@
-# QuantAgent-Invest Development Startup Script
+﻿# QuantAgent-Invest Development Startup Script
 # 智能投研系统一键开发启动脚本
 
 [CmdletBinding(PositionalBinding=$false)]
