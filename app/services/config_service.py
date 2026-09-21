@@ -3356,6 +3356,10 @@ class ConfigService:
             if not provider_data:
                 provider_data = await providers_collection.find_one({"_id": provider_id})
 
+            # 如果仍未找到，尝试按厂家标识 name 查询
+            if not provider_data:
+                provider_data = await providers_collection.find_one({"name": provider_id})
+
             if not provider_data:
                 return {
                     "success": False,
@@ -3999,6 +4003,9 @@ class ConfigService:
 
             if not provider_data:
                 provider_data = await providers_collection.find_one({"_id": provider_id})
+
+            if not provider_data:
+                provider_data = await providers_collection.find_one({"name": provider_id})
 
             if not provider_data:
                 return {
@@ -4743,6 +4750,12 @@ class ConfigService:
             # 🔥 测试模型优先级：传入的配置 > 厂家预设特殊值 > 默认 gpt-3.5-turbo
             if test_model:
                 logger.info(f"🔍 使用配置的测试模型: {test_model}")
+            elif provider_name in ("volcengine_coding", "ark_coding", "doubao_coding"):
+                test_model = "doubao-seed-2.0-code"
+                logger.info(f"🔍 火山方舟编程使用测试模型: {test_model}")
+            elif provider_name in ("volcengine", "ark", "doubao"):
+                test_model = "doubao-seed-2.0-pro"
+                logger.info(f"🔍 火山方舟使用测试模型: {test_model}")
             elif provider_name == "siliconflow":
                 test_model = "Qwen/Qwen2.5-7B-Instruct"
                 logger.info(f"🔍 硅基流动使用测试模型: {test_model}")

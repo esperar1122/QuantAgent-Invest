@@ -423,7 +423,19 @@ def _get_default_provider_by_model(model_name: str) -> str:
         # 智谱AI
         'glm-4': 'glm',
         'glm-3-turbo': 'glm',
-        'chatglm3-6b': 'glm'
+        'chatglm3-6b': 'glm',
+
+        # 火山方舟 CodingPlan
+        'doubao-seed-2.0-code': 'volcengine_coding',
+        'doubao-seed-2.0-pro': 'volcengine_coding',
+        'doubao-seed-2.0-lite': 'volcengine_coding',
+        'doubao-seed-code': 'volcengine_coding',
+        'deepseek-v4-flash': 'volcengine_coding',
+        'deepseek-v4-pro': 'volcengine_coding',
+        'kimi-k2.7-code': 'volcengine_coding',
+        'minimax-m3': 'volcengine_coding',
+        'minimax-m2.7': 'volcengine_coding',
+        'kimi-k2.6': 'volcengine_coding',
     }
 
     provider = model_provider_map.get(model_name, 'qwen')  # 默认使用阿里百炼

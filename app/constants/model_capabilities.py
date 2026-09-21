@@ -347,6 +347,56 @@ DEFAULT_MODEL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "performance_metrics": {"speed": 2, "cost": 2, "quality": 5},
         "description": "Moonshot V1 128K，超长上下文旗舰"
     },
+
+    # ==================== 火山方舟 CodingPlan ====================
+    "doubao-seed-2.0-code": {
+        "capability_level": 3,
+        "suitable_roles": [ModelRole.QUICK_ANALYSIS, ModelRole.BOTH],
+        "features": [ModelFeature.TOOL_CALLING, ModelFeature.FAST_RESPONSE, ModelFeature.REASONING],
+        "recommended_depths": ["快速", "基础", "标准"],
+        "performance_metrics": {"speed": 5, "cost": 5, "quality": 4},
+        "description": "Doubao Seed 2.0 Code 编程与代码模型，极速响应，逻辑与工具调用出众"
+    },
+    "doubao-seed-2.0-pro": {
+        "capability_level": 5,
+        "suitable_roles": [ModelRole.DEEP_ANALYSIS, ModelRole.BOTH],
+        "features": [ModelFeature.TOOL_CALLING, ModelFeature.LONG_CONTEXT, ModelFeature.REASONING],
+        "recommended_depths": ["标准", "深度", "全面"],
+        "performance_metrics": {"speed": 4, "cost": 4, "quality": 5},
+        "description": "Doubao Seed 2.0 Pro 旗舰全能通用推理模型，适合长链路多智能体复杂推理研判"
+    },
+    "doubao-seed-code": {
+        "capability_level": 3,
+        "suitable_roles": [ModelRole.QUICK_ANALYSIS],
+        "features": [ModelFeature.TOOL_CALLING, ModelFeature.FAST_RESPONSE],
+        "recommended_depths": ["快速", "基础"],
+        "performance_metrics": {"speed": 5, "cost": 5, "quality": 4},
+        "description": "Doubao Seed Code 编程优化模型，结构化输出与任务调度能力强"
+    },
+    "deepseek-v4-flash": {
+        "capability_level": 3,
+        "suitable_roles": [ModelRole.QUICK_ANALYSIS, ModelRole.BOTH],
+        "features": [ModelFeature.TOOL_CALLING, ModelFeature.FAST_RESPONSE, ModelFeature.COST_EFFECTIVE],
+        "recommended_depths": ["快速", "基础", "标准"],
+        "performance_metrics": {"speed": 5, "cost": 5, "quality": 4},
+        "description": "DeepSeek V4 Flash 快速模型，超低抵扣系数，极速经济"
+    },
+    "deepseek-v4-pro": {
+        "capability_level": 5,
+        "suitable_roles": [ModelRole.DEEP_ANALYSIS],
+        "features": [ModelFeature.TOOL_CALLING, ModelFeature.LONG_CONTEXT, ModelFeature.REASONING],
+        "recommended_depths": ["深度", "全面"],
+        "performance_metrics": {"speed": 3, "cost": 3, "quality": 5},
+        "description": "DeepSeek V4 Pro 强化推理模型，Agent 能力显著增强，深度思考研判"
+    },
+    "glm-5.2": {
+        "capability_level": 5,
+        "suitable_roles": [ModelRole.DEEP_ANALYSIS, ModelRole.BOTH],
+        "features": [ModelFeature.TOOL_CALLING, ModelFeature.LONG_CONTEXT, ModelFeature.REASONING],
+        "recommended_depths": ["标准", "深度", "全面"],
+        "performance_metrics": {"speed": 3, "cost": 4, "quality": 5},
+        "description": "GLM 5.2 智谱旗舰模型，支持 1M 超长上下文，长程研判表现突出"
+    },
 }
 
 
@@ -419,19 +469,21 @@ AGGREGATOR_PROVIDERS = {
     "volcengine": {
         "display_name": "火山方舟",
         "description": "火山方舟 Agent Plan 模型订阅套餐集成了包含 Doubao-Seed、Doubao-Seedance、Doubao-Seedream 等在内的字节跳动自研 SOTA 级模型，覆盖文本、代码、图像、视频等多模态任务。最新支持 MiniMax-M3、DeepSeek-V4 系列、GLM-5.2、Doubao-Seed-2.0 系列、Kimi-K2.7 等模型，工具不限。超全模态模型与 Harness 升级一步到位，深度支持 Agent 框架与 AI 编程工具。一次订阅，可以为不同任务切换合适的 AI 引擎。",
-        "website": "https://www.volcengine.com/activity/ai618?utm_campaign=hw&utm_content=hw&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=TradingAgents-CN",
+        "website": "https://www.volcengine.com/product/ark",
         "api_doc_url": "https://ark.volcengine.com/docs",
         "default_base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "test_model": "doubao-seed-2.0-pro",
         "model_name_format": "{model}",
         "supported_providers": ["doubao", "minimax", "deepseek", "glm", "kimi"],
         "default_embedding_model": "doubao-seed-evolving"
     },
     "volcengine_coding": {
-        "display_name": "火山方舟编程",
+        "display_name": "火山方舟 CodingPlan",
         "description": "火山方舟 Coding Plan 是为开发者量身定制的 AI 编程订阅服务，支持 Doubao-Seed-Code、DeepSeek-V4 系列、GLM-5.2、Kimi-K2.7 等主流编程模型按需切换。兼容 Claude Code、Cursor、Cline、OpenCode、TRAE 等主流编程工具，套餐额度共享。提供 Lite（40元/月）和 Pro（200元/月）两档套餐。注意：Coding Plan 仅限 AI 编程工具使用，Base URL 与 Agent Plan 不同。",
-        "website": "https://www.volcengine.com/activity/ai618?utm_campaign=hw&utm_content=hw&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=TradingAgents-CN",
+        "website": "https://www.volcengine.com/activity/codingplan",
         "api_doc_url": "https://www.volcengine.com/docs/82379/1925114",
         "default_base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
+        "test_model": "doubao-seed-2.0-code",
         "model_name_format": "{model}",
         "supported_providers": ["doubao", "deepseek", "glm", "kimi", "minimax"],
         "default_embedding_model": "doubao-embedding-vision"

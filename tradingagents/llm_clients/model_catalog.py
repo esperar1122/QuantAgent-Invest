@@ -112,14 +112,16 @@ MODEL_OPTIONS: ProviderModeOptions = {
     "volcengine_coding": {
         "quick": [
             ("Doubao-Seed-2.0-Code", "doubao-seed-2.0-code"),
+            ("Doubao-Seed-Code", "doubao-seed-code"),
             ("DeepSeek-V4-Flash", "deepseek-v4-flash"),
+            ("Doubao-Seed-2.0-Lite", "doubao-seed-2.0-lite"),
             ("Custom model ID", "custom"),
         ],
         "deep": [
             ("Doubao-Seed-2.0-Pro", "doubao-seed-2.0-pro"),
             ("DeepSeek-V4-Pro", "deepseek-v4-pro"),
             ("GLM-5.2", "glm-5.2"),
-            ("Kimi-K2.7", "kimi-k2.7"),
+            ("Kimi-K2.7-Code", "kimi-k2.7-code"),
             ("MiniMax-M3", "minimax-m3"),
             ("Custom model ID", "custom"),
         ],
