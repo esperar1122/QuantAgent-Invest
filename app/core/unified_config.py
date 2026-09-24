@@ -7,9 +7,11 @@ import json
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
-from datetime import datetime
 import asyncio
+import logging
 from dataclasses import dataclass, asdict
+
+logger = logging.getLogger(__name__)
 
 from app.models.config import (
     LLMConfig, DataSourceConfig, DatabaseConfig, SystemConfig,
@@ -341,7 +343,7 @@ class UnifiedConfigManager:
             if config_data and config_data.get('data_source_configs'):
                 # 从数据库读取到配置
                 data_source_configs = config_data.get('data_source_configs', [])
-                print(f"✅ [unified_config] 从数据库读取到 {len(data_source_configs)} 个数据源配置")
+                logger.info(f"[unified_config] 从数据库读取到 {len(data_source_configs)} 个数据源配置")
 
                 # 转换为 DataSourceConfig 对象
                 result = []
@@ -349,16 +351,16 @@ class UnifiedConfigManager:
                     try:
                         result.append(DataSourceConfig(**ds_config))
                     except Exception as e:
-                        print(f"⚠️ [unified_config] 解析数据源配置失败: {e}, 配置: {ds_config}")
+                        logger.warning(f"[unified_config] 解析数据源配置失败: {e}, 配置: {ds_config}")
                         continue
 
                 # 按优先级排序（数字越大优先级越高）
                 result.sort(key=lambda x: x.priority, reverse=True)
                 return result
             else:
-                print("⚠️ [unified_config] 数据库中没有数据源配置，使用硬编码配置")
+                logger.info("[unified_config] 数据库中没有数据源配置，使用硬编码配置")
         except Exception as e:
-            print(f"⚠️ [unified_config] 从数据库读取数据源配置失败: {e}，使用硬编码配置")
+            logger.warning(f"[unified_config] 从数据库读取数据源配置失败: {e}，使用硬编码配置")
 
         # 🔥 回退到硬编码配置（兼容性）
         settings = self.get_system_settings()

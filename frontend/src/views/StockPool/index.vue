@@ -37,20 +37,34 @@
         :show-advanced="showAdvancedFilter"
         :has-active-advanced="hasActiveAdvancedFilters"
         :active-advanced-count="activeAdvancedCount"
+        :custom-strategies="customStrategies"
+        :presets="strategyPresets"
         @search="handleSearch"
         @reset="handleReset"
         @toggle-advanced="toggleAdvancedFilter"
+        @apply-custom="applyCustomStrategy"
+        @apply-preset="applyStrategyPreset"
+        @save-current="openCreateStrategy"
+        @create-strategy="openCreateStrategy"
+        @manage-strategies="openManageStrategies"
       />
 
       <AdvancedFilterPanel
         :show="showAdvancedFilter"
         :params="queryParams"
         :presets="strategyPresets"
+        :custom-strategies="customStrategies"
         :active-tags="activeFilterTags"
         @search="handleSearch"
         @reset-advanced="resetAdvancedFilters"
         @close="showAdvancedFilter = false"
         @apply-preset="applyStrategyPreset"
+        @apply-custom="applyCustomStrategy"
+        @save-current="openCreateStrategy"
+        @create-strategy="openCreateStrategy"
+        @edit-strategy="openEditStrategy"
+        @delete-strategy="handleDeleteStrategy"
+        @manage-strategies="openManageStrategies"
         @remove-tag="removeFilterTag"
         @clear-all="handleReset"
       />
@@ -75,6 +89,25 @@
       @size-change="handleSizeChange"
       @current-change="handleCurrentChange"
     />
+
+    <!-- 自定义量化选股策略编辑/新建弹窗 -->
+    <StrategyEditDialog
+      v-model:visible="strategyEditVisible"
+      :strategy="currentEditingStrategy"
+      :current-params="queryParams"
+      @save="handleSaveStrategy"
+    />
+
+    <!-- 自定义量化策略库集中管理弹窗 -->
+    <StrategyManageDialog
+      v-model:visible="strategyManageVisible"
+      :strategies="customStrategies"
+      @apply="applyCustomStrategy"
+      @create="openCreateStrategy"
+      @edit="openEditStrategy"
+      @delete="handleDeleteStrategy"
+      @reset-defaults="resetToDefaultTemplates"
+    />
   </div>
 </template>
 
@@ -85,6 +118,8 @@ import StockPoolStats from './components/StockPoolStats.vue'
 import StockPoolFilterBar from './components/StockPoolFilterBar.vue'
 import AdvancedFilterPanel from './components/AdvancedFilterPanel.vue'
 import StockPoolTable from './components/StockPoolTable.vue'
+import StrategyEditDialog from './components/StrategyEditDialog.vue'
+import StrategyManageDialog from './components/StrategyManageDialog.vue'
 
 const {
   loading,
@@ -96,6 +131,17 @@ const {
   stats,
   queryParams,
   strategyPresets,
+  customStrategies,
+  resetToDefaultTemplates,
+  strategyEditVisible,
+  strategyManageVisible,
+  currentEditingStrategy,
+  openCreateStrategy,
+  openEditStrategy,
+  openManageStrategies,
+  applyCustomStrategy,
+  handleSaveStrategy,
+  handleDeleteStrategy,
   activeAdvancedCount,
   hasActiveAdvancedFilters,
   activeFilterTags,

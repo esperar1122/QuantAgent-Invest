@@ -354,15 +354,27 @@ def fetch_index_kline(code: str, period: str = "day", limit: int = 120) -> Tuple
         if len(k_list) >= 5:
             items = []
             for row in k_list:
-                items.append({
-                    "time": row[0],
-                    "open": float(row[1]),
-                    "close": float(row[2]),
-                    "high": float(row[3]),
-                    "low": float(row[4]),
-                    "volume": float(row[5]) if len(row) > 5 else 0.0,
-                    "amount": float(row[6]) if len(row) > 6 else 0.0
-                })
+                if not isinstance(row, list) or len(row) < 5:
+                    continue
+                try:
+                    v = float(row[5]) if len(row) > 5 and not isinstance(row[5], (dict, list)) else 0.0
+                    amt = 0.0
+                    if len(row) > 6 and not isinstance(row[6], (dict, list)):
+                        try:
+                            amt = float(row[6])
+                        except (ValueError, TypeError):
+                            amt = 0.0
+                    items.append({
+                        "time": str(row[0]),
+                        "open": float(row[1]),
+                        "close": float(row[2]),
+                        "high": float(row[3]),
+                        "low": float(row[4]),
+                        "volume": v,
+                        "amount": amt
+                    })
+                except Exception:
+                    continue
             return items[-limit:], "tencent"
     except Exception as e:
         logger.warning(f"⚠️ 腾讯指数K线获取异常 ({tx_sym}): {e}")
@@ -391,3 +403,165 @@ def fetch_index_kline(code: str, period: str = "day", limit: int = 120) -> Tuple
         logger.warning(f"⚠️ 新浪指数K线获取异常 ({sina_sym}): {e}")
 
     return [], "none"
+
+
+def fetch_timeline_data(code: str) -> Dict[str, Any]:
+    """
+    获取高保真分时走势数据（分钟线、均线、分时成交量）
+    支持核心指数与A股个股
+    """
+    norm_code = normalize_index_code(code)
+    raw_lower = str(code).strip().lower()
+
+    if norm_code in SUPPORTED_INDICES:
+        tx_sym = SUPPORTED_INDICES[norm_code]["tx_sym"]
+        sina_sym = SUPPORTED_INDICES[norm_code]["sina_sym"]
+        name = SUPPORTED_INDICES[norm_code]["name"]
+    else:
+        if raw_lower.startswith("sh"):
+            prefix = "sh"
+            clean_num = raw_lower[2:]
+        elif raw_lower.startswith("sz"):
+            prefix = "sz"
+            clean_num = raw_lower[2:]
+        elif raw_lower.startswith("bj"):
+            prefix = "bj"
+            clean_num = raw_lower[2:]
+        elif raw_lower.endswith(".sh"):
+            prefix = "sh"
+            clean_num = raw_lower[:-3]
+        elif raw_lower.endswith(".sz"):
+            prefix = "sz"
+            clean_num = raw_lower[:-3]
+        elif raw_lower.endswith(".bj"):
+            prefix = "bj"
+            clean_num = raw_lower[:-3]
+        else:
+            clean_num = raw_lower
+            if clean_num.startswith(("6", "900")):
+                prefix = "sh"
+            elif clean_num.startswith(("8", "4", "920")):
+                prefix = "bj"
+            else:
+                prefix = "sz"
+        tx_sym = f"{prefix}{clean_num}"
+        sina_sym = f"{prefix}{clean_num}"
+        name = code
+
+    # 1. 毫秒级抓取最新盘口与昨收基准
+    curr_price = 0.0
+    prev_close = 0.0
+    change_val = 0.0
+    pct_val = 0.0
+    tot_vol = 0.0
+    tot_amt = 0.0
+
+    try:
+        url_q = f"http://qt.gtimg.cn/q=s_{tx_sym}"
+        rq = requests.get(url_q, timeout=3)
+        rq.encoding = "gbk"
+        if "~" in rq.text:
+            parts = rq.text.split("~")
+            if len(parts) > 1 and parts[1]:
+                name = parts[1]
+            if len(parts) > 3 and parts[3]:
+                curr_price = float(parts[3])
+            if len(parts) > 4 and parts[4]:
+                change_val = float(parts[4])
+            if len(parts) > 5 and parts[5]:
+                pct_val = float(parts[5])
+            if len(parts) > 6 and parts[6]:
+                tot_vol = float(parts[6])
+            if len(parts) > 7 and parts[7]:
+                tot_amt = float(parts[7]) * 10000.0  # 万元转元
+            prev_close = curr_price - change_val
+    except Exception as qe:
+        logger.debug(f"抓取盘口昨收异常: {qe}")
+
+    # 2. 获取1分钟分时序列 (Sina 1-min)
+    items = []
+    source = "sina"
+    high_price = curr_price or 0.0
+    low_price = curr_price or 0.0
+
+    try:
+        url_sina = f"https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?symbol={sina_sym}&scale=1&ma=no&datalen=300"
+        rk = requests.get(url_sina, timeout=4)
+        raw_list = rk.json()
+        if isinstance(raw_list, list) and raw_list:
+            now = datetime.datetime.now()
+            today_str = now.strftime("%Y-%m-%d")
+
+            today_rows = [p for p in raw_list if p.get("day", "").startswith(today_str)]
+            if not today_rows:
+                dates = sorted(set(p.get("day", "")[:10] for p in raw_list if p.get("day")))
+                if dates:
+                    today_rows = [p for p in raw_list if p.get("day", "").startswith(dates[-1])]
+
+            if today_rows:
+                if not prev_close:
+                    prev_close = float(today_rows[0].get("open", curr_price))
+
+                cum_pa = 0.0
+                cum_a = 0.0
+                high_price = -1e9
+                low_price = 1e9
+                last_p = prev_close
+
+                for row in today_rows:
+                    day_str = row.get("day", "")
+                    time_str = day_str[-8:-3] if len(day_str) >= 8 else "09:30"
+                    p = float(row.get("close", 0.0))
+                    a = float(row.get("amount", 0.0))
+                    v = float(row.get("volume", 0.0))
+
+                    cum_pa += p * a
+                    cum_a += a
+                    avg = (cum_pa / cum_a) if cum_a > 0 else p
+
+                    high_price = max(high_price, p)
+                    low_price = min(low_price, p)
+
+                    diff = p - prev_close
+                    pct = (diff / prev_close * 100.0) if prev_close else 0.0
+
+                    items.append({
+                        "time": time_str,
+                        "day": day_str,
+                        "price": round(p, 3),
+                        "avg_price": round(avg, 3),
+                        "volume": round(v, 2),
+                        "amount": round(a, 2),
+                        "change": round(diff, 3),
+                        "pct_chg": round(pct, 2),
+                        "is_up": p >= last_p
+                    })
+                    last_p = p
+
+                if items:
+                    curr_price = items[-1]["price"]
+                    change_val = round(curr_price - prev_close, 3)
+                    pct_val = round((change_val / prev_close * 100.0) if prev_close else 0.0, 2)
+    except Exception as e:
+        logger.warning(f"⚠️ 分时线获取异常 ({sina_sym}): {e}")
+
+    # 计算对称动态量程比例 (默认最小 0.5%)
+    max_diff = max(abs(high_price - prev_close), abs(low_price - prev_close), abs(change_val))
+    max_ratio = max((max_diff / prev_close) if prev_close else 0.005, 0.005)
+
+    return {
+        "code": norm_code,
+        "name": name,
+        "prev_close": round(prev_close, 3),
+        "current_price": round(curr_price, 3),
+        "change": round(change_val, 3),
+        "change_percent": round(pct_val, 2),
+        "high": round(high_price, 3) if high_price > -1e8 else curr_price,
+        "low": round(low_price, 3) if low_price < 1e8 else curr_price,
+        "max_ratio": round(max_ratio, 5),
+        "total_volume": tot_vol,
+        "total_amount": tot_amt,
+        "count": len(items),
+        "items": items,
+        "source": source
+    }

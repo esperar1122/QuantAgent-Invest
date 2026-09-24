@@ -135,44 +135,54 @@ def create_filtered_realtime_news_function():
         logger.info(f"[增强实时新闻] 开始获取 {ticker} 的过滤新闻")
         
         try:
-            # 导入原始函数
-            from tradingagents.dataflows.news.realtime_news import get_realtime_stock_news
+            # 如果启用过滤且是A股，优先使用高效的A股数据源管理器与相关度过滤
+            is_a_share = any(suffix in ticker for suffix in ['.SH', '.SZ', '.SS', '.XSHE', '.XSHG']) or \
+                         (not '.' in ticker and ticker.isdigit())
 
-            # 调用原始函数获取新闻
-            original_report = get_realtime_stock_news(ticker, curr_date, hours_back)
-            
-            if not enable_filter:
-                logger.info(f"[增强实时新闻] 过滤功能已禁用，返回原始报告")
-                return original_report
-            
-            # 如果启用过滤且是A股，尝试重新获取并过滤
-            if any(suffix in ticker for suffix in ['.SH', '.SZ', '.SS', '.XSHE', '.XSHG']) or \
-               (not '.' in ticker and ticker.isdigit()):
-                
-                logger.info(f"[增强实时新闻] 检测到A股代码，尝试使用过滤版东方财富新闻")
-                
+            if enable_filter and is_a_share:
+                logger.info(f"[增强实时新闻] 检测到A股代码，使用数据源管理器与相关度过滤: {ticker}")
                 try:
-                    # 注意：akshare_utils 已废弃，使用 AKShareProvider 替代
-                    from tradingagents.dataflows.providers.china.akshare import get_akshare_provider
-
-                    # 清理股票代码
                     clean_ticker = ticker.replace('.SH', '').replace('.SZ', '').replace('.SS', '')\
                                     .replace('.XSHE', '').replace('.XSHG', '')
 
-                    # 使用 AKShareProvider 获取新闻（如果有相应方法）
-                    provider = get_akshare_provider()
-                    # TODO: 需要实现 get_stock_news 方法
-                    # original_news_df = provider.get_stock_news(clean_ticker)
-                    # 暂时跳过，返回原始报告
-                    logger.warning(f"[增强实时新闻] AKShare新闻功能暂未实现，返回原始报告")
-                    return original_report
-                        
+                    from tradingagents.dataflows.data_source_manager import get_data_source_manager
+                    dm = get_data_source_manager()
+                    raw_news = dm.get_news_data(clean_ticker, hours_back=hours_back, limit=20)
+
+                    if raw_news:
+                        import pandas as pd
+                        df = pd.DataFrame(raw_news)
+                        from tradingagents.utils.enhanced_news_filter import create_enhanced_news_filter
+                        news_filter = create_enhanced_news_filter(clean_ticker, use_semantic=False, use_local_model=False)
+                        filtered_df = news_filter.filter_news_enhanced(df, min_score=min_score)
+
+                        target_df = filtered_df if not filtered_df.empty else df
+
+                        lines = [
+                            f"=== {clean_ticker} 实时新闻报告 (共{len(target_df)}条精选新闻) ===",
+                            f"分析基准时间: {curr_date} (回溯窗口: {hours_back}小时)\n"
+                        ]
+                        for _, row in target_df.iterrows():
+                            t = str(row.get('新闻标题') or row.get('title') or '').strip()
+                            c = str(row.get('新闻内容') or row.get('content') or '').strip()
+                            src = str(row.get('source') or row.get('文章来源') or '财经快讯')
+                            pub = str(row.get('publish_time') or row.get('发布时间') or '')
+                            score = row.get('final_score')
+                            score_str = f" [相关度: {score:.0f}]" if score is not None else ""
+
+                            lines.append(f"### [{src}] {t}{score_str}")
+                            if pub:
+                                lines.append(f"- 发布时间: {pub}")
+                            if c and c != t:
+                                lines.append(f"- 详情摘要: {c[:200]}...")
+                            lines.append("")
+                        return "\n".join(lines)
                 except Exception as filter_error:
-                    logger.error(f"[增强实时新闻] 新闻过滤失败: {filter_error}")
-                    return original_report
-            else:
-                logger.info(f"[增强实时新闻] 非A股代码，返回原始报告")
-                return original_report
+                    logger.error(f"[增强实时新闻] 优先A股新闻过滤失败，回退到原始聚合器: {filter_error}")
+
+            # 导入原始聚合器作为备用
+            from tradingagents.dataflows.news.realtime_news import get_realtime_stock_news
+            return get_realtime_stock_news(ticker, curr_date, hours_back)
                 
         except Exception as e:
             logger.error(f"[增强实时新闻] 增强新闻获取失败: {e}")

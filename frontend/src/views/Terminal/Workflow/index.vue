@@ -1,14 +1,109 @@
 <template>
   <div class="workflow-view">
+    <!-- 1. 标的极速检索与切换控制台 (Stock Switcher Ribbon) -->
+    <div class="stock-switcher-ribbon">
+      <div class="ribbon-left">
+        <!-- 标的搜索下拉框 -->
+        <div class="search-input-wrapper">
+          <el-select
+            v-model="selectedCode"
+            filterable
+            remote
+            reserve-keyword
+            :remote-method="handleSearch"
+            :loading="searchLoading"
+            placeholder="🔍 检索 A股代码 / 名称 / 简拼 (如 600519、贵州茅台、300750)..."
+            class="terminal-stock-select"
+            @change="onStockSelectChange"
+          >
+            <el-option
+              v-for="item in searchOptions"
+              :key="item.code"
+              :label="`${item.name} (${item.code})`"
+              :value="item.code"
+            >
+              <div class="search-option-card">
+                <div class="opt-left">
+                  <span class="opt-code font-mono">{{ item.code }}</span>
+                  <span class="opt-market-tag">{{ item.market || 'A股' }}</span>
+                </div>
+                <div class="opt-center">
+                  <span class="opt-name">{{ item.name }}</span>
+                  <span class="opt-industry" v-if="item.industry">{{ item.industry }}</span>
+                </div>
+                <div class="opt-right tabular-nums" v-if="item.close !== undefined">
+                  <span class="opt-price">{{ Number(item.close).toFixed(2) }}</span>
+                  <span
+                    class="opt-pct"
+                    :class="(item.pct_chg || 0) >= 0 ? 'color-up' : 'color-down'"
+                  >
+                    {{ (item.pct_chg || 0) >= 0 ? '+' : '' }}{{ Number(item.pct_chg || 0).toFixed(2) }}%
+                  </span>
+                </div>
+              </div>
+            </el-option>
+          </el-select>
+        </div>
+
+        <!-- 热门核心指数标的秒级切换胶囊 (Quick Preset Chips) -->
+        <div class="preset-chips">
+          <span class="chips-label">核心池:</span>
+          <button
+            v-for="chip in hotStocks"
+            :key="chip.code"
+            class="chip-btn"
+            :class="{ active: isChipActive(chip.code) }"
+            @click="switchStock(chip.code)"
+          >
+            <span class="chip-name">{{ chip.name }}</span>
+            <span class="chip-code font-mono">{{ chip.displayCode || chip.code }}</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="ribbon-right">
+        <!-- 自选股快速切换下拉 -->
+        <el-dropdown trigger="click" @command="switchStock">
+          <el-button size="small" class="watchlist-btn">
+            <el-icon><Star /></el-icon>
+            <span>自选池 ({{ favoritesStore.favorites.length }})</span>
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu class="watchlist-dropdown-menu">
+              <el-dropdown-item
+                v-if="favoritesStore.favorites.length === 0"
+                disabled
+              >
+                暂无自选股，可在个股研究添加
+              </el-dropdown-item>
+              <el-dropdown-item
+                v-for="fav in favoritesStore.favorites"
+                :key="fav.symbol || fav.stock_code"
+                :command="fav.symbol || fav.stock_code"
+                :class="{ active: currentStock.code === (fav.symbol || fav.stock_code) }"
+              >
+                <div class="fav-item-row">
+                  <span class="fav-name">{{ fav.stock_name || fav.symbol || fav.stock_code }}</span>
+                  <span class="fav-code font-mono">{{ fav.symbol || fav.stock_code }}</span>
+                </div>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
+    </div>
+
     <!-- 顶部工作流控制栏 -->
     <div class="workflow-control-bar">
       <div class="control-left">
-        <span class="ctrl-title">多智能体协同研判流水线 (Multi-Agent Workflow)</span>
+        <span class="ctrl-title">多智能体协同研判流水线</span>
         <div class="stock-pill">
           <span class="stock-tag">当前标的</span>
           <span class="stock-name">{{ currentStock.name }}</span>
           <span class="stock-code tabular-nums font-mono">{{ currentStock.code }}</span>
           <span class="quant-score tabular-nums">Quant分: {{ currentStock.score }}</span>
+          <span class="stock-sector">{{ currentStock.sector }}</span>
         </div>
       </div>
 
@@ -19,7 +114,7 @@
         </div>
         <el-button size="small" @click="goToStock">
           <el-icon><TrendCharts /></el-icon>
-          返回个股研究
+          返回个股
         </el-button>
         <el-button 
           type="primary" 
@@ -32,7 +127,7 @@
         </el-button>
         <el-button size="small" @click="goToReport">
           <el-icon><Document /></el-icon>
-          查看产出研报
+          查看全息研报
         </el-button>
       </div>
     </div>
@@ -171,13 +266,64 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { VideoPlay, Document, TrendCharts } from '@element-plus/icons-vue'
+import { VideoPlay, Document, TrendCharts, Star, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import EvidenceAggregator from '@/components/Terminal/EvidenceAggregator.vue'
 import { stocksApi } from '@/api/stocks'
+import { useFavoritesStore } from '@/stores/favorites'
 
 const route = useRoute()
 const router = useRouter()
+const favoritesStore = useFavoritesStore()
+
+const hotStocks = [
+  { code: 'sh000001', displayCode: '000001', name: '上证指数' },
+  { code: 'sz399001', displayCode: '399001', name: '深证成指' },
+  { code: 'sz399006', displayCode: '399006', name: '创业板指' },
+  { code: 'sh000680', displayCode: '000680', name: '科创综指' },
+  { code: '688981', name: '中芯国际' },
+  { code: '600519', name: '贵州茅台' },
+  { code: '300750', name: '宁德时代' },
+  { code: '002594', name: '比亚迪' },
+  { code: '300308', name: '中际旭创' }
+]
+
+const searchLoading = ref(false)
+const searchOptions = ref<any[]>([])
+const selectedCode = ref((route.query.code as string) || 'sh000001')
+
+async function handleSearch(query: string) {
+  if (!query || query.trim().length === 0) {
+    searchOptions.value = []
+    return
+  }
+  searchLoading.value = true
+  try {
+    const res = await stocksApi.search(query.trim(), 15)
+    const items = (res as any)?.data?.items || (res as any)?.items || []
+    searchOptions.value = items
+  } catch (e) {
+    searchOptions.value = []
+  } finally {
+    searchLoading.value = false
+  }
+}
+
+function isChipActive(code: string) {
+  const cur = currentStock.value.code
+  return cur === code || cur === code.replace(/^(sh|sz|bj)/i, '')
+}
+
+function switchStock(code: string) {
+  if (!code || code === currentStock.value.code) return
+  selectedCode.value = code
+  router.replace({ path: '/terminal/workflow', query: { code } })
+  loadStockDetail(code)
+}
+
+function onStockSelectChange(val: string) {
+  if (val) switchStock(val)
+}
 
 const hotDict: Record<string, string> = {
   'sh000001': '上证指数',
@@ -266,6 +412,7 @@ async function loadStockDetail(code: string) {
 
 watch(() => route.query.code, (newCode) => {
   if (newCode && typeof newCode === 'string') {
+    selectedCode.value = newCode
     currentStock.value.code = newCode
     if (hotDict[newCode]) {
       currentStock.value.name = hotDict[newCode]
@@ -276,7 +423,9 @@ watch(() => route.query.code, (newCode) => {
 
 onMounted(() => {
   const queryCode = (route.query.code as string) || 'sh000001'
+  selectedCode.value = queryCode
   loadStockDetail(queryCode)
+  favoritesStore.fetchFavorites()
 })
 
 function getNodeClass(step: number) {
@@ -378,6 +527,194 @@ function goToReport() {
   margin: 0 auto;
 }
 
+// 标的极速检索与切换控制台
+.stock-switcher-ribbon {
+  background-color: #ffffff;
+  border: 1px solid #e4e7ec;
+  border-radius: 6px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+
+  .ribbon-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 300px;
+    flex-wrap: wrap;
+  }
+
+  .search-input-wrapper {
+    width: 320px;
+    max-width: 100%;
+
+    .terminal-stock-select {
+      width: 100%;
+
+      :deep(.el-input__wrapper) {
+        border-radius: 5px;
+        background-color: #f8fafc;
+        box-shadow: 0 0 0 1px #e2e8f0 inset;
+
+        &:hover {
+          box-shadow: 0 0 0 1px #b2ccff inset;
+        }
+
+        &.is-focus {
+          box-shadow: 0 0 0 1px #175cd3 inset, 0 0 0 3px rgba(23, 92, 211, 0.12);
+        }
+      }
+    }
+  }
+
+  .preset-chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+
+    .chips-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #667085;
+      margin-right: 2px;
+    }
+
+    .chip-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      border: 1px solid #eaecf0;
+      background-color: #ffffff;
+      color: #344054;
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      .chip-name {
+        font-weight: 600;
+      }
+
+      .chip-code {
+        font-size: 10px;
+        color: #667085;
+      }
+
+      &:hover {
+        border-color: #b2ccff;
+        background-color: #eff8ff;
+        color: #175cd3;
+
+        .chip-code {
+          color: #175cd3;
+        }
+      }
+
+      &.active {
+        background-color: #175cd3;
+        border-color: #175cd3;
+        color: #ffffff;
+
+        .chip-code {
+          color: rgba(255, 255, 255, 0.85);
+        }
+      }
+    }
+  }
+
+  .ribbon-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+// 标的下拉选项样式
+.search-option-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 10px;
+  font-size: 12px;
+
+  .opt-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    .opt-code {
+      font-weight: 700;
+      color: #101828;
+    }
+
+    .opt-market-tag {
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 2px;
+      background-color: #eff8ff;
+      color: #175cd3;
+      font-weight: 600;
+    }
+  }
+
+  .opt-center {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    .opt-name {
+      font-weight: 600;
+      color: #101828;
+    }
+
+    .opt-industry {
+      font-size: 11px;
+      color: #667085;
+    }
+  }
+
+  .opt-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    .opt-price {
+      font-weight: 600;
+      color: #101828;
+    }
+
+    .opt-pct {
+      font-size: 11px;
+      font-weight: 700;
+    }
+  }
+}
+
+.fav-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 160px;
+  font-size: 12px;
+
+  .fav-name {
+    font-weight: 600;
+  }
+
+  .fav-code {
+    font-size: 10px;
+    color: #667085;
+  }
+}
+
 .workflow-control-bar {
   background-color: #ffffff;
   border: 1px solid #e4e7ec;
@@ -386,16 +723,20 @@ function goToReport() {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
 
   .control-left {
     display: flex;
     align-items: center;
     gap: 14px;
+    flex-wrap: wrap;
 
     .ctrl-title {
       font-size: 13px;
       font-weight: 700;
       color: #101828;
+      white-space: nowrap;
     }
 
     .stock-pill {
@@ -406,6 +747,7 @@ function goToReport() {
       border: 1px solid #eaecf0;
       border-radius: 4px;
       padding: 3px 8px;
+      flex-wrap: wrap;
 
       .stock-tag {
         font-size: 10px;
@@ -428,6 +770,14 @@ function goToReport() {
         font-weight: 700;
         color: #175cd3;
         background-color: #eff8ff;
+        padding: 1px 4px;
+        border-radius: 2px;
+      }
+
+      .stock-sector {
+        font-size: 10px;
+        color: #475467;
+        background-color: #f2f4f7;
         padding: 1px 4px;
         border-radius: 2px;
       }
@@ -471,7 +821,13 @@ function goToReport() {
   background-color: #ffffff;
   border: 1px solid #e4e7ec;
   border-radius: 6px;
-  overflow: hidden;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 
   .flow-header {
     display: flex;
@@ -480,6 +836,8 @@ function goToReport() {
     padding: 10px 16px;
     background-color: #fafbfc;
     border-bottom: 1px solid #eaecf0;
+    flex-wrap: wrap;
+    gap: 6px;
 
     .fh-title {
       font-size: 12px;
@@ -499,6 +857,7 @@ function goToReport() {
     justify-content: space-between;
     gap: 8px;
     overflow-x: auto;
+    min-width: 960px;
   }
 }
 
@@ -508,6 +867,7 @@ function goToReport() {
   border-radius: 6px;
   padding: 10px 12px;
   min-width: 140px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -706,5 +1066,11 @@ function goToReport() {
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1100px) {
+  .workflow-bottom-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

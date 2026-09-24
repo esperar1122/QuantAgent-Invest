@@ -1809,9 +1809,19 @@ class DataSourceManager:
             return self._try_fallback_fundamentals(symbol)
 
     def _get_tushare_fundamentals(self, symbol: str) -> str:
-        """从 Tushare 获取基本面数据 - 暂时不可用，需要实现"""
-        logger.warning(f"⚠️ Tushare基本面数据功能暂时不可用")
-        return f"⚠️ Tushare基本面数据功能暂时不可用，请使用其他数据源"
+        """从 Tushare 获取基本面数据"""
+        try:
+            from tradingagents.dataflows.providers.china.tushare import get_tushare_provider
+            clean_symbol = symbol.split('.')[0] if symbol else symbol
+            # 优先从已同步的 MongoDB 基础财务数据中获取
+            result = self._get_mongodb_fundamentals(clean_symbol)
+            if result and "❌" not in result and "⚠️" not in result:
+                return result
+            # 否则结合快照与估值指标动态生成
+            return self._generate_fundamentals_analysis(clean_symbol)
+        except Exception as e:
+            logger.warning(f"⚠️ [数据来源: Tushare] 获取基本面数据失败: {e}，回退到自动分析")
+            return self._generate_fundamentals_analysis(symbol)
 
     def _get_akshare_fundamentals(self, symbol: str) -> str:
         """从 AKShare 生成基本面分析"""
@@ -2045,24 +2055,101 @@ class DataSourceManager:
             logger.error(f"❌ [数据来源: MongoDB] 获取新闻失败: {e}")
             return self._try_fallback_news(symbol, hours_back, limit)
 
+    def _fetch_sina_stock_news(self, symbol: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """从新浪财经抓取个股实时新闻（高稳定性兜底）"""
+        try:
+            import requests, re
+            from bs4 import BeautifulSoup
+            clean_code = str(symbol).split('.')[0].zfill(6)
+            prefix = 'sh' if clean_code.startswith(('6', '9')) else 'sz'
+            url = f'https://vip.stock.finance.sina.com.cn/corp/view/vCB_AllNewsStock.php?symbol={prefix}{clean_code}'
+            r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}, timeout=6)
+            r.encoding = 'gbk'
+            soup = BeautifulSoup(r.text, 'html.parser')
+            datelist = soup.find('div', class_='datelist')
+            if not datelist:
+                return []
+            items = []
+            for a in datelist.find_all('a')[:limit]:
+                title = a.get_text().strip()
+                if not title:
+                    continue
+                href = a.get('href', '')
+                m = re.search(r'/(\d{4}-\d{2}-\d{2})/', href)
+                date_str = m.group(1) if m else ''
+                items.append({
+                    'title': title,
+                    'content': title,
+                    'publish_time': date_str,
+                    'source': '新浪财经',
+                    'url': href
+                })
+            return items
+        except Exception as e:
+            logger.debug(f"[SinaNews] 抓取个股新闻失败: {e}")
+            return []
+
     def _get_tushare_news(self, symbol: str, hours_back: int, limit: int) -> List[Dict[str, Any]]:
         """从Tushare获取新闻数据"""
         try:
-            # Tushare新闻功能暂时不可用，返回空列表
-            logger.warning(f"⚠️ [数据来源: Tushare] Tushare新闻功能暂时不可用")
-            return []
-
+            from tradingagents.dataflows.providers.china.tushare import get_tushare_provider
+            provider = get_tushare_provider()
+            clean_symbol = symbol.split('.')[0] if symbol else None
+            api = getattr(provider, 'api', None)
+            if api is not None:
+                news_df = api.news(src='sina', limit=limit) if clean_symbol else api.major_news(limit=limit)
+                if news_df is not None and not news_df.empty:
+                    news_list = []
+                    for _, row in news_df.iterrows():
+                        news_list.append({
+                            "title": str(row.get('title') or ''),
+                            "content": str(row.get('content') or row.get('title') or ''),
+                            "publish_time": str(row.get('datetime') or row.get('pub_time') or ''),
+                            "source": str(row.get('src') or 'Tushare'),
+                            "url": ''
+                        })
+                    logger.info(f"✅ [数据来源: Tushare] 成功获取新闻 {len(news_list)} 条")
+                    return news_list
         except Exception as e:
-            logger.error(f"❌ [数据来源: Tushare] 获取新闻失败: {e}")
-            return []
+            logger.debug(f"Tushare新闻获取异常: {e}")
+
+        # 若Tushare无权限或失败，回退到个股新闻抓取
+        if symbol:
+            return self._fetch_sina_stock_news(symbol, limit)
+        return []
 
     def _get_akshare_news(self, symbol: str, hours_back: int, limit: int) -> List[Dict[str, Any]]:
-        """从AKShare获取新闻数据"""
+        """从AKShare/财经源获取新闻数据"""
         try:
-            # AKShare新闻功能暂时不可用，返回空列表
-            logger.warning(f"⚠️ [数据来源: AKShare] AKShare新闻功能暂时不可用")
-            return []
+            clean_symbol = symbol.split('.')[0] if symbol else None
+            # 1. 优先尝试 AKShareProvider
+            try:
+                from tradingagents.dataflows.providers.china.akshare import get_akshare_provider
+                provider = get_akshare_provider()
+                df = provider.get_stock_news_sync(symbol=clean_symbol, limit=limit)
+                if df is not None and not df.empty:
+                    news_list = []
+                    for _, row in df.iterrows():
+                        news_list.append({
+                            "title": str(row.get('新闻标题') or row.get('title') or ''),
+                            "content": str(row.get('新闻内容') or row.get('content') or row.get('新闻标题') or ''),
+                            "publish_time": str(row.get('发布时间') or row.get('datetime') or ''),
+                            "source": str(row.get('文章来源') or row.get('source') or '东方财富'),
+                            "url": str(row.get('新闻链接') or row.get('url') or '')
+                        })
+                    logger.info(f"✅ [数据来源: AKShare] 成功获取新闻 {len(news_list)} 条: {symbol or '市场新闻'}")
+                    return news_list
+            except Exception as ak_err:
+                logger.debug(f"AKShare原生新闻接口异常: {ak_err}，尝试财经源")
 
+            # 2. 如果个股代码存在，使用新浪财经个股接口补充
+            if clean_symbol:
+                sina_news = self._fetch_sina_stock_news(clean_symbol, limit)
+                if sina_news:
+                    logger.info(f"✅ [数据来源: 财经源] 成功获取 {len(sina_news)} 条个股新闻: {clean_symbol}")
+                    return sina_news
+
+            return []
         except Exception as e:
             logger.error(f"❌ [数据来源: AKShare] 获取新闻失败: {e}")
             return []

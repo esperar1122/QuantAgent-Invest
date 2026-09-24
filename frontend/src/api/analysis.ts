@@ -329,18 +329,10 @@ export const DATA_SOURCES = {
   AKSHARE: 'akshare',
   BAOSTOCK: 'baostock',
 
-  // 美股数据源
-  FINNHUB: 'finnhub',
-  YAHOO_FINANCE: 'yahoo_finance',
-  ALPHA_VANTAGE: 'alpha_vantage',
-  IEX_CLOUD: 'iex_cloud',
-
   // 专业数据源
-  WIND: 'wind',
   CHOICE: 'choice',
 
   // 其他数据源
-  QUANDL: 'quandl',
   LOCAL_FILE: 'local_file',
   CUSTOM: 'custom'
 } as const

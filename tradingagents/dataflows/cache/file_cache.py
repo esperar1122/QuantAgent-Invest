@@ -577,6 +577,53 @@ class StockDataCache:
         
         logger.info(f"🧹 已清理 {cleared_count} 个过期缓存文件")
     
+    def get_cache_details(self, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
+        """获取缓存详情列表"""
+        items = []
+        for metadata_file in sorted(self.metadata_dir.glob("*_meta.json"), key=os.path.getmtime, reverse=True):
+            try:
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    meta = json.load(f)
+                data_file = Path(meta.get('file_path', ''))
+                size = data_file.stat().st_size if data_file.exists() else 0
+                items.append({
+                    "type": meta.get('data_type', 'unknown'),
+                    "symbol": meta.get('symbol', ''),
+                    "size": size,
+                    "created_at": meta.get('cached_at', ''),
+                    "last_accessed": meta.get('last_accessed', meta.get('cached_at', '')),
+                    "hit_count": meta.get('hit_count', 1)
+                })
+            except Exception:
+                continue
+        total = len(items)
+        start = (page - 1) * page_size
+        return {
+            "items": items[start:start + page_size],
+            "total": total,
+            "page": page,
+            "page_size": page_size
+        }
+
+    def delete_cache_item(self, symbol: str, data_type: str = None) -> int:
+        """删除指定股票的缓存文件"""
+        deleted_count = 0
+        for metadata_file in list(self.metadata_dir.glob(f"*{symbol}*_meta.json")):
+            try:
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    meta = json.load(f)
+                if meta.get('symbol') == symbol:
+                    if data_type and meta.get('data_type') != data_type:
+                        continue
+                    data_file = Path(meta.get('file_path', ''))
+                    if data_file.exists():
+                        data_file.unlink()
+                    metadata_file.unlink()
+                    deleted_count += 1
+            except Exception as e:
+                logger.warning(f"删除缓存文件出错: {e}")
+        return deleted_count
+
     def get_cache_stats(self) -> Dict[str, Any]:
         """获取缓存统计信息"""
         stats = {

@@ -76,7 +76,12 @@ class ConfigService:
             categories_collection = db.market_categories
 
             categories_data = await categories_collection.find({}).to_list(length=None)
-            categories = [MarketCategory(**data) for data in categories_data]
+            # 过滤掉历史遗留的港股、美股、数字货币等非A股分类
+            excluded_ids = {"us_stocks", "hk_stocks", "crypto", "futures"}
+            categories = [
+                MarketCategory(**data) for data in categories_data
+                if data.get("id") not in excluded_ids and data.get("name") not in excluded_ids
+            ]
 
             # 如果没有分类，创建默认分类
             if not categories:
@@ -90,47 +95,31 @@ class ConfigService:
             return []
 
     async def _create_default_market_categories(self) -> List[MarketCategory]:
-        """创建默认市场分类"""
+        """创建默认市场分类（纯A股量化投研体系）"""
         default_categories = [
             MarketCategory(
                 id="a_shares",
                 name="a_shares",
                 display_name="A股",
-                description="中国A股市场数据源",
+                description="中国A股股票市场数据源",
                 enabled=True,
                 sort_order=1
             ),
             MarketCategory(
-                id="us_stocks",
-                name="us_stocks",
-                display_name="美股",
-                description="美国股票市场数据源",
+                id="indices",
+                name="indices",
+                display_name="核心指数",
+                description="沪深300、中证500、科创综指等中国核心指数",
                 enabled=True,
                 sort_order=2
             ),
             MarketCategory(
-                id="hk_stocks",
-                name="hk_stocks",
-                display_name="港股",
-                description="香港股票市场数据源",
+                id="etf",
+                name="etf",
+                display_name="行业与ETF",
+                description="行业板块与ETF基金数据源",
                 enabled=True,
                 sort_order=3
-            ),
-            MarketCategory(
-                id="crypto",
-                name="crypto",
-                display_name="数字货币",
-                description="数字货币市场数据源",
-                enabled=True,
-                sort_order=4
-            ),
-            MarketCategory(
-                id="futures",
-                name="futures",
-                display_name="期货",
-                description="期货市场数据源",
-                enabled=True,
-                sort_order=5
             )
         ]
 

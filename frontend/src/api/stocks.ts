@@ -14,6 +14,11 @@ export interface QuoteResponse {
   amplitude?: number  // 振幅（替代量比）
   trade_date?: string
   updated_at?: string
+  roe?: number
+  net_profit_growth?: number
+  revenue_growth?: number
+  ask_orders?: Array<{ level: string; price: number; qty: number }>
+  bid_orders?: Array<{ level: string; price: number; qty: number }>
 }
 
 export interface FundamentalsResponse {
@@ -32,6 +37,9 @@ export interface FundamentalsResponse {
   ps_ttm?: number  // 🔥 新增：市销率（TTM）
   roe?: number
   debt_ratio?: number  // 🔥 新增：负债率
+  net_profit_growth?: number
+  revenue_growth?: number
+  gross_margin?: number
   total_mv?: number
   circ_mv?: number
   turnover_rate?: number
@@ -82,11 +90,22 @@ export interface NewsResponse {
 
 export const stocksApi = {
   /**
-   * 获取股票行情
-   * @param symbol 6位股票代码
+   * 批量获取核心重要指数实时行情（上证指数、深证成指、创业板指、科创综指等）
    */
-  async getQuote(symbol: string) {
-    return ApiClient.get<QuoteResponse>(`/api/stocks/${symbol}/quote`)
+  async getMarketIndices(forceRefresh = false) {
+    return ApiClient.get<{ indices: any[]; updated_at: string; timestamp: number }>(
+      '/api/stocks/market/indices',
+      { force_refresh: forceRefresh }
+    )
+  },
+
+  /**
+   * 获取股票行情
+   * @param symbol 6位股票代码或指数代码
+   * @param forceRefresh 是否强制刷新
+   */
+  async getQuote(symbol: string, forceRefresh = false) {
+    return ApiClient.get<QuoteResponse>(`/api/stocks/${symbol}/quote`, { force_refresh: forceRefresh })
   },
 
   /**
@@ -120,6 +139,14 @@ export const stocksApi = {
   },
 
   /**
+   * 获取股票/指数高保真分时走势数据 (分钟线、均线、分时成交量、量程基准)
+   * @param symbol 股票或指数代码
+   */
+  async getTimeline(symbol: string) {
+    return ApiClient.get<any>(`/api/stocks/${symbol}/timeline`)
+  },
+
+  /**
    * 获取A股股票池列表及统计指标
    */
   async getPool(params?: StockPoolParams) {
@@ -140,10 +167,93 @@ export const stocksApi = {
    * @param symbol 6位股票代码
    * @param period 周期: day/week/month
    * @param limit K线根数
+   * @param forceRefresh 是否强制刷新
    */
-  async getIndicators(symbol: string, period = 'day', limit = 120) {
-    return ApiClient.get<TechnicalIndicatorsResponse>(`/api/stocks/${symbol}/indicators`, { period, limit })
+  async getIndicators(symbol: string, period = 'day', limit = 120, forceRefresh = false) {
+    return ApiClient.get<TechnicalIndicatorsResponse>(`/api/stocks/${symbol}/indicators`, { period, limit, force_refresh: forceRefresh })
+  },
+
+  /**
+   * 获取股票筹码分布（CYQ）详细透视
+   * @param symbol 6位股票代码
+   * @param period 周期: day/week
+   * @param limit K线跨度样本数 (默认120)
+   */
+  async getChips(symbol: string, period = 'day', limit = 120) {
+    return ApiClient.get<{ code: string; period: string; chips: ChipsDistribution }>(`/api/stocks/${symbol}/chips`, { period, limit })
+  },
+
+  /**
+   * 获取市场总览全景数据（KPI宏观指标、行业板块、量化主线、事件流）
+   */
+  async getMarketOverview(forceRefresh = false) {
+    return ApiClient.get<any>('/api/stocks/market/overview', { force_refresh: forceRefresh })
+  },
+
+  /**
+   * 获取自定义量化策略列表
+   */
+  async getCustomStrategies() {
+    return ApiClient.get<CustomQuantStrategy[]>('/api/stocks/strategies')
+  },
+
+  /**
+   * 创建新的自定义量化策略
+   */
+  async createCustomStrategy(payload: CustomQuantStrategyCreatePayload) {
+    return ApiClient.post<CustomQuantStrategy>('/api/stocks/strategies', payload)
+  },
+
+  /**
+   * 修改已有量化策略
+   */
+  async updateCustomStrategy(id: string, payload: CustomQuantStrategyUpdatePayload) {
+    return ApiClient.put<CustomQuantStrategy>(`/api/stocks/strategies/${id}`, payload)
+  },
+
+  /**
+   * 删除量化策略
+   */
+  async deleteCustomStrategy(id: string) {
+    return ApiClient.delete<{ id: string }>(`/api/stocks/strategies/${id}`)
+  },
+
+  /**
+   * 恢复系统推荐预设策略库
+   */
+  async resetDefaultStrategies() {
+    return ApiClient.post<CustomQuantStrategy[]>('/api/stocks/strategies/reset-defaults')
   }
+}
+
+export interface CustomQuantStrategy {
+  id: string
+  name: string
+  description?: string
+  icon?: string
+  tag_type?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
+  created_at?: string
+  updated_at?: string
+  is_system?: boolean
+  cannot_delete?: boolean
+  params: Partial<StockPoolParams>
+}
+
+export interface CustomQuantStrategyCreatePayload {
+  name: string
+  description?: string
+  icon?: string
+  tag_type?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
+  params: Partial<StockPoolParams>
+}
+
+export interface CustomQuantStrategyUpdatePayload {
+  name?: string
+  description?: string
+  icon?: string
+  tag_type?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
+  cannot_delete?: boolean
+  params?: Partial<StockPoolParams>
 }
 
 export interface StockSearchItem {
@@ -202,6 +312,7 @@ export interface StockPoolStats {
 }
 
 export interface StockPoolParams {
+  preset?: string
   keyword?: string
   market?: string
   source?: string
@@ -231,6 +342,8 @@ export interface StockPoolParams {
   max_revenue_growth?: number | null
   min_gross_margin?: number | null
   max_gross_margin?: number | null
+  min_amount?: number | null
+  max_amount?: number | null
   page?: number
   page_size?: number
   sort_field?: string
@@ -338,6 +451,32 @@ export interface TechnicalSnapshot {
   obv?: {
     obv?: number | null
   }
+  ask_orders?: Array<{ level: string; price: number; qty: number }> | null
+  bid_orders?: Array<{ level: string; price: number; qty: number }> | null
+  chips?: ChipsDistribution | null
+}
+
+export interface ChipsHistogramBin {
+  price: number
+  percent: number
+  is_profit: boolean
+}
+
+export interface ChipsDistribution {
+  current_price: number
+  avg_cost: number
+  profit_ratio: number
+  trapped_ratio: number
+  profit_premium: number
+  cost_range_90: [number, number]
+  concentration_90: number
+  cost_range_70: [number, number]
+  concentration_70: number
+  median_cost: number
+  peak_pattern: string
+  pattern_desc: string
+  pattern_type: 'bullish' | 'bearish' | 'neutral'
+  histogram: ChipsHistogramBin[]
 }
 
 export interface TechnicalIndicatorsResponse {
@@ -347,6 +486,7 @@ export interface TechnicalIndicatorsResponse {
   period: string
   snapshot: TechnicalSnapshot
   series: TechnicalIndicatorBar[]
+  chips?: ChipsDistribution | null
 }
 
 

@@ -31,11 +31,6 @@ export const useAuthStore = defineStore('auth', {
     // 验证token格式
     const isValidToken = (token: string | null): boolean => {
       if (!token || typeof token !== 'string') return false
-      // 检查是否是mock token（开发时可能设置的测试token）
-      if (token === 'mock-token' || token.startsWith('mock-')) {
-        console.warn('⚠️ 检测到mock token，将被清除:', token)
-        return false
-      }
       // JWT token应该有3个部分，用.分隔
       return token.split('.').length === 3
     }

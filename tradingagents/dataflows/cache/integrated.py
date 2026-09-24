@@ -338,7 +338,48 @@ class IntegratedCacheManager:
 
         self.logger.info(f"🧹 总共清理了 {cleared_count} 条缓存记录")
         return cleared_count
-    
+
+    def get_cache_details(self, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
+        """获取缓存详情列表"""
+        if hasattr(self.legacy_cache, 'get_cache_details'):
+            return self.legacy_cache.get_cache_details(page=page, page_size=page_size)
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size
+        }
+
+    def delete_cache_item(self, symbol: str, data_type: str = None) -> int:
+        """删除指定股票的缓存"""
+        deleted_count = 0
+        # 1. MongoDB 缓存
+        if self.use_adaptive and self.db_manager.is_mongodb_available():
+            try:
+                mongodb_db = self.db_manager.get_mongodb_db()
+                cols = ["stock_data", "news_data", "fundamentals_data"]
+                if data_type:
+                    if 'stock' in data_type:
+                        cols = ["stock_data"]
+                    elif 'news' in data_type:
+                        cols = ["news_data"]
+                    elif 'fundamentals' in data_type:
+                        cols = ["fundamentals_data"]
+                for col in cols:
+                    res = mongodb_db[col].delete_many({"symbol": symbol})
+                    deleted_count += res.deleted_count
+            except Exception as e:
+                self.logger.warning(f"MongoDB 删除单项缓存失败: {e}")
+
+        # 2. 文件缓存
+        try:
+            if hasattr(self.legacy_cache, 'delete_cache_item'):
+                deleted_count += self.legacy_cache.delete_cache_item(symbol, data_type)
+        except Exception as e:
+            self.logger.warning(f"文件缓存删除单项缓存失败: {e}")
+
+        return deleted_count
+
     def get_cache_backend_info(self) -> Dict[str, Any]:
         """获取缓存后端信息"""
         if self.use_adaptive:

@@ -106,12 +106,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Reports/ReportDetail.vue'),
         meta: { title: '报告详情', requiresAuth: true }
       },
-      {
-        path: 'reports/token',
-        name: 'TerminalTokenStatistics',
-        component: () => import('@/views/Reports/TokenStatistics.vue'),
-        meta: { title: 'Token统计', requiresAuth: true }
-      },
 
       // 任务与调度运维
       {
@@ -182,7 +176,6 @@ const routes: RouteRecordRaw[] = [
   { path: '/analysis', redirect: '/terminal/analysis/single' },
   { path: '/analysis/single', redirect: '/terminal/analysis/single' },
   { path: '/analysis/batch', redirect: '/terminal/analysis/batch' },
-  { path: '/analysis/history', redirect: '/terminal/tasks?tab=completed' },
   { path: '/screening', redirect: '/terminal/screening' },
   { path: '/stock-pool', redirect: '/terminal/screening' },
   { path: '/favorites', redirect: '/terminal/favorites' },
@@ -191,7 +184,6 @@ const routes: RouteRecordRaw[] = [
   { path: '/queue', redirect: '/terminal/tasks' },
   { path: '/reports', redirect: '/terminal/reports' },
   { path: '/reports/view/:id', redirect: to => `/terminal/reports/view/${to.params.id}` },
-  { path: '/reports/token', redirect: '/terminal/reports/token' },
   { path: '/settings', redirect: '/terminal/settings/config' },
   { path: '/settings/config', redirect: '/terminal/settings/config' },
   { path: '/settings/database', redirect: '/terminal/settings/database' },

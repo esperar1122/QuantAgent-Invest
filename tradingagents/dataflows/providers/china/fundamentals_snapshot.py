@@ -23,7 +23,7 @@ def _safe_float(x) -> Optional[float]:
 
 def _get_tushare_snapshot(symbol: str) -> Dict[str, Optional[float]]:
     try:
-        from .providers.china.tushare import get_tushare_provider
+        from .tushare import get_tushare_provider
         provider = get_tushare_provider()
         if not getattr(provider, 'connected', False):
             return {}
@@ -63,13 +63,44 @@ def _get_tushare_snapshot(symbol: str) -> Dict[str, Optional[float]]:
         return {}
 
 
+def _get_mongodb_snapshot(symbol: str) -> Dict[str, Optional[float]]:
+    """从MongoDB数据库获取基础基本面估值指标"""
+    try:
+        from app.core.database import get_mongo_db_sync
+        db = get_mongo_db_sync()
+        clean_code = str(symbol).split('.')[0].zfill(6)
+        doc = db.stock_basic_info.find_one(
+            {"code": clean_code},
+            {"_id": 0, "pe": 1, "pb": 1, "total_mv": 1, "roe": 1}
+        )
+        if not doc:
+            doc = db.market_quotes.find_one(
+                {"code": clean_code},
+                {"_id": 0, "pe": 1, "pb": 1, "total_mv": 1, "roe": 1}
+            )
+        if doc:
+            return {
+                'pe': _safe_float(doc.get('pe')),
+                'pb': _safe_float(doc.get('pb')),
+                'market_cap': _safe_float(doc.get('total_mv')),
+                'roe': _safe_float(doc.get('roe')),
+            }
+    except Exception as e:
+        logger.debug(f"[fund_snapshot] mongodb snapshot failed: {e}")
+    return {}
+
+
 def get_cn_fund_snapshot(symbol: str) -> Dict[str, Optional[float]]:
     """
     获取A股基础基本面快照（pe/pb/roe/market_cap）。
-    优先Tushare，失败则返回空字典（后续可扩展AKShare/东方财富等）。
+    优先级：Tushare → MongoDB 数据库兜底。
     """
     snap = _get_tushare_snapshot(symbol)
-    if snap:
+    if snap and any(v is not None for v in snap.values()):
         return snap
+    # 数据库兜底
+    db_snap = _get_mongodb_snapshot(symbol)
+    if db_snap:
+        return db_snap
     return {}
 

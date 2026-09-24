@@ -81,6 +81,19 @@ export function clearAllCache() {
 }
 
 /**
+ * 删除单个缓存项
+ * @param symbol 股票代码
+ * @param type 缓存类型
+ */
+export function deleteCacheItem(symbol: string, type?: string) {
+  return request({
+    url: '/api/cache/item',
+    method: 'delete',
+    params: { symbol, cache_type: type }
+  })
+}
+
+/**
  * 获取缓存详情列表
  * @param page 页码
  * @param pageSize 每页数量

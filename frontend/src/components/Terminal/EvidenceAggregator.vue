@@ -217,6 +217,8 @@ const riskList = computed(() => [
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .title-cluster {
@@ -494,5 +496,21 @@ const riskList = computed(() => [
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
+  .evidence-body {
+    grid-template-columns: 1fr;
+    .risk-col {
+      border-left: none;
+      border-top: 1px solid #eaecf0;
+    }
+  }
 }
 </style>

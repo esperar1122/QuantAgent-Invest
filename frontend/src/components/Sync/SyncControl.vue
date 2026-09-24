@@ -152,17 +152,6 @@
               清空缓存
             </el-button>
 
-            <!-- 临时测试按钮 -->
-
-
-            <el-button
-              size="large"
-              type="success"
-              :loading="syncing"
-              @click="forceSync"
-            >
-              🔄 强制重新同步
-            </el-button>
           </div>
         </div>
 
@@ -510,26 +499,6 @@ const formatTime = (isoString: string) => {
   }
 }
 
-
-
-// 强制重新同步
-const forceSync = async () => {
-  console.log('🔄 强制重新同步')
-
-  // 先清空当前状态
-  syncStatus.value = null
-
-  // 设置强制同步标志
-  const originalForce = syncForm.force
-  syncForm.force = true
-
-  try {
-    await startSync()
-  } finally {
-    // 恢复原始设置
-    syncForm.force = originalForce
-  }
-}
 
 // 组件挂载
 onMounted(async () => {

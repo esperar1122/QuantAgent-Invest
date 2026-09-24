@@ -160,10 +160,8 @@
           
           <el-form :model="analysisSettings" label-width="120px">
             <el-form-item label="默认市场">
-              <el-select v-model="analysisSettings.defaultMarket">
+              <el-select v-model="analysisSettings.defaultMarket" disabled>
                 <el-option label="A股" value="A股" />
-                <el-option label="美股" value="美股" />
-                <el-option label="港股" value="港股" />
               </el-select>
             </el-form-item>
             

@@ -1262,6 +1262,9 @@ class AKShareProvider(BaseStockDataProvider):
                             self.logger.error(f"❌ {symbol} 获取新闻失败(JSON解析错误): {e}")
                             return None
                     except Exception as e:
+                        if "Recv failure" in str(e) or "SSLError" in str(type(e)):
+                            self.logger.warning(f"⚠️ {symbol} 东方财富接口SSL重置，快速转入备用财经源: {e}")
+                            break
                         if attempt < max_retries - 1:
                             self.logger.warning(f"⚠️ {symbol} 第{attempt+1}次获取新闻失败: {e}，{retry_delay}秒后重试...")
                             time.sleep(retry_delay)

@@ -122,6 +122,38 @@ async def clear_all_cache(current_user: dict = Depends(get_current_user)):
         )
 
 
+@router.delete("/item")
+async def delete_cache_item(
+    symbol: str = Query(..., description="股票代码"),
+    cache_type: Optional[str] = Query(None, description="缓存类型"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    删除指定股票的缓存项
+    """
+    try:
+        from tradingagents.dataflows.cache import get_cache
+
+        cache = get_cache()
+        deleted_count = 0
+        if hasattr(cache, 'delete_cache_item'):
+            deleted_count = cache.delete_cache_item(symbol=symbol, data_type=cache_type)
+
+        logger.info(f"用户 {current_user['username']} 删除了股票 {symbol} 的缓存 (类型: {cache_type}, 清除记录: {deleted_count})")
+
+        return ok(
+            data={"symbol": symbol, "cache_type": cache_type, "deleted_count": deleted_count},
+            message=f"已成功删除 {symbol} 的缓存"
+        )
+
+    except Exception as e:
+        logger.error(f"删除缓存项失败: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"删除缓存项失败: {str(e)}"
+        )
+
+
 @router.get("/details")
 async def get_cache_details(
     page: int = Query(1, ge=1, description="页码"),

@@ -25,6 +25,17 @@
           {{ index.changePercent >= 0 ? '+' : '' }}{{ index.changePercent.toFixed(2) }}%
         </span>
       </div>
+
+      <!-- 极速时效性更新与手动刷新指示 -->
+      <div
+        class="ticker-refresh-pill"
+        :class="{ 'is-refreshing': isTickerRefreshing }"
+        @click="handleManualTickerRefresh"
+        title="指数行情每分钟自动同步，点击立即刷新"
+      >
+        <el-icon class="refresh-icon" :class="{ 'spin-anim': isTickerRefreshing }"><RefreshRight /></el-icon>
+        <span class="refresh-time tabular-nums">{{ lastTickerUpdate ? `更新于 ${lastTickerUpdate}` : '每分刷新' }}</span>
+      </div>
     </div>
 
     <!-- 右侧交易状态、主题切换与返回工作台 -->
@@ -102,7 +113,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { Sunny, Moon, FullScreen, Bell, Setting } from '@element-plus/icons-vue'
+import { Sunny, Moon, FullScreen, Bell, Setting, RefreshRight } from '@element-plus/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
@@ -174,28 +185,54 @@ function goToIndexResearch(code: string) {
   router.push({ path: '/terminal/stock', query: { code } })
 }
 
+const isTickerRefreshing = ref(false)
+const lastTickerUpdate = ref('')
+
 const indices = ref([
-  { code: '000001', fullCode: 'sh000001', name: '上证指数', price: 3911.87, changePercent: 0.94 },
-  { code: '399001', fullCode: 'sz399001', name: '深证成指', price: 13640.87, changePercent: 1.72 },
-  { code: '399006', fullCode: 'sz399006', name: '创业板指', price: 3372.68, changePercent: 2.25 },
-  { code: '000680', fullCode: 'sh000680', name: '科创综指', price: 1948.21, changePercent: 3.23 }
+  { code: '000001', fullCode: 'sh000001', name: '上证指数', price: 3901.66, changePercent: -0.89 },
+  { code: '399001', fullCode: 'sz399001', name: '深证成指', price: 13401.49, changePercent: -1.72 },
+  { code: '399006', fullCode: 'sz399006', name: '创业板指', price: 3315.97, changePercent: -1.88 },
+  { code: '000680', fullCode: 'sh000680', name: '科创综指', price: 1935.07, changePercent: -1.70 }
 ])
 
-async function fetchLiveIndices() {
-  await Promise.allSettled(
-    indices.value.map(async (idx) => {
-      try {
-        const res = await stocksApi.getQuote(idx.fullCode)
-        const q = (res as any)?.data || res
-        if (q && (q.price !== undefined || q.close !== undefined)) {
-          idx.price = Number(q.price ?? q.close)
-          idx.changePercent = Number(q.change_percent ?? q.pct_chg ?? 0)
+async function fetchLiveIndices(force = false) {
+  if (isTickerRefreshing.value && !force) return
+  isTickerRefreshing.value = true
+  try {
+    const res: any = await stocksApi.getMarketIndices(force)
+    const data = res?.data || res
+    if (data && Array.isArray(data.indices) && data.indices.length > 0) {
+      data.indices.forEach((remoteIdx: any) => {
+        const local = indices.value.find(
+          (i) => i.code === remoteIdx.code || i.fullCode === remoteIdx.full_code || i.fullCode === remoteIdx.code
+        )
+        if (local) {
+          if (remoteIdx.price !== undefined && remoteIdx.price !== null) {
+            local.price = Number(remoteIdx.price)
+          }
+          if (remoteIdx.change_percent !== undefined && remoteIdx.change_percent !== null) {
+            local.changePercent = Number(remoteIdx.change_percent)
+          }
         }
-      } catch (e) {
-        // 保持平滑
+      })
+      if (data.updated_at) {
+        lastTickerUpdate.value = data.updated_at
+      } else {
+        const d = new Date()
+        lastTickerUpdate.value = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
       }
-    })
-  )
+    }
+  } catch (e) {
+    console.warn('获取核心指数实时行情失败:', e)
+  } finally {
+    setTimeout(() => {
+      isTickerRefreshing.value = false
+    }, 200)
+  }
+}
+
+function handleManualTickerRefresh() {
+  fetchLiveIndices(true)
 }
 
 const currentTime = ref('09:41:26')
@@ -242,11 +279,21 @@ const updateClock = () => {
   updateMarketStatus(now)
 }
 
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    fetchLiveIndices(false)
+  }
+}
+
 onMounted(() => {
   updateClock()
   timer = window.setInterval(updateClock, 1000)
-  fetchLiveIndices()
-  tickerTimer = window.setInterval(fetchLiveIndices, 15000)
+  fetchLiveIndices(false)
+  // 每60秒定时自动轮询刷新最新指数行情（遵循每分钟时效性）
+  tickerTimer = window.setInterval(() => {
+    fetchLiveIndices(false)
+  }, 60000)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 
   // 消息通知初始化
   notifStore.refreshUnreadCount()
@@ -284,6 +331,7 @@ onUnmounted(() => {
   if (tickerTimer) clearInterval(tickerTimer)
   if (timerCount) clearInterval(timerCount)
   if (timerList) clearInterval(timerList)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   notifStore.disconnect()
 })
 </script>
@@ -291,22 +339,26 @@ onUnmounted(() => {
 <style scoped lang="scss">
 .terminal-top-bar {
   height: 66px;
+  min-height: 56px;
   background-color: #ffffff;
   border-bottom: 1px solid #e4e7ec;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 clamp(8px, 1.5vw, 20px);
   position: sticky;
   top: 0;
   z-index: 999;
   user-select: none;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .brand-section {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: clamp(6px, 1vw, 12px);
+  flex-shrink: 0;
 
   .brand-badge {
     background-color: #eff8ff;
@@ -317,6 +369,7 @@ onUnmounted(() => {
     padding: 2px 6px;
     border-radius: 4px;
     line-height: 1.2;
+    white-space: nowrap;
   }
 
   .brand-text {
@@ -326,12 +379,14 @@ onUnmounted(() => {
       color: #101828;
       line-height: 1.2;
       letter-spacing: -0.01em;
+      white-space: nowrap;
     }
     .brand-sub {
       font-size: 11px;
       color: #667085;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       margin-top: 2px;
+      white-space: nowrap;
     }
   }
 }
@@ -339,17 +394,29 @@ onUnmounted(() => {
 .index-ticker-strip {
   display: flex;
   align-items: center;
-  gap: 28px;
+  gap: clamp(6px, 1.2vw, 24px);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  flex-shrink: 1;
+  min-width: 0;
+  padding: 0 4px;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 
   .index-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 13px;
+    gap: clamp(4px, 0.6vw, 8px);
+    font-size: clamp(11.5px, 0.85vw, 13px);
+    white-space: nowrap;
+    flex-shrink: 0;
 
     &.clickable {
       cursor: pointer;
-      padding: 3px 8px;
+      padding: 3px clamp(4px, 0.6vw, 8px);
       border-radius: 4px;
       transition: all 0.15s ease;
 
@@ -370,9 +437,9 @@ onUnmounted(() => {
 
     .index-change {
       font-weight: 600;
-      padding: 1px 6px;
+      padding: 1px 5px;
       border-radius: 4px;
-      font-size: 12px;
+      font-size: 11.5px;
     }
 
     &.up {
@@ -395,11 +462,47 @@ onUnmounted(() => {
       }
     }
   }
+
+  .ticker-refresh-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 12px;
+    background-color: #f2f4f7;
+    border: 1px solid #eaecf0;
+    color: #667085;
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+
+    .refresh-icon {
+      font-size: 12px;
+      transition: transform 0.3s ease;
+    }
+
+    .spin-anim {
+      animation: spin-ticker 0.8s linear infinite;
+    }
+
+    &:hover {
+      background-color: #e0f2fe;
+      border-color: #bae6fd;
+      color: #0284c7;
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
+  }
 }
 
 .status-section {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 
   .market-status-pill {
     display: flex;
@@ -407,9 +510,10 @@ onUnmounted(() => {
     gap: 8px;
     background-color: #f8fafc;
     border: 1px solid #e4e7ec;
-    padding: 5px 12px;
+    padding: 5px 10px;
     border-radius: 6px;
     font-size: 12px;
+    white-space: nowrap;
 
     .pulse-dot {
       width: 7px;
@@ -417,6 +521,7 @@ onUnmounted(() => {
       border-radius: 50%;
       background-color: #12b76a;
       box-shadow: 0 0 0 2px rgba(18, 183, 106, 0.2);
+      flex-shrink: 0;
 
       &.status-open {
         background-color: #12b76a;
@@ -450,13 +555,13 @@ onUnmounted(() => {
     width: 1px;
     height: 20px;
     background-color: #e4e7ec;
-    margin: 0 12px;
+    margin: 0 10px;
   }
 
   .top-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 
     .top-action-btn {
       width: 32px;
@@ -470,6 +575,7 @@ onUnmounted(() => {
       justify-content: center;
       cursor: pointer;
       transition: all 0.15s ease;
+      flex-shrink: 0;
 
       &:hover {
         background-color: #f8fafc;
@@ -477,6 +583,39 @@ onUnmounted(() => {
         border-color: #b2ddff;
       }
     }
+  }
+}
+
+@media (max-width: 1240px) {
+  .brand-section .brand-text .brand-sub {
+    display: none;
+  }
+}
+
+@media (max-width: 1080px) {
+  .status-section .market-status-pill .live-clock {
+    display: none;
+  }
+}
+
+@media (max-width: 960px) {
+  .brand-section .brand-text .brand-title {
+    font-size: 13.5px;
+  }
+  .index-ticker-strip .index-item:nth-child(n+3) {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .brand-section .brand-text {
+    display: none;
+  }
+  .status-section .market-status-pill {
+    display: none;
+  }
+  .status-section .top-bar-divider {
+    display: none;
   }
 }
 
@@ -542,6 +681,35 @@ onUnmounted(() => {
     display: flex;
     gap: 8px;
     margin-top: 8px;
+  }
+}
+
+@keyframes spin-ticker {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .ticker-refresh-pill .refresh-time {
+    display: none;
+  }
+}
+
+:global(html.dark) {
+  .ticker-refresh-pill {
+    background-color: #1e293b;
+    border-color: #334155;
+    color: #94a3b8;
+
+    &:hover {
+      background-color: #0f172a;
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
   }
 }
 </style>

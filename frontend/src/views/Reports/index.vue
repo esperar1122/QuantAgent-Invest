@@ -30,8 +30,6 @@
         <el-col :span="4">
           <el-select v-model="marketFilter" placeholder="市场筛选" clearable @change="handleMarketChange">
             <el-option label="A股" value="A股" />
-            <el-option label="港股" value="港股" />
-            <el-option label="美股" value="美股" />
           </el-select>
         </el-col>
         
@@ -422,8 +420,53 @@ const deleteReport = async (report: ReportListItem) => {
   }
 }
 
-const exportSelected = () => {
-  ElMessage.info('批量导出功能开发中...')
+const exportSelected = async () => {
+  if (!selectedReports.value || selectedReports.value.length === 0) {
+    ElMessage.warning('请先勾选需要导出的报告')
+    return
+  }
+
+  const count = selectedReports.value.length
+  ElMessage.info(`开始批量导出 ${count} 份研报...`)
+
+  let successCount = 0
+  let failCount = 0
+
+  for (const report of selectedReports.value) {
+    try {
+      const response = await fetch(`/api/reports/${report.id}/download?format=markdown`, {
+        headers: {
+          'Authorization': `Bearer ${authStore.token}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${report.stock_code}_分析报告_${report.analysis_date}.md`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      successCount++
+      // 间隔300ms避免浏览器阻拦批量多文件下载
+      await new Promise(resolve => setTimeout(resolve, 300))
+    } catch (err) {
+      console.error(`导出报告 ${report.stock_code} 失败:`, err)
+      failCount++
+    }
+  }
+
+  if (failCount === 0) {
+    ElMessage.success(`成功导出全部 ${successCount} 份研报`)
+  } else {
+    ElMessage.warning(`批量导出完成: 成功 ${successCount} 份，失败 ${failCount} 份`)
+  }
 }
 
 const refreshReports = () => {

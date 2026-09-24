@@ -132,17 +132,32 @@ class FavoritesService:
                     if q:
                         it["current_price"] = q.get("close")
                         it["change_percent"] = q.get("pct_chg")
+                        it["volume"] = q.get("amount") if q.get("amount") is not None else q.get("volume")
                 # 兜底：对未命中的代码使用在线源补齐（可选）
                 missing = [c for c in codes if c not in quotes_map]
                 if missing:
                     try:
-                        quotes_online = await get_quotes_service().get_quotes(missing)
+                        # 从 stock_basic_info 获取静态最新数据作为兜底
+                        basic_info_coll = db["stock_basic_info"]
+                        cursor = basic_info_coll.find(
+                            {"code": {"$in": missing}},
+                            {"code": 1, "close": 1, "pct_chg": 1, "amount": 1, "volume": 1, "_id": 0}
+                        )
+                        basic_docs = await cursor.to_list(length=None)
+                        basic_map = {str(d.get("code")).zfill(6): d for d in (basic_docs or [])}
+                        
                         for it in items:
                             code = it.get("stock_code")
                             if it.get("current_price") is None:
-                                q2 = quotes_online.get(code, {}) if quotes_online else {}
-                                it["current_price"] = q2.get("close")
-                                it["change_percent"] = q2.get("pct_chg")
+                                bq = basic_map.get(code)
+                                if bq:
+                                    it["current_price"] = bq.get("close")
+                                    it["change_percent"] = bq.get("pct_chg")
+                                    it["volume"] = bq.get("amount") if bq.get("amount") is not None else bq.get("volume")
+                                else:
+                                    it["current_price"] = None
+                                    it["change_percent"] = None
+                                    it["volume"] = None
                     except Exception:
                         pass
             except Exception:
@@ -385,23 +400,6 @@ class FavoritesService:
             result = await db.user_favorites.aggregate(pipeline).to_list(None)
 
         return [item["_id"] for item in result if item.get("_id")]
-
-    def _get_mock_price(self, stock_code: str) -> float:
-        """获取模拟股价"""
-        # 基于股票代码生成模拟价格
-        base_price = hash(stock_code) % 100 + 10
-        return round(base_price + (hash(stock_code) % 1000) / 100, 2)
-    
-    def _get_mock_change(self, stock_code: str) -> float:
-        """获取模拟涨跌幅"""
-        # 基于股票代码生成模拟涨跌幅
-        change = (hash(stock_code) % 2000 - 1000) / 100
-        return round(change, 2)
-    
-    def _get_mock_volume(self, stock_code: str) -> int:
-        """获取模拟成交量"""
-        # 基于股票代码生成模拟成交量
-        return (hash(stock_code) % 10000 + 1000) * 100
 
 
 # 创建全局实例

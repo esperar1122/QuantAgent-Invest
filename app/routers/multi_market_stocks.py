@@ -53,22 +53,6 @@ async def get_supported_markets(current_user: dict = Depends(get_current_user)):
             "currency": "CNY",
             "timezone": "Asia/Shanghai",
             "trading_hours": "09:30-15:00"
-        },
-        {
-            "code": "HK",
-            "name": "港股",
-            "name_en": "Hong Kong Stocks",
-            "currency": "HKD",
-            "timezone": "Asia/Hong_Kong",
-            "trading_hours": "09:30-16:00"
-        },
-        {
-            "code": "US",
-            "name": "美股",
-            "name_en": "US Stocks",
-            "currency": "USD",
-            "timezone": "America/New_York",
-            "trading_hours": "09:30-16:00 EST"
         }
     ]
     
@@ -109,10 +93,10 @@ async def search_stocks(
         }
     """
     market = market.upper()
-    if market not in ["CN", "HK", "US"]:
+    if market != "CN":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"不支持的市场类型: {market}"
+            detail=f"本系统为A股专属系统，不支持市场类型: {market}"
         )
     
     db = get_mongo_db()
@@ -166,10 +150,10 @@ async def get_stock_info(
         }
     """
     market = market.upper()
-    if market not in ["CN", "HK", "US"]:
+    if market != "CN":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"不支持的市场类型: {market}"
+            detail=f"本系统为A股专属系统，不支持市场类型: {market}"
         )
     
     db = get_mongo_db()
@@ -227,10 +211,10 @@ async def get_stock_quote(
         }
     """
     market = market.upper()
-    if market not in ["CN", "HK", "US"]:
+    if market != "CN":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"不支持的市场类型: {market}"
+            detail=f"本系统为A股专属系统，不支持市场类型: {market}"
         )
     
     db = get_mongo_db()
@@ -298,10 +282,10 @@ async def get_stock_daily_quotes(
         }
     """
     market = market.upper()
-    if market not in ["CN", "HK", "US"]:
+    if market != "CN":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"不支持的市场类型: {market}"
+            detail=f"本系统为A股专属系统，不支持市场类型: {market}"
         )
     
     db = get_mongo_db()

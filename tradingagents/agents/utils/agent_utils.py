@@ -1316,28 +1316,115 @@ class Toolkit:
                 logger.info(f"🇨🇳🇭🇰 [统一情绪工具] 处理中文市场情绪...")
 
                 try:
-                    # 可以集成微博、雪球、东方财富等中文社交媒体情绪
-                    # 目前使用基础的情绪分析
-                    sentiment_summary = f"""
-## 中文市场情绪分析
+                    clean_code = str(ticker).split('.')[0].zfill(6)
+                    import akshare as ak
+                    from tradingagents.dataflows.data_source_manager import get_data_source_manager
 
-**股票**: {ticker} ({market_info['market_name']})
-**分析日期**: {curr_date}
+                    # 1. 情绪量化指标（综合评分、关注热度、参与意愿、机构参与度）
+                    zhpj_score = None
+                    focus_idx = None
+                    desire_val = None
+                    desire_5d = None
+                    inst_part = None
 
-### 市场情绪概况
-- 由于中文社交媒体情绪数据源暂未完全集成，当前提供基础分析
-- 建议关注雪球、东方财富、同花顺等平台的讨论热度
-- 港股市场还需关注香港本地财经媒体情绪
+                    try:
+                        df_zhpj = ak.stock_comment_detail_zhpj_lspf_em(symbol=clean_code)
+                        if df_zhpj is not None and not df_zhpj.empty:
+                            zhpj_score = float(df_zhpj.iloc[-1]['评分'])
+                    except Exception as ze:
+                        logger.debug(f"[情绪指标] 综合评分获取失败: {ze}")
 
-### 情绪指标
-- 整体情绪: 中性
-- 讨论热度: 待分析
-- 投资者信心: 待评估
+                    try:
+                        df_focus = ak.stock_comment_detail_scrd_focus_em(symbol=clean_code)
+                        if df_focus is not None and not df_focus.empty:
+                            focus_idx = float(df_focus.iloc[-1]['用户关注指数'])
+                    except Exception as fe:
+                        logger.debug(f"[情绪指标] 关注指数获取失败: {fe}")
 
-*注：完整的中文社交媒体情绪分析功能正在开发中*
-"""
+                    try:
+                        df_desire = ak.stock_comment_detail_scrd_desire_em(symbol=clean_code)
+                        if df_desire is not None and not df_desire.empty:
+                            last_row = df_desire.iloc[-1]
+                            desire_val = float(last_row['参与意愿'])
+                            desire_5d = float(last_row.get('5日平均参与意愿', desire_val))
+                    except Exception as de:
+                        logger.debug(f"[情绪指标] 参与意愿获取失败: {de}")
+
+                    try:
+                        df_jgcyd = ak.stock_comment_detail_zlkp_jgcyd_em(symbol=clean_code)
+                        if df_jgcyd is not None and not df_jgcyd.empty:
+                            inst_part = float(df_jgcyd.iloc[-1]['机构参与度'])
+                    except Exception as ie:
+                        logger.debug(f"[情绪指标] 机构参与度获取失败: {ie}")
+
+                    # 2. 情绪等级判定与定性描述
+                    if zhpj_score is not None:
+                        if zhpj_score >= 75:
+                            overall_tone = "强烈看多 (情绪偏高亢)"
+                        elif zhpj_score >= 65:
+                            overall_tone = "偏向多头 (温和看好)"
+                        elif zhpj_score >= 50:
+                            overall_tone = "中性震荡 (多空博弈)"
+                        else:
+                            overall_tone = "谨慎防守 (情绪较弱)"
+                        score_desc = f"{zhpj_score:.2f} 分 / 100 分"
+                    else:
+                        overall_tone = "中性 (数据平稳)"
+                        score_desc = "暂未收录"
+
+                    if focus_idx is not None:
+                        if focus_idx >= 85:
+                            focus_level = f"{focus_idx:.1f} (市场焦点，极高关注)"
+                        elif focus_idx >= 70:
+                            focus_level = f"{focus_idx:.1f} (主流资金关注)"
+                        else:
+                            focus_level = f"{focus_idx:.1f} (常态关注)"
+                    else:
+                        focus_level = "正常"
+
+                    if desire_val is not None:
+                        trend = "上升" if (desire_5d and desire_val > desire_5d) else "持平或回落"
+                        desire_desc = f"{desire_val:.1f}% (5日均值: {desire_5d:.1f}%, 趋势: {trend})"
+                    else:
+                        desire_desc = "温和参与"
+
+                    inst_desc = f"{inst_part:.2f}%" if inst_part is not None else "主流水平"
+
+                    # 3. 舆情新闻动态
+                    dm = get_data_source_manager()
+                    recent_news = dm.get_news_data(clean_code, limit=5)
+                    news_lines = []
+                    if recent_news:
+                        for item in recent_news[:5]:
+                            title = str(item.get('title') or '').strip()
+                            src = str(item.get('source') or '财经')
+                            ptime = str(item.get('publish_time') or '')
+                            if title:
+                                ptime_str = f" ({ptime})" if ptime else ""
+                                news_lines.append(f"- [{src}] {title}{ptime_str}")
+                    if not news_lines:
+                        news_lines.append("- 近期市场消息面平稳，未见突发重大利空利好事件")
+
+                    sentiment_summary = f"""## 中文市场社交与舆情情绪分析
+
+**标的**: {ticker} ({market_info['market_name']})
+**分析基准日**: {curr_date}
+
+### 核心情绪量化指标
+- **综合情绪评级**: {overall_tone}
+- **情绪综合评分**: {score_desc}
+- **社交与市场热度**: {focus_level}
+- **投资者参与意愿**: {desire_desc}
+- **机构控盘/参与度**: {inst_desc}
+
+### 近期核心舆情动态
+{chr(10).join(news_lines)}
+
+### 投资情绪总结
+当前市场对该标的整体情绪处于【{overall_tone}】状态。结合资金意愿与机构参与度，建议投资者结合基本面估值与技术面走势综合研判。"""
                     result_data.append(sentiment_summary)
                 except Exception as e:
+                    logger.error(f"[统一情绪工具] 中文情绪分析异常: {e}")
                     result_data.append(f"## 中文市场情绪\n获取失败: {e}")
 
             else:

@@ -363,7 +363,55 @@ const openReport = (row:any): void => {
   void router.push(`/terminal/reports/view/${id}`)
 }
 
-const retryTask = (_row:any) => { ElMessage.info('重试功能待实现') }
+// 重试任务
+const retryTask = async (row: any) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要重试分析任务 "${row.stock_name || row.stock_code}" 吗？这将会创建一个新的分析任务。`,
+      '确认重试',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    const taskId = row.task_id || row.analysis_id || row.id
+    if (!taskId) {
+      ElMessage.error('任务ID不存在')
+      return
+    }
+
+    loading.value = true
+    
+    // 尝试获取任务详情以获取完整参数
+    let task = row
+    try {
+      const res = await analysisApi.getTaskStatus(taskId)
+      task = (res as any)?.data?.data || row
+    } catch (e) {
+      console.warn('获取任务详情失败，尝试使用已有数据重试', e)
+    }
+
+    // 构造请求参数，复用原任务的参数
+    const requestParams = {
+      symbol: task.symbol || task.stock_code || task.stock_symbol,
+      parameters: task.parameters || {}
+    }
+
+    await analysisApi.startSingleAnalysis(requestParams)
+    ElMessage.success('重试任务已提交')
+    
+    // 刷新列表
+    await loadList()
+  } catch (e: any) {
+    if (e !== 'cancel' && e !== 'close') {
+      ElMessage.error(e?.message || '重试失败')
+    }
+  } finally {
+    loading.value = false
+  }
+}
 
 // 显示错误详情
 const showErrorDetail = async (row: any) => {

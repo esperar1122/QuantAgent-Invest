@@ -42,11 +42,13 @@
       <!-- 复选框列 -->
       <el-table-column type="selection" width="50" align="center" fixed="left" />
 
-      <!-- 股票代码 -->
+      <!-- 股票代码 (点击查看技术指标与行情) -->
       <el-table-column prop="code" label="代码" width="130" fixed="left" sortable="custom">
         <template #default="{ row }">
           <div class="symbol-col">
-            <span class="symbol-code num-tabular">{{ row.code }}</span>
+            <el-tooltip content="点击查看技术指标全景与交互行情" placement="top" :show-after="200">
+              <span class="symbol-code num-tabular clickable-code" @click="openTechnicalModal(row)">{{ row.code }}</span>
+            </el-tooltip>
             <el-tag size="small" :type="getExchangeTagType(row.code)" effect="plain" class="exchange-tag">
               {{ getExchangeName(row.code) }}
             </el-tag>
@@ -455,6 +457,15 @@ const formatTradeDate = (d?: string) => {
       .symbol-code {
         font-weight: 600;
         color: var(--el-text-color-primary, #1e293b);
+
+        &.clickable-code {
+          cursor: pointer;
+          transition: all 0.2s ease;
+          &:hover {
+            color: #2563eb;
+            text-decoration: underline;
+          }
+        }
       }
 
       .exchange-tag {

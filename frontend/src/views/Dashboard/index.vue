@@ -54,7 +54,7 @@
     <!-- 主要功能区域 -->
     <el-row :gutter="24" class="main-content">
       <!-- 左侧：快速操作 -->
-      <el-col :span="16">
+      <el-col :xs="24" :sm="24" :md="24" :lg="16">
         <el-card class="quick-actions-card" header="快速操作">
           <div class="quick-actions">
             <div class="action-item" @click="goToSingleAnalysis">
@@ -106,33 +106,44 @@
         <!-- 最近分析 -->
         <el-card class="recent-analyses-card" header="最近分析" style="margin-top: 24px;">
           <el-table :data="recentAnalyses" style="width: 100%">
-            <el-table-column prop="stock_code" label="股票代码" width="120" />
-            <el-table-column prop="stock_name" label="股票名称" width="150" />
-            <el-table-column prop="status" label="状态" width="100">
+            <el-table-column prop="stock_code" label="股票代码" min-width="95" />
+            <el-table-column prop="stock_name" label="股票名称" min-width="120" />
+            <el-table-column prop="status" label="状态" min-width="85">
               <template #default="{ row }">
                 <el-tag :type="getStatusType(row.status)">
                   {{ getStatusText(row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="start_time" label="创建时间" width="180">
+            <el-table-column prop="start_time" label="创建时间" min-width="165">
               <template #default="{ row }">
                 {{ formatTime(row.start_time) }}
               </template>
             </el-table-column>
-            <el-table-column label="操作">
+            <el-table-column label="操作" min-width="180">
               <template #default="{ row }">
-                <el-button type="text" size="small" @click="viewAnalysis(row)">
-                  查看
-                </el-button>
-                <el-button
-                  v-if="row.status === 'completed'"
-                  type="text"
-                  size="small"
-                  @click="downloadReport(row)"
-                >
-                  下载
-                </el-button>
+                <div class="action-buttons">
+                  <el-button link type="primary" size="small" @click="viewAnalysis(row)">
+                    查看
+                  </el-button>
+                  <el-button
+                    v-if="row.status === 'completed'"
+                    link
+                    type="primary"
+                    size="small"
+                    @click="downloadReport(row)"
+                  >
+                    下载
+                  </el-button>
+                  <el-button
+                    link
+                    type="danger"
+                    size="small"
+                    @click="deleteAnalysisTask(row)"
+                  >
+                    删除
+                  </el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -146,7 +157,7 @@
       </el-col>
 
       <!-- 右侧：自选股与数据源状态 -->
-      <el-col :span="8">
+      <el-col :xs="24" :sm="24" :md="24" :lg="8">
         <!-- 我的自选股 -->
         <el-card class="favorites-card">
           <template #header>
@@ -215,7 +226,7 @@ import {
   ArrowRight,
   Collection
 } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { AnalysisTask, AnalysisStatus } from '@/types/analysis'
 import MultiSourceSyncCard from '@/components/Dashboard/MultiSourceSyncCard.vue'
 import { favoritesApi } from '@/api/favorites'
@@ -304,6 +315,41 @@ const downloadReport = async (analysis: AnalysisTask) => {
   } catch (err) {
     console.error('下载报告出错:', err)
     ElMessage.error('下载失败，请稍后重试')
+  }
+}
+
+const deleteAnalysisTask = async (task: AnalysisTask) => {
+  const taskId = (task as any).task_id || (task as any).id
+  if (!taskId) {
+    ElMessage.error('任务ID不存在')
+    return
+  }
+
+  const stockLabel = (task as any).stock_name || (task as any).stock_code || taskId
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除任务【${stockLabel}】的历史记录吗？此操作不可恢复！`,
+      '确认删除任务',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger'
+      }
+    )
+
+    const res = await analysisApi.deleteTask(taskId)
+    if (res && res.success !== false) {
+      ElMessage.success('任务记录已成功删除')
+      await loadRecentAnalyses()
+    } else {
+      ElMessage.error(res?.message || '删除失败，请稍后重试')
+    }
+  } catch (err: any) {
+    if (err !== 'cancel') {
+      console.error('删除任务失败:', err)
+      ElMessage.error(err?.message || '删除任务失败')
+    }
   }
 }
 
@@ -590,6 +636,20 @@ onMounted(async () => {
   }
 
   .recent-analyses-card {
+    .action-buttons {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+
+      .el-button {
+        margin-left: 0;
+        padding: 0 4px;
+        font-size: 13px;
+      }
+    }
+
     .table-footer {
       text-align: center;
       margin-top: 16px;

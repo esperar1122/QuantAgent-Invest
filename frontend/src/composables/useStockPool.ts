@@ -1,13 +1,15 @@
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
-import { stocksApi, type StockPoolItem, type StockPoolStats, type StockPoolParams } from '@/api/stocks'
+import { stocksApi, type StockPoolItem, type StockPoolStats, type StockPoolParams, type CustomQuantStrategy } from '@/api/stocks'
 import { useFavoritesStore } from '@/stores/favorites'
+import { useQuantStrategies } from '@/composables/useQuantStrategies'
 import { ApiClient } from '@/api/request'
 
 export function useStockPool() {
   const router = useRouter()
   const favoritesStore = useFavoritesStore()
+  const quantStrategiesStore = useQuantStrategies()
 
   // 状态控制
   const loading = ref(false)
@@ -29,6 +31,7 @@ export function useStockPool() {
 
   // 查询参数对象
   const queryParams = reactive<StockPoolParams>({
+    preset: undefined,
     keyword: '',
     market: '全部',
     source: '全部',
@@ -58,54 +61,90 @@ export function useStockPool() {
     max_revenue_growth: null,
     min_gross_margin: null,
     max_gross_margin: null,
+    min_amount: null,
+    max_amount: null,
     page: 1,
     page_size: 20,
     sort_field: 'code',
     sort_order: 'asc'
   })
 
-  // 快捷策略预设
-  const strategyPresets = [
-    {
-      name: '💎 低估值价值',
-      type: 'success' as const,
-      params: { min_pe: 0, max_pe: 20, min_pb: 0, max_pb: 2, min_pct_chg: null, max_pct_chg: null, volume_level: '' }
-    },
-    {
-      name: '👑 巴菲特高ROE',
-      type: 'warning' as const,
-      params: { min_roe: 15, min_pe: 0, max_pe: 30 }
-    },
-    {
-      name: '🚀 业绩高成长',
-      type: 'danger' as const,
-      params: { min_net_profit_growth: 30, min_revenue_growth: 20 }
-    },
-    {
-      name: '⚡ 强势突破',
-      type: 'danger' as const,
-      params: { min_pct_chg: 3, max_pct_chg: null, min_turnover_rate: 3, volume_level: 'high', min_pe: null, max_pe: null }
-    },
-    {
-      name: '🔥 高换手活跃',
-      type: 'danger' as const,
-      params: { min_turnover_rate: 5, min_volume_ratio: 1.5, min_pct_chg: 0 }
-    },
-    {
-      name: '🛡️ 稳健蓝筹',
-      type: 'primary' as const,
-      params: { market: '主板', min_pe: 0, max_pe: 30, min_close: 10, volume_level: 'medium' }
-    },
-    {
-      name: '🌟 专精特新',
-      type: 'warning' as const,
-      params: { market: '北交所', min_pct_chg: 0, market_cap_range: 'small' }
+  // 快捷策略预设（从策略库中动态提取预设模板，支持自定义修改与更新）
+  const strategyPresets = computed(() => {
+    const sys = quantStrategiesStore.customStrategies.value.filter(s => s.is_system || s.id.startsWith('preset_'))
+    if (sys.length > 0) {
+      return sys.map(s => ({
+        id: s.id,
+        name: `${s.icon || '🎯'} ${s.name}`,
+        type: (s.tag_type || 'primary') as any,
+        cannot_delete: s.cannot_delete,
+        params: { ...s.params }
+      }))
     }
-  ]
+    return [
+      {
+        id: 'preset_quant_candidate',
+        name: '🎯 量化初筛候选池',
+        type: 'primary' as const,
+        cannot_delete: true,
+        params: { preset: 'quant_candidate', min_pe: null, max_pe: null, min_amount: 80000000 }
+      },
+      {
+        id: 'preset_low_valuation',
+        name: '💎 低估值价值',
+        type: 'success' as const,
+        cannot_delete: false,
+        params: { min_pe: 0, max_pe: 20, min_pb: 0, max_pb: 2 }
+      },
+      {
+        id: 'preset_buffett_roe',
+        name: '👑 巴菲特高ROE',
+        type: 'warning' as const,
+        cannot_delete: false,
+        params: { min_roe: 15, min_pe: 0, max_pe: 30 }
+      },
+      {
+        id: 'preset_growth',
+        name: '🚀 业绩高成长',
+        type: 'danger' as const,
+        cannot_delete: false,
+        params: { min_net_profit_growth: 30, min_revenue_growth: 20 }
+      },
+      {
+        id: 'preset_breakout',
+        name: '⚡ 强势突破',
+        type: 'danger' as const,
+        cannot_delete: false,
+        params: { min_pct_chg: 3, min_turnover_rate: 3, volume_level: 'high' }
+      },
+      {
+        id: 'preset_active_turnover',
+        name: '🔥 高换手活跃',
+        type: 'danger' as const,
+        cannot_delete: false,
+        params: { min_turnover_rate: 5, min_volume_ratio: 1.5, min_pct_chg: 0 }
+      },
+      {
+        id: 'preset_bluechip',
+        name: '🛡️ 稳健蓝筹',
+        type: 'primary' as const,
+        cannot_delete: false,
+        params: { market: '主板', min_pe: 0, max_pe: 30, min_close: 10, volume_level: 'medium' }
+      },
+      {
+        id: 'preset_specialized',
+        name: '🌟 专精特新',
+        type: 'warning' as const,
+        cannot_delete: false,
+        params: { market: '北交所', min_pct_chg: 0, market_cap_range: 'small' }
+      }
+    ]
+  })
 
   // 计算当前生效的高级筛选条件数量
   const activeAdvancedCount = computed(() => {
     let cnt = 0
+    if (queryParams.preset) cnt++
     if (queryParams.min_pe != null || queryParams.max_pe != null) cnt++
     if (queryParams.min_pb != null || queryParams.max_pb != null) cnt++
     if (queryParams.min_ps != null || queryParams.max_ps != null) cnt++
@@ -117,7 +156,7 @@ export function useStockPool() {
     if (queryParams.min_net_profit_growth != null || queryParams.max_net_profit_growth != null) cnt++
     if (queryParams.min_revenue_growth != null || queryParams.max_revenue_growth != null) cnt++
     if (queryParams.min_gross_margin != null || queryParams.max_gross_margin != null) cnt++
-    if (queryParams.volume_level) cnt++
+    if (queryParams.volume_level || queryParams.min_amount != null || queryParams.max_amount != null) cnt++
     if (queryParams.market_cap_range || queryParams.min_market_cap != null || queryParams.max_market_cap != null) cnt++
     return cnt
   })
@@ -127,6 +166,14 @@ export function useStockPool() {
   // 生效筛选标签
   const activeFilterTags = computed(() => {
     const tags: Array<{ key: string; label: string; text: string }> = []
+    if (queryParams.preset === 'quant_candidate') {
+      const candStrat = quantStrategiesStore.customStrategies.value.find(s => s.id === 'preset_quant_candidate')
+      const p = candStrat?.params
+      const pePart = p?.max_pe ? `0<PE≤${p.max_pe}` : '合理估值'
+      const amtWan = p?.min_amount ? p.min_amount / 10000 : 8000
+      const amtPart = `成交额≥${amtWan >= 10000 ? (amtWan / 10000) + '亿' : amtWan + '万'}`
+      tags.push({ key: 'preset', label: '量化初筛', text: `量化初筛候选池 (${pePart}, ${amtPart})` })
+    }
     if (queryParams.keyword && queryParams.keyword.trim()) {
       tags.push({ key: 'keyword', label: '标的', text: queryParams.keyword.trim() })
     }
@@ -169,16 +216,22 @@ export function useStockPool() {
     if (queryParams.min_gross_margin != null || queryParams.max_gross_margin != null) {
       tags.push({ key: 'gross_margin', label: '毛利率', text: `${queryParams.min_gross_margin ?? 0}% ~ ${queryParams.max_gross_margin ?? '∞'}%` })
     }
-    if (queryParams.volume_level) {
+    if (queryParams.min_amount != null || queryParams.max_amount != null) {
+      tags.push({
+        key: 'amount_range',
+        label: '日均成交额',
+        text: `¥${queryParams.min_amount ?? 0}亿 ~ ${queryParams.max_amount ?? '∞'}亿`
+      })
+    } else if (queryParams.volume_level) {
       const volMap: Record<string, string> = { high: '高活跃(>10亿)', medium: '正常(3-10亿)', low: '清淡(<3亿)' }
-      tags.push({ key: 'volume_level', label: '成交量', text: volMap[queryParams.volume_level] || queryParams.volume_level })
+      tags.push({ key: 'volume_level', label: '成交活跃度', text: volMap[queryParams.volume_level] || queryParams.volume_level })
     }
-    if (queryParams.market_cap_range) {
+
+    if (queryParams.min_market_cap != null || queryParams.max_market_cap != null) {
+      tags.push({ key: 'market_cap_num', label: '市值区间', text: `${queryParams.min_market_cap ?? 0}亿 ~ ${queryParams.max_market_cap ?? '∞'}亿` })
+    } else if (queryParams.market_cap_range) {
       const capMap: Record<string, string> = { small: '小盘(<100亿)', medium: '中盘(100-500亿)', large: '大盘(>500亿)' }
       tags.push({ key: 'market_cap_range', label: '市值规模', text: capMap[queryParams.market_cap_range] || queryParams.market_cap_range })
-    }
-    if (queryParams.min_market_cap != null || queryParams.max_market_cap != null) {
-      tags.push({ key: 'market_cap_num', label: '自定义市值', text: `${queryParams.min_market_cap ?? 0}亿 ~ ${queryParams.max_market_cap ?? '∞'}亿` })
     }
     return tags
   })
@@ -186,6 +239,14 @@ export function useStockPool() {
   // 移除单个筛选标签
   const removeFilterTag = (key: string) => {
     switch (key) {
+      case 'preset':
+        queryParams.preset = undefined
+        if (router.currentRoute.value.query.preset) {
+          const q = { ...router.currentRoute.value.query }
+          delete q.preset
+          router.replace({ query: q })
+        }
+        break
       case 'keyword': queryParams.keyword = ''; break
       case 'market': queryParams.market = '全部'; break
       case 'source': queryParams.source = '全部'; break
@@ -200,9 +261,18 @@ export function useStockPool() {
       case 'net_profit_growth': queryParams.min_net_profit_growth = null; queryParams.max_net_profit_growth = null; break
       case 'revenue_growth': queryParams.min_revenue_growth = null; queryParams.max_revenue_growth = null; break
       case 'gross_margin': queryParams.min_gross_margin = null; queryParams.max_gross_margin = null; break
-      case 'volume_level': queryParams.volume_level = ''; break
-      case 'market_cap_range': queryParams.market_cap_range = ''; break
-      case 'market_cap_num': queryParams.min_market_cap = null; queryParams.max_market_cap = null; break
+      case 'volume_level':
+      case 'amount_range':
+        queryParams.volume_level = ''
+        queryParams.min_amount = null
+        queryParams.max_amount = null
+        break
+      case 'market_cap_range':
+      case 'market_cap_num':
+        queryParams.market_cap_range = ''
+        queryParams.min_market_cap = null
+        queryParams.max_market_cap = null
+        break
     }
     handleSearch()
   }
@@ -212,15 +282,14 @@ export function useStockPool() {
     showAdvancedFilter.value = !showAdvancedFilter.value
   }
 
-  // 应用策略预设
-  const applyStrategyPreset = (preset: typeof strategyPresets[0]) => {
-    Object.assign(queryParams, preset.params)
-    ElMessage.success(`已应用策略预设：${preset.name}`)
-    handleSearch()
-  }
-
-  // 清空高级筛选条件
-  const resetAdvancedFilters = () => {
+  // 清除所有高级指标筛选参数
+  const clearFilterParams = () => {
+    queryParams.preset = undefined
+    if (router.currentRoute.value.query.preset) {
+      const q = { ...router.currentRoute.value.query }
+      delete q.preset
+      router.replace({ query: q })
+    }
     queryParams.min_pe = null
     queryParams.max_pe = null
     queryParams.min_pb = null
@@ -247,6 +316,22 @@ export function useStockPool() {
     queryParams.market_cap_range = ''
     queryParams.min_market_cap = null
     queryParams.max_market_cap = null
+    queryParams.min_amount = null
+    queryParams.max_amount = null
+  }
+
+  // 应用策略预设
+  const applyStrategyPreset = (preset: any) => {
+    clearFilterParams()
+    queryParams.preset = (preset.params as any)?.preset || undefined
+    Object.assign(queryParams, preset.params)
+    ElMessage.success(`已应用策略预设：${preset.name}`)
+    handleSearch()
+  }
+
+  // 清空高级筛选条件
+  const resetAdvancedFilters = () => {
+    clearFilterParams()
     handleSearch()
   }
 
@@ -254,7 +339,14 @@ export function useStockPool() {
   const loadData = async () => {
     loading.value = true
     try {
-      const res = await stocksApi.getPool(queryParams)
+      // 过滤掉无效参数（null, undefined, 空字符串）以保证请求严谨
+      const cleanParams: Record<string, any> = {}
+      for (const [k, v] of Object.entries(queryParams)) {
+        if (v !== null && v !== undefined && v !== '') {
+          cleanParams[k] = v
+        }
+      }
+      const res = await stocksApi.getPool(cleanParams)
       const poolData = res?.data || (res as any)
       if (poolData && poolData.items) {
         stockList.value = poolData.items
@@ -288,6 +380,12 @@ export function useStockPool() {
     queryParams.keyword = ''
     queryParams.market = '全部'
     queryParams.source = '全部'
+    queryParams.preset = undefined
+    if (router.currentRoute.value.query.preset) {
+      const q = { ...router.currentRoute.value.query }
+      delete q.preset
+      router.replace({ query: q })
+    }
     resetAdvancedFilters()
   }
 
@@ -440,9 +538,81 @@ export function useStockPool() {
   }
 
   onMounted(() => {
+    const routeQuery = router.currentRoute.value.query
+    if (routeQuery.preset && typeof routeQuery.preset === 'string') {
+      queryParams.preset = routeQuery.preset
+    }
+    if (routeQuery.market && typeof routeQuery.market === 'string') {
+      queryParams.market = routeQuery.market
+    }
+    if (routeQuery.keyword && typeof routeQuery.keyword === 'string') {
+      queryParams.keyword = routeQuery.keyword
+    }
     loadData()
     loadFavorites()
   })
+
+  // 监听路由参数变化（支持在概览与选股池间自由跳转更新）
+  watch(
+    () => router.currentRoute.value.query.preset,
+    (newPreset) => {
+      const val = typeof newPreset === 'string' ? newPreset : undefined
+      if (queryParams.preset !== val) {
+        queryParams.preset = val
+        queryParams.page = 1
+        loadData()
+      }
+    }
+  )
+
+  // 自定义量化策略管理
+  const strategyEditVisible = ref(false)
+  const strategyManageVisible = ref(false)
+  const currentEditingStrategy = ref<CustomQuantStrategy | null>(null)
+
+  const openCreateStrategy = () => {
+    currentEditingStrategy.value = null
+    strategyEditVisible.value = true
+  }
+
+  const openEditStrategy = (strat: CustomQuantStrategy) => {
+    currentEditingStrategy.value = strat
+    strategyEditVisible.value = true
+  }
+
+  const openManageStrategies = () => {
+    strategyManageVisible.value = true
+  }
+
+  const applyCustomStrategy = (strat: CustomQuantStrategy) => {
+    clearFilterParams()
+    Object.assign(queryParams, strat.params)
+    if (strat.params.preset) {
+      queryParams.preset = strat.params.preset
+    }
+    ElMessage.success(`已应用量化策略：${strat.name}`)
+    handleSearch()
+  }
+
+  const handleSaveStrategy = async (payload: any, id?: string) => {
+    try {
+      if (id) {
+        await quantStrategiesStore.updateStrategy(id, payload)
+      } else {
+        await quantStrategiesStore.createStrategy(payload)
+      }
+      strategyEditVisible.value = false
+      if (id === 'preset_quant_candidate' || queryParams.preset === 'quant_candidate') {
+        loadData()
+      }
+    } catch (e: any) {
+      ElMessage.error(e.message || '保存策略失败')
+    }
+  }
+
+  const handleDeleteStrategy = async (id: string) => {
+    await quantStrategiesStore.deleteStrategy(id)
+  }
 
   return {
     loading,
@@ -455,6 +625,17 @@ export function useStockPool() {
     stats,
     queryParams,
     strategyPresets,
+    customStrategies: quantStrategiesStore.customStrategies,
+    resetToDefaultTemplates: quantStrategiesStore.resetToDefaultTemplates,
+    strategyEditVisible,
+    strategyManageVisible,
+    currentEditingStrategy,
+    openCreateStrategy,
+    openEditStrategy,
+    openManageStrategies,
+    applyCustomStrategy,
+    handleSaveStrategy,
+    handleDeleteStrategy,
     activeAdvancedCount,
     hasActiveAdvancedFilters,
     activeFilterTags,

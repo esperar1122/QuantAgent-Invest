@@ -75,12 +75,6 @@ export const isTokenValid = (token: string | null): boolean => {
     return false
   }
 
-  // 检查是否是 mock token
-  if (token === 'mock-token' || token.startsWith('mock-')) {
-    console.warn('⚠️ 检测到 mock token')
-    return false
-  }
-
   // JWT token 应该有 3 个部分，用 . 分隔
   const parts = token.split('.')
   if (parts.length !== 3) {

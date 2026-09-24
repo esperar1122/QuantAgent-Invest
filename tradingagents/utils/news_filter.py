@@ -256,7 +256,19 @@ def get_company_name(ticker: str) -> str:
         logger.debug(f"[公司映射] {ticker} -> {company_name}")
         return company_name
     else:
-        # 如果没有映射，返回默认名称
+        # 尝试从数据源管理器动态获取股票真实名称
+        try:
+            from tradingagents.dataflows.data_source_manager import get_data_source_manager
+            info = get_data_source_manager().get_stock_info(clean_ticker)
+            if info and info.get('name'):
+                dyn_name = str(info['name']).strip()
+                if dyn_name:
+                    logger.debug(f"[公司映射] 动态解析 {ticker} -> {dyn_name}")
+                    return dyn_name
+        except Exception:
+            pass
+            
+        # 如果获取失败，返回默认名称
         default_name = f"股票{clean_ticker}"
         logger.warning(f"[公司映射] 未找到 {ticker} 的公司名称映射，使用默认: {default_name}")
         return default_name

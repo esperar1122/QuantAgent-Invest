@@ -271,6 +271,7 @@ import {
   WarningFilled
 } from '@element-plus/icons-vue'
 import { analysisApi, type SingleAnalysisRequest } from '@/api/analysis'
+import { stocksApi } from '@/api/stocks'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { configApi } from '@/api/config'
@@ -550,8 +551,25 @@ const validateStockCodeInput = () => {
 }
 
 // 获取股票信息
-const fetchStockInfo = () => {
-  // TODO: 实现股票信息获取
+const fetchStockInfo = async () => {
+  const code = (analysisForm.stockCode || '').trim()
+  if (!code || code.length < 6) return
+
+  try {
+    const cleanCode = code.slice(0, 6)
+    const res = await stocksApi.getQuote(cleanCode)
+    const quote = (res as any)?.data || res
+    if (quote && quote.name) {
+      const priceText = quote.price != null ? `¥${Number(quote.price).toFixed(2)}` : ''
+      const changeText = quote.change_percent != null
+        ? `${quote.change_percent >= 0 ? '+' : ''}${Number(quote.change_percent).toFixed(2)}%`
+        : ''
+      const quoteInfo = priceText ? ` | 最新价: ${priceText} (${changeText})` : ''
+      stockCodeHelp.value = `✓ ${quote.name} (${cleanCode})${quoteInfo}`
+    }
+  } catch (_e) {
+    // 忽略未查询到行情的静默失败
+  }
 }
 
 // 切换分析师
