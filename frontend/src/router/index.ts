@@ -57,6 +57,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '个股与指数研究', requiresAuth: false }
       },
       {
+        path: 'etf',
+        name: 'TerminalEtfHub',
+        component: () => import('@/views/Terminal/EtfHub/index.vue'),
+        meta: { title: '场内 ETF 专区', requiresAuth: false }
+      },
+      {
         path: 'favorites',
         name: 'TerminalFavorites',
         component: () => import('@/views/Favorites/index.vue'),

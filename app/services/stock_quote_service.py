@@ -18,9 +18,9 @@ def fetch_realtime_stock_kline(code: str, period: str = "day", limit: int = 120)
     code_raw = str(code).strip()
     code_clean = code_raw.lower().replace("sh", "").replace("sz", "").replace("bj", "")
 
-    if code_clean.startswith(("60", "68", "90")):
+    if code_clean.startswith(("60", "68", "90", "50", "51", "56", "58")):
         tx_sym = f"sh{code_clean}"
-    elif code_clean.startswith(("00", "30", "20")):
+    elif code_clean.startswith(("00", "30", "20", "15", "16", "39")):
         tx_sym = f"sz{code_clean}"
     elif code_clean.startswith(("8", "4", "92")):
         tx_sym = f"bj{code_clean}"
@@ -92,9 +92,9 @@ def fetch_realtime_stock_quote(code: str) -> Optional[Dict[str, Any]]:
     code_clean = code_raw.lower().replace("sh", "").replace("sz", "").replace("bj", "")
 
     # 判断交易所前缀
-    if code_clean.startswith(("60", "68", "90")):
+    if code_clean.startswith(("60", "68", "90", "50", "51", "56", "58")):
         tx_sym = f"sh{code_clean}"
-    elif code_clean.startswith(("00", "30", "20")):
+    elif code_clean.startswith(("00", "30", "20", "15", "16", "39")):
         tx_sym = f"sz{code_clean}"
     elif code_clean.startswith(("8", "4", "92")):
         tx_sym = f"bj{code_clean}"

@@ -134,6 +134,14 @@ npm run build
   5. *大宗交易锁定期满抛压注入*：锁定 6 个月期满后在阻力峰追加潜在抛压因子；
   6. *股本变动注销/增发修正*：回购注销等比抽离筹码，增发注入新成本峰。
 
+- **5. 全市场场内 ETF 专区与毫秒级批量切片架构 (`TerminalEtfHub` & `etf_service.py`)**：
+  - *左侧独立专区*：导航栏新增 `场内ETF专区`（路由 `/terminal/etf`，带 `Coin` 图标与 `ETF` 高亮徽章）；
+  - *毫秒级单请求批量抓取引擎 (`app/services/etf_service.py`)*：利用腾讯行情批量接口 `http://qt.gtimg.cn/q=s_sh510300,s_sh562590...`，单次 GET 请求涵盖 39+ 核心场内 ETF（宽基、硬核科技、制造周期、大类跨境），平均响应仅 80~130ms，0 数据库压力、0 卡顿；
+  - *内存防雪崩短时缓存 (TTL=3s)*：同时间段高并发请求自动命中缓存，彻底隔绝外部接口风控；
+  - *千分位（3 位小数）精度全面支持*：依据交易所规则对 ETF 现价、今开昨收、四维推荐买卖点全面启用 3 位小数显示；
+  - *ETF 专属基金属性自适应面板*：个股展示财报，ETF 自动切换展示“股票型ETF、场内 T+1、最小变动 0.001元、免印花税(0%)、基金规模、日内换手”；
+  - *双向深度投研联动*：在 ETF 专区点击任意标的（或在个股研究顶栏直接点击“半导体设备 562590”胶囊），均一键穿透进入深度分时、K线、CYQ 筹码分布与买卖点决策看板。
+
 ---
 
 ## 四、 核心源码目录索引 (Source Code Index)
@@ -141,11 +149,13 @@ npm run build
 | 模块 | 核心源码路径 | 功能概述 |
 | :--- | :--- | :--- |
 | **全局布局** | `frontend/src/layouts/TerminalLayout.vue` | 终端主框架，双向 flex 自适应排版 |
-| **侧边导航** | `frontend/src/components/Terminal/TerminalSidebar.vue` | 可折叠 (60px)、拖拽调宽 (160-228px)、偏好记忆导航栏 |
+| **侧边导航** | `frontend/src/components/Terminal/TerminalSidebar.vue` | 可折叠 (60px)、拖拽调宽 (160-228px)、偏好记忆导航栏（含场内ETF入口） |
+| **场内ETF专区** | `frontend/src/views/Terminal/EtfHub/index.vue` | 全市场核心场内 ETF 雷达、分类筛选、卡片/表格双视图、自动轮询 |
+| **ETF聚合服务**| `app/services/etf_service.py` | 单请求多标的批量切片极速抓取引擎，内存防雪崩缓存 |
 | **K线与分时**| `frontend/src/components/Terminal/StockKlineChart.vue` | 240分时图、全局悬浮画线窗、滚轮缩放、成交量校准 |
-| **个股投研** | `frontend/src/views/Terminal/StockResearch/index.vue` | 量化买卖决策看板、四维点位协同、盈亏比推演 |
+| **个股投研** | `frontend/src/views/Terminal/StockResearch/index.vue` | 量化买卖决策看板、四维点位协同、盈亏比推演、ETF专属千分位/面板 |
 | **筹码弹窗** | `frontend/src/components/TechnicalIndicators/TechnicalAnalysisModal.vue` | 筹码规则生效横幅、多空对决裁决台 |
-| **前端接口** | `frontend/src/api/stocks.ts` | 股票搜索、分时、K线、指标快照与筹码接口定义 |
+| **前端接口** | `frontend/src/api/stocks.ts` | 股票搜索、分时、K线、ETF专区概览、指标快照与筹码接口定义 |
 | **实时行情** | `app/services/stock_quote_service.py` | 腾讯极速行情解析、五档挂单、分时数据抓取 |
 | **筹码引擎** | `app/services/chips_service.py` | CYQ 筹码分布、非对称衰减、6大机构修正规则 |
 

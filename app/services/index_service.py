@@ -438,12 +438,14 @@ def fetch_timeline_data(code: str) -> Dict[str, Any]:
             clean_num = raw_lower[:-3]
         else:
             clean_num = raw_lower
-            if clean_num.startswith(("6", "900")):
+            if clean_num.startswith(("6", "900", "50", "51", "56", "58")):
                 prefix = "sh"
             elif clean_num.startswith(("8", "4", "920")):
                 prefix = "bj"
-            else:
+            elif clean_num.startswith(("00", "30", "20", "15", "16", "39")):
                 prefix = "sz"
+            else:
+                prefix = "sz" if clean_num.startswith("0") else "sh"
         tx_sym = f"{prefix}{clean_num}"
         sina_sym = f"{prefix}{clean_num}"
         name = code
@@ -459,9 +461,9 @@ def fetch_timeline_data(code: str) -> Dict[str, Any]:
     try:
         url_q = f"http://qt.gtimg.cn/q=s_{tx_sym}"
         rq = requests.get(url_q, timeout=3)
-        rq.encoding = "gbk"
-        if "~" in rq.text:
-            parts = rq.text.split("~")
+        resp_text = rq.content.decode("gbk", errors="ignore")
+        if "~" in resp_text:
+            parts = resp_text.split("~")
             if len(parts) > 1 and parts[1]:
                 name = parts[1]
             if len(parts) > 3 and parts[3]:

@@ -100,6 +100,16 @@ export const stocksApi = {
   },
 
   /**
+   * 获取全市场场内 ETF 极速实时数据与行情聚合 (核心宽基、硬核科技、制造周期、大类跨境)
+   */
+  async getEtfOverview(forceRefresh = false) {
+    return ApiClient.get<any>(
+      '/api/stocks/etf/overview',
+      { force_refresh: forceRefresh }
+    )
+  },
+
+  /**
    * 获取股票行情
    * @param symbol 6位股票代码或指数代码
    * @param forceRefresh 是否强制刷新

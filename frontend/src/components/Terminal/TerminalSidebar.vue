@@ -11,7 +11,7 @@
         <span class="brand-title">QUANT TERMINAL</span>
       </div>
       <el-tooltip 
-        :content="isCollapsed ? '展开导航栏 (快捷恢复之前宽度)' : '收起导航栏 (仅保留图标)'" 
+        :content="isCollapsed ? '展开导航栏' : '收起导航栏'" 
         placement="right" 
         :show-after="300"
       >
@@ -49,6 +49,14 @@
           <router-link to="/terminal/screening" class="nav-item" active-class="active">
             <el-icon class="nav-icon"><Collection /></el-icon>
             <span v-if="!isCollapsed" class="nav-label">A股股票池</span>
+          </router-link>
+        </el-tooltip>
+
+        <el-tooltip content="场内ETF专区" placement="right" :disabled="!isCollapsed" :show-after="150">
+          <router-link to="/terminal/etf" class="nav-item" active-class="active">
+            <el-icon class="nav-icon"><Coin /></el-icon>
+            <span v-if="!isCollapsed" class="nav-label">场内ETF专区</span>
+            <span v-if="!isCollapsed" class="badge-hot">ETF</span>
           </router-link>
         </el-tooltip>
 
@@ -202,6 +210,7 @@ import {
   Odometer,
   DataBoard,
   Collection,
+  Coin,
   TrendCharts,
   Star,
   Connection,
@@ -491,6 +500,18 @@ onUnmounted(() => {
       color: #175cd3;
       background: #eff8ff;
       border: 1px solid #b2ddff;
+      padding: 0 4px;
+      border-radius: 3px;
+      line-height: 14px;
+      flex-shrink: 0;
+    }
+
+    .badge-hot {
+      font-size: 9px;
+      font-weight: 700;
+      color: #ea580c;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
       padding: 0 4px;
       border-radius: 3px;
       line-height: 14px;

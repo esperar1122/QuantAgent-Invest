@@ -105,6 +105,42 @@ async def search_stocks(
         ]
         items = await db["stock_basic_info"].find(filter_q, {"_id": 0}).limit(limit).to_list(length=limit)
 
+    # 2.1 若仍未找到且输入形如6位代码或带有市场前缀，尝试通过实时行情引擎极速嗅探（支持 56/51/58/15/16 等 ETF 基金及新股）
+    if not items and (re.match(r'^\d{6}$', kw) or kw.lower().startswith(('sh', 'sz', 'bj'))):
+        clean_kw = re.sub(r'^[a-zA-Z]+', '', kw)
+        if len(clean_kw) == 6:
+            from app.services.stock_quote_service import fetch_realtime_stock_quote
+            rt_q = await asyncio.to_thread(fetch_realtime_stock_quote, clean_kw)
+            if rt_q and rt_q.get("name") and rt_q.get("name") != clean_kw:
+                is_etf = clean_kw.startswith(("50", "51", "56", "58", "15", "16"))
+                item_obj = {
+                    "code": clean_kw,
+                    "symbol": f"{clean_kw}.SH" if clean_kw.startswith(("6", "5", "9")) else f"{clean_kw}.SZ",
+                    "name": rt_q["name"],
+                    "market": "ETF基金" if is_etf else "A股",
+                    "industry": "ETF指数基金" if is_etf else "综合",
+                    "close": float(rt_q.get("price") or 0.0),
+                    "pct_chg": float(rt_q.get("pct_chg") or 0.0),
+                    "pe": float(rt_q.get("pe") or 0.0),
+                    "pb": float(rt_q.get("pb") or 0.0),
+                    "total_mv": float(rt_q.get("total_mv") or 0.0)
+                }
+                items = [item_obj]
+                # 异步写入数据库沉淀
+                try:
+                    asyncio.create_task(db["stock_basic_info"].update_one(
+                        {"code": clean_kw},
+                        {"$set": item_obj},
+                        upsert=True
+                    ))
+                    asyncio.create_task(db["market_quotes"].update_one(
+                        {"code": clean_kw},
+                        {"$set": rt_q},
+                        upsert=True
+                    ))
+                except Exception:
+                    pass
+
     # 3. 关联最新行情 (market_quotes) 补齐价格、涨跌幅、成交额
     codes = [it.get("code") for it in items if it.get("code")]
     quotes_map = {}
@@ -391,7 +427,26 @@ async def get_fundamentals(
                 logger.warning(f"⚠️ 使用旧数据（无 source 字段）: {code6}")
 
         if not b:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到该股票的基础信息")
+            # 尝试从实时行情中回退构建（如ETF基金、指数标的或未全量入库代码）
+            from app.services.stock_quote_service import fetch_realtime_stock_quote
+            rt_q = await asyncio.to_thread(fetch_realtime_stock_quote, code6)
+            if rt_q and rt_q.get("name"):
+                is_etf = code6.startswith(("50", "51", "56", "58", "15", "16"))
+                b = {
+                    "code": code6,
+                    "symbol": f"{code6}.SH" if code6.startswith(("6", "5", "9")) else f"{code6}.SZ",
+                    "name": rt_q["name"],
+                    "market": "ETF基金" if is_etf else "A股",
+                    "industry": "ETF指数基金" if is_etf else "综合",
+                    "sector": "ETF板块" if is_etf else "A股",
+                    "total_mv": rt_q.get("total_mv", 0.0),
+                    "circ_mv": rt_q.get("total_mv", 0.0),
+                    "pe": rt_q.get("pe", 0.0),
+                    "pb": rt_q.get("pb", 0.0),
+                    "turnover_rate": rt_q.get("turnover_rate", 0.0),
+                }
+            else:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到该股票的基础信息")
 
     # 2. 尝试从 stock_financial_data 获取最新财务指标
     # 🔥 按数据源优先级查询，而不是按时间戳，避免混用不同数据源的数据
@@ -2123,6 +2178,20 @@ _market_overview_cache = {
     "data": None,
     "timestamp": 0
 }
+
+
+@router.get("/etf/overview", response_model=dict)
+async def get_etf_market_overview(
+    force_refresh: bool = Query(False, description="是否强制刷新"),
+    current_user: Optional[dict] = Depends(get_optional_current_user)
+):
+    """
+    全市场核心场内 ETF 极速实时数据与行情聚合
+    支持宽基、硬核科技、制造周期、大类跨境等核心板块，毫秒级响应
+    """
+    from app.services.etf_service import fetch_all_etf_market_overview
+    data = await asyncio.to_thread(fetch_all_etf_market_overview, force_refresh)
+    return ok(data=data)
 
 
 @router.get("/market/indices", response_model=dict)

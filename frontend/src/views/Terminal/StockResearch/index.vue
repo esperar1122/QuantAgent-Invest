@@ -127,10 +127,10 @@
         </div>
         <div class="price-cluster">
           <span class="current-price tabular-nums" :class="currentStock.change >= 0 ? 'color-up' : 'color-down'">
-            {{ currentStock.price.toFixed(2) }}
+            {{ currentStock.price.toFixed(isCurrentETF ? 3 : 2) }}
           </span>
           <div class="change-group tabular-nums" :class="currentStock.change >= 0 ? 'color-up' : 'color-down'">
-            <span class="change-val">{{ currentStock.change >= 0 ? '+' : '' }}{{ currentStock.changeVal.toFixed(2) }}</span>
+            <span class="change-val">{{ currentStock.change >= 0 ? '+' : '' }}{{ currentStock.changeVal.toFixed(isCurrentETF ? 3 : 2) }}</span>
             <span class="change-pct">({{ currentStock.change >= 0 ? '+' : '' }}{{ currentStock.change.toFixed(2) }}%)</span>
           </div>
         </div>
@@ -138,16 +138,16 @@
 
       <!-- 高密度十项金融行情数据 -->
       <div class="metrics-strip">
-        <div class="m-item"><span class="mk">今开</span><span class="mv tabular-nums">{{ currentStock.open.toFixed(2) }}</span></div>
-        <div class="m-item"><span class="mk">最高</span><span class="mv tabular-nums color-up">{{ currentStock.high.toFixed(2) }}</span></div>
-        <div class="m-item"><span class="mk">最低</span><span class="mv tabular-nums color-down">{{ currentStock.low.toFixed(2) }}</span></div>
-        <div class="m-item"><span class="mk">昨收</span><span class="mv tabular-nums">{{ currentStock.preClose.toFixed(2) }}</span></div>
+        <div class="m-item"><span class="mk">今开</span><span class="mv tabular-nums">{{ currentStock.open.toFixed(isCurrentETF ? 3 : 2) }}</span></div>
+        <div class="m-item"><span class="mk">最高</span><span class="mv tabular-nums color-up">{{ currentStock.high.toFixed(isCurrentETF ? 3 : 2) }}</span></div>
+        <div class="m-item"><span class="mk">最低</span><span class="mv tabular-nums color-down">{{ currentStock.low.toFixed(isCurrentETF ? 3 : 2) }}</span></div>
+        <div class="m-item"><span class="mk">昨收</span><span class="mv tabular-nums">{{ currentStock.preClose.toFixed(isCurrentETF ? 3 : 2) }}</span></div>
         <div class="m-item"><span class="mk">成交量</span><span class="mv tabular-nums">{{ (currentStock.volume / 10000).toFixed(1) }}万手</span></div>
         <div class="m-item"><span class="mk">成交额</span><span class="mv tabular-nums">{{ currentStock.amount }}亿</span></div>
         <div class="m-item"><span class="mk">换手率</span><span class="mv tabular-nums">{{ currentStock.turnover.toFixed(2) }}%</span></div>
-        <div class="m-item"><span class="mk">{{ isCurrentIndex ? '成份总市值' : '总市值' }}</span><span class="mv tabular-nums">{{ currentStock.marketCap }}亿</span></div>
-        <div class="m-item"><span class="mk">{{ isCurrentIndex ? '指数PE' : '市盈(动)' }}</span><span class="mv tabular-nums">{{ currentStock.pe }}</span></div>
-        <div class="m-item"><span class="mk">{{ isCurrentIndex ? '指数PB' : '市净率' }}</span><span class="mv tabular-nums">{{ currentStock.pb }}</span></div>
+        <div class="m-item"><span class="mk">{{ isCurrentIndex ? '成份总市值' : (isCurrentETF ? '基金净资产' : '总市值') }}</span><span class="mv tabular-nums">{{ currentStock.marketCap }}亿</span></div>
+        <div class="m-item"><span class="mk">{{ isCurrentIndex ? '指数PE' : (isCurrentETF ? '交易机制' : '市盈(动)') }}</span><span class="mv tabular-nums">{{ isCurrentETF ? '场内T+1' : currentStock.pe }}</span></div>
+        <div class="m-item"><span class="mk">{{ isCurrentIndex ? '指数PB' : (isCurrentETF ? '费率机制' : '市净率') }}</span><span class="mv tabular-nums">{{ isCurrentETF ? '免印花税' : currentStock.pb }}</span></div>
       </div>
 
       <div class="header-actions">
@@ -226,7 +226,7 @@
             <span class="point-action-status">{{ tradeDecision.buyPoint.label }}</span>
           </div>
           <div class="card-price-row">
-            <span class="price-val tabular-nums">¥{{ tradeDecision.buyPoint.price.toFixed(2) }}</span>
+            <span class="price-val tabular-nums">¥{{ tradeDecision.buyPoint.price.toFixed(isCurrentETF ? 3 : 2) }}</span>
             <span class="dist-val tabular-nums" :class="tradeDecision.buyPoint.distancePct <= 0 ? 'color-down' : 'color-up'">
               {{ tradeDecision.buyPoint.distancePct >= 0 ? '+' : '' }}{{ tradeDecision.buyPoint.distancePct }}%
             </span>
@@ -241,7 +241,7 @@
             <span class="point-action-status">{{ tradeDecision.addPoint.label }}</span>
           </div>
           <div class="card-price-row">
-            <span class="price-val tabular-nums">¥{{ tradeDecision.addPoint.price.toFixed(2) }}</span>
+            <span class="price-val tabular-nums">¥{{ tradeDecision.addPoint.price.toFixed(isCurrentETF ? 3 : 2) }}</span>
             <span class="dist-val tabular-nums color-up">
               {{ tradeDecision.addPoint.distancePct >= 0 ? '+' : '' }}{{ tradeDecision.addPoint.distancePct }}%
             </span>
@@ -256,7 +256,7 @@
             <span class="point-action-status">{{ tradeDecision.sellPoint.label }}</span>
           </div>
           <div class="card-price-row">
-            <span class="price-val tabular-nums">¥{{ tradeDecision.sellPoint.price.toFixed(2) }}</span>
+            <span class="price-val tabular-nums">¥{{ tradeDecision.sellPoint.price.toFixed(isCurrentETF ? 3 : 2) }}</span>
             <span class="dist-val tabular-nums color-up">
               {{ tradeDecision.sellPoint.distancePct >= 0 ? '+' : '' }}{{ tradeDecision.sellPoint.distancePct }}%
             </span>
@@ -271,7 +271,7 @@
             <span class="point-action-status">{{ tradeDecision.stopLossPoint.label }}</span>
           </div>
           <div class="card-price-row">
-            <span class="price-val tabular-nums">¥{{ tradeDecision.stopLossPoint.price.toFixed(2) }}</span>
+            <span class="price-val tabular-nums">¥{{ tradeDecision.stopLossPoint.price.toFixed(isCurrentETF ? 3 : 2) }}</span>
             <span class="dist-val tabular-nums color-down">
               {{ tradeDecision.stopLossPoint.distancePct >= 0 ? '+' : '' }}{{ tradeDecision.stopLossPoint.distancePct }}%
             </span>
@@ -353,11 +353,11 @@
           </div>
         </div>
 
-        <!-- 财务与基本面核心指标 -->
+        <!-- 财务与基本面核心指标 / ETF 基金属性 -->
         <div class="panel-box">
           <div class="panel-header">
-            <span class="panel-title">{{ isCurrentIndex ? '指数估值与市场特征' : '财务与经营核心数据' }}</span>
-            <span class="q-tag">{{ isCurrentIndex ? '实时跟踪基准' : '2026 Q2 财报' }}</span>
+            <span class="panel-title">{{ isCurrentIndex ? '指数估值与市场特征' : (isCurrentETF ? 'ETF 基金特征与交易机制' : '财务与经营核心数据') }}</span>
+            <span class="q-tag">{{ isCurrentIndex ? '实时跟踪基准' : (isCurrentETF ? '场内开放式基金' : '2026 Q2 财报') }}</span>
           </div>
 
           <div class="finance-kv-grid">
@@ -393,6 +393,40 @@
               <div class="kv-item">
                 <span class="k">中位数涨跌</span>
                 <span class="v tabular-nums" :class="currentStock.change >= 0 ? 'color-up' : 'color-down'">{{ indexMetrics.medianPct }}</span>
+              </div>
+            </template>
+            <template v-else-if="isCurrentETF">
+              <div class="kv-item">
+                <span class="k">基金类型</span>
+                <span class="v font-bold">股票型 ETF</span>
+              </div>
+              <div class="kv-item">
+                <span class="k">交易机制</span>
+                <span class="v color-up font-bold">场内 T+1 交易</span>
+              </div>
+              <div class="kv-item">
+                <span class="k">最小变动</span>
+                <span class="v tabular-nums font-bold">0.001 元 (千分位)</span>
+              </div>
+              <div class="kv-item">
+                <span class="k">印花税</span>
+                <span class="v color-up font-bold">免征印花税 (0%)</span>
+              </div>
+              <div class="kv-item">
+                <span class="k">涨跌幅限制</span>
+                <span class="v tabular-nums">{{ currentStock.code.startsWith('58') ? '±20% (科创)' : '±10%' }}</span>
+              </div>
+              <div class="kv-item">
+                <span class="k">昨收基准</span>
+                <span class="v tabular-nums">¥{{ currentStock.preClose.toFixed(3) }}</span>
+              </div>
+              <div class="kv-item">
+                <span class="k">基金规模</span>
+                <span class="v tabular-nums">{{ currentStock.marketCap }} 亿元</span>
+              </div>
+              <div class="kv-item">
+                <span class="k">日内换手</span>
+                <span class="v tabular-nums">{{ currentStock.turnover.toFixed(2) }}%</span>
               </div>
             </template>
             <template v-else>
@@ -641,12 +675,15 @@ const route = useRoute()
 const router = useRouter()
 const favoritesStore = useFavoritesStore()
 
-// 热门核心资产标的（四大核心指数）
+// 热门核心资产标的（核心指数与场内热门 ETF）
 const hotStocks = [
   { code: 'sh000001', displayCode: '000001', name: '上证指数', board: '核心指数' },
   { code: 'sz399001', displayCode: '399001', name: '深证成指', board: '核心指数' },
   { code: 'sz399006', displayCode: '399006', name: '创业板指', board: '核心指数' },
-  { code: 'sh000680', displayCode: '000680', name: '科创综指', board: '核心指数' }
+  { code: 'sh000680', displayCode: '000680', name: '科创综指', board: '核心指数' },
+  { code: '562590', displayCode: '562590', name: '半导体设备', board: '硬核科技' },
+  { code: '510300', displayCode: '510300', name: '300ETF', board: '核心宽基' },
+  { code: '588000', displayCode: '588000', name: '科创50', board: '硬科技' }
 ]
 
 // 检索状态
@@ -698,6 +735,25 @@ const isCurrentIndex = computed(() => {
     c.startsWith('sh000') ||
     c.startsWith('sz399') ||
     ['sh000001', 'sz399001', 'sz399006', 'sh000680'].includes(c)
+  )
+})
+
+// 是否为 ETF 基金模式判断 (51/56/58/50/15/16 等全市场 ETF)
+const isCurrentETF = computed(() => {
+  const c = currentStock.value.code.toLowerCase().replace(/^(sh|sz|bj)/, '')
+  const b = currentStock.value.board || ''
+  const s = currentStock.value.sector || ''
+  const n = currentStock.value.name || ''
+  return (
+    c.startsWith('51') ||
+    c.startsWith('56') ||
+    c.startsWith('58') ||
+    c.startsWith('50') ||
+    c.startsWith('15') ||
+    c.startsWith('16') ||
+    b.includes('ETF') ||
+    s.includes('ETF') ||
+    n.includes('ETF')
   )
 })
 
@@ -1179,7 +1235,15 @@ async function loadStockDetail(code: string) {
       if (code.startsWith('688')) board = '科创板'
       else if (code.startsWith('30')) board = '创业板'
       else if (code.startsWith('8') || code.startsWith('9') || code.startsWith('4')) board = '北交所'
+      else if (code.startsWith('58')) board = '科创板ETF'
+      else if (code.startsWith('51') || code.startsWith('56') || code.startsWith('50')) board = '上交所ETF'
+      else if (code.startsWith('15') || code.startsWith('16')) board = '深交所ETF'
       else if (code.startsWith('sh000') || code.startsWith('sz399') || code === 'sh000300') board = '核心指数'
+
+      let sector = q.industry || 'A股蓝筹 / 优势产业'
+      if (code.startsWith('51') || code.startsWith('56') || code.startsWith('58') || code.startsWith('50') || code.startsWith('15') || code.startsWith('16') || q.name?.includes('ETF')) {
+        sector = q.industry && q.industry !== '综合' ? q.industry : '指数基金 / 行业主题ETF'
+      }
 
       const roeVal = Number(f?.roe ?? q.roe ?? 0)
       const revGrowth = Number(f?.revenue_growth ?? q.revenue_growth ?? 0)
@@ -1190,8 +1254,8 @@ async function loadStockDetail(code: string) {
       currentStock.value = {
         code,
         name: q.name || getPresetName(code),
-        board: q.market || board,
-        sector: q.industry || 'A股蓝筹 / 优势产业',
+        board: q.market && q.market !== 'A股' ? q.market : board,
+        sector,
         price: px,
         change: pct,
         changeVal,
