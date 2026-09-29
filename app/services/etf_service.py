@@ -27,6 +27,7 @@ CORE_ETF_CATALOG: List[Dict[str, Any]] = [
 
     # 2. 科技与硬核半导体 (Technology & Semiconductors)
     {"code": "562590", "symbol": "562590.SH", "tx_sym": "sh562590", "name": "半导体设备ETF华夏", "category": "tech", "category_name": "硬核科技", "tag": "芯片关键设备"},
+    {"code": "588710", "symbol": "588710.SH", "tx_sym": "sh588710", "name": "科创半导体设备ETF华泰柏瑞", "category": "tech", "category_name": "硬核科技", "tag": "科创芯片设备"},
     {"code": "512760", "symbol": "512760.SH", "tx_sym": "sh512760", "name": "芯片ETF国泰", "category": "tech", "category_name": "硬核科技", "tag": "半导体产业链"},
     {"code": "512480", "symbol": "512480.SH", "tx_sym": "sh512480", "name": "半导体ETF国联安", "category": "tech", "category_name": "硬核科技", "tag": "芯片龙头基准"},
     {"code": "159819", "symbol": "159819.SZ", "tx_sym": "sz159819", "name": "人工智能AI ETF", "category": "tech", "category_name": "硬核科技", "tag": "大模型与算力"},

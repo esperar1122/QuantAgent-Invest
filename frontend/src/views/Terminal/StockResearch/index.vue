@@ -682,6 +682,7 @@ const hotStocks = [
   { code: 'sz399006', displayCode: '399006', name: '创业板指', board: '核心指数' },
   { code: 'sh000680', displayCode: '000680', name: '科创综指', board: '核心指数' },
   { code: '562590', displayCode: '562590', name: '半导体设备', board: '硬核科技' },
+  { code: '588710', displayCode: '588710', name: '科创芯片设备', board: '硬核科技' },
   { code: '510300', displayCode: '510300', name: '300ETF', board: '核心宽基' },
   { code: '588000', displayCode: '588000', name: '科创50', board: '硬科技' }
 ]

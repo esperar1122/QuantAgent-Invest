@@ -115,7 +115,7 @@
       <div class="filter-actions">
         <el-input
           v-model="searchQuery"
-          placeholder="快速搜索代码 / 名称 / 标签 (如 562590、半导体、黄金)..."
+          placeholder="快速搜索代码 / 名称 / 标签 (如 588710、562590、半导体、黄金)..."
           :prefix-icon="Search"
           clearable
           size="small"

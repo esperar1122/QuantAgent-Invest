@@ -141,6 +141,36 @@ async def search_stocks(
                 except Exception:
                     pass
 
+    # 2.2 融合全市场核心场内 ETF 目录（支持部分代码、名称、标签模糊匹配，如 588710、芯片设备等）
+    try:
+        from app.services.etf_service import CORE_ETF_CATALOG
+        kw_lower = kw.lower()
+        matched_etfs = [
+            etf for etf in CORE_ETF_CATALOG
+            if kw_lower in etf["code"].lower() 
+            or kw_lower in etf["name"].lower() 
+            or kw_lower in etf.get("tag", "").lower()
+        ]
+        if matched_etfs:
+            existing_codes = {it.get("code") for it in items}
+            for etf in matched_etfs:
+                if etf["code"] not in existing_codes and len(items) < limit:
+                    items.append({
+                        "code": etf["code"],
+                        "symbol": etf["symbol"],
+                        "name": etf["name"],
+                        "market": "ETF基金",
+                        "industry": etf.get("category_name", "ETF指数"),
+                        "close": 0.0,
+                        "pct_chg": 0.0,
+                        "pe": 0.0,
+                        "pb": 0.0,
+                        "total_mv": 0.0
+                    })
+                    existing_codes.add(etf["code"])
+    except Exception:
+        pass
+
     # 3. 关联最新行情 (market_quotes) 补齐价格、涨跌幅、成交额
     codes = [it.get("code") for it in items if it.get("code")]
     quotes_map = {}
