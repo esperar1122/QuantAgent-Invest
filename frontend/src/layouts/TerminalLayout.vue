@@ -43,6 +43,7 @@ import TerminalSidebar from '@/components/Terminal/TerminalSidebar.vue'
 
 .terminal-main-workspace {
   flex: 1;
+  min-width: 0;
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;

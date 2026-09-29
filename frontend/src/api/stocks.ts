@@ -462,6 +462,44 @@ export interface ChipsHistogramBin {
   is_profit: boolean
 }
 
+export interface ChipsSupportResistanceLevel {
+  price: number
+  chip_percent: number
+  distance_percent: number
+  strength: 'strong' | 'medium' | 'light'
+  desc: string
+}
+
+export interface ChipsVacuumZone {
+  low: number
+  high: number
+  desc: string
+}
+
+export interface ChipsQuantDebate {
+  bull_thesis: {
+    title: string
+    confidence: number
+    points: string[]
+    key_defense: string
+  }
+  bear_thesis: {
+    title: string
+    confidence: number
+    points: string[]
+    key_resistance: string
+  }
+  arbiter: {
+    bias: string
+    tactics: string
+    summary: string
+    suggested_entry: string
+    stop_loss: number
+    target_price: number
+    risk_reward_ratio: number
+  }
+}
+
 export interface ChipsDistribution {
   current_price: number
   avg_cost: number
@@ -476,6 +514,11 @@ export interface ChipsDistribution {
   peak_pattern: string
   pattern_desc: string
   pattern_type: 'bullish' | 'bearish' | 'neutral'
+  support_levels?: ChipsSupportResistanceLevel[]
+  resistance_levels?: ChipsSupportResistanceLevel[]
+  vacuum_zones?: ChipsVacuumZone[]
+  quant_debate?: ChipsQuantDebate
+  applied_rules?: string[]
   histogram: ChipsHistogramBin[]
 }
 

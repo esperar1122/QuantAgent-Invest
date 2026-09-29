@@ -122,7 +122,7 @@ def fetch_realtime_stock_quote(code: str) -> Optional[Dict[str, Any]]:
         open_px = float(fields[5]) if fields[5] else pre_close
         high_px = float(fields[33]) if fields[33] else max(px, open_px)
         low_px = float(fields[34]) if fields[34] else min(px, open_px)
-        vol = float(fields[6]) * 100.0 if fields[6] else 0.0
+        vol = float(fields[6]) if fields[6] else 0.0
         amt = float(fields[37]) * 10000.0 if fields[37] else 0.0
         chg = float(fields[31]) if fields[31] else (px - pre_close)
         pct = float(fields[32]) if fields[32] else 0.0

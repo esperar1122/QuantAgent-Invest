@@ -170,6 +170,117 @@
       </div>
     </div>
 
+    <!-- 2.5 量化技术买卖决策看板 (显眼置顶，覆盖回踩建仓、突破加仓、目标减仓、破位止损及日内风控提示) -->
+    <div class="trade-decision-board" v-if="!isCurrentIndex && tradeDecision">
+      <!-- 决策信号主横幅 -->
+      <div class="decision-signal-banner" :class="[tradeDecision.signalType]">
+        <div class="banner-left">
+          <div class="engine-badge">
+            <span class="pulse-indicator"></span>
+            QUANT TRADE ENGINE · 量化实盘决策
+          </div>
+          <div class="signal-title-wrap">
+            <span class="signal-title">{{ tradeDecision.signalTitle }}</span>
+            <el-tag
+              size="small"
+              :type="tradeDecision.hasBuySignal ? 'success' : (tradeDecision.signalType === 'trim' ? 'danger' : 'info')"
+              effect="dark"
+              class="signal-tag"
+            >
+              {{ tradeDecision.hasBuySignal ? '买点就绪' : (tradeDecision.signalType === 'trim' ? '高位风险' : '观望等待') }}
+            </el-tag>
+          </div>
+          <div class="signal-summary">{{ tradeDecision.summaryReason }}</div>
+        </div>
+
+        <div class="banner-right">
+          <div class="rr-box">
+            <span class="rr-label">推演盈亏比 (盈利:风险)</span>
+            <span class="rr-val tabular-nums" :class="{ 'rr-great': tradeDecision.riskRewardRatio >= 2.0 }">
+              {{ tradeDecision.riskRewardRatio }} : 1
+            </span>
+            <span class="rr-sub">冒 1 份风险博 {{ tradeDecision.riskRewardRatio }} 份收益</span>
+          </div>
+          <el-button
+            size="small"
+            class="decision-detail-btn"
+            @click="openTechnicalModal('indicators')"
+          >
+            指标全景对决 ↗
+          </el-button>
+        </div>
+      </div>
+
+      <!-- 日内无买点 / 高位风险警示条 (显眼提示) -->
+      <div class="intraday-warning-strip" v-if="tradeDecision.intradayWarning">
+        <el-icon class="warning-icon"><WarningFilled /></el-icon>
+        <span class="warning-text">{{ tradeDecision.intradayWarning }}</span>
+      </div>
+
+      <!-- 四维推荐买卖点位卡片组 (建仓点、加仓点、减仓点、止损点，各含理由与距离) -->
+      <div class="decision-points-grid">
+        <!-- 1. 推荐买点 / 建仓点 -->
+        <div class="point-card buy-card" :class="{ 'is-active': tradeDecision.buyPoint.isActionableToday }">
+          <div class="card-head">
+            <div class="point-badge buy">建仓点 (买入)</div>
+            <span class="point-action-status">{{ tradeDecision.buyPoint.label }}</span>
+          </div>
+          <div class="card-price-row">
+            <span class="price-val tabular-nums">¥{{ tradeDecision.buyPoint.price.toFixed(2) }}</span>
+            <span class="dist-val tabular-nums" :class="tradeDecision.buyPoint.distancePct <= 0 ? 'color-down' : 'color-up'">
+              {{ tradeDecision.buyPoint.distancePct >= 0 ? '+' : '' }}{{ tradeDecision.buyPoint.distancePct }}%
+            </span>
+          </div>
+          <div class="card-desc">{{ tradeDecision.buyPoint.reason }}</div>
+        </div>
+
+        <!-- 2. 顺势加仓点 -->
+        <div class="point-card add-card">
+          <div class="card-head">
+            <div class="point-badge add">加仓点 (右侧)</div>
+            <span class="point-action-status">{{ tradeDecision.addPoint.label }}</span>
+          </div>
+          <div class="card-price-row">
+            <span class="price-val tabular-nums">¥{{ tradeDecision.addPoint.price.toFixed(2) }}</span>
+            <span class="dist-val tabular-nums color-up">
+              {{ tradeDecision.addPoint.distancePct >= 0 ? '+' : '' }}{{ tradeDecision.addPoint.distancePct }}%
+            </span>
+          </div>
+          <div class="card-desc">{{ tradeDecision.addPoint.reason }}</div>
+        </div>
+
+        <!-- 3. 目标减仓点 (卖点) -->
+        <div class="point-card sell-card">
+          <div class="card-head">
+            <div class="point-badge sell">减仓点 (止盈)</div>
+            <span class="point-action-status">{{ tradeDecision.sellPoint.label }}</span>
+          </div>
+          <div class="card-price-row">
+            <span class="price-val tabular-nums">¥{{ tradeDecision.sellPoint.price.toFixed(2) }}</span>
+            <span class="dist-val tabular-nums color-up">
+              {{ tradeDecision.sellPoint.distancePct >= 0 ? '+' : '' }}{{ tradeDecision.sellPoint.distancePct }}%
+            </span>
+          </div>
+          <div class="card-desc">{{ tradeDecision.sellPoint.reason }}</div>
+        </div>
+
+        <!-- 4. 破位止损点 -->
+        <div class="point-card stop-card">
+          <div class="card-head">
+            <div class="point-badge stop">止损点 (防守)</div>
+            <span class="point-action-status">{{ tradeDecision.stopLossPoint.label }}</span>
+          </div>
+          <div class="card-price-row">
+            <span class="price-val tabular-nums">¥{{ tradeDecision.stopLossPoint.price.toFixed(2) }}</span>
+            <span class="dist-val tabular-nums color-down">
+              {{ tradeDecision.stopLossPoint.distancePct >= 0 ? '+' : '' }}{{ tradeDecision.stopLossPoint.distancePct }}%
+            </span>
+          </div>
+          <div class="card-desc">{{ tradeDecision.stopLossPoint.reason }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- 3. 三栏金融工作台主体 -->
     <div class="three-columns-workspace">
       <!-- 左栏：量化画像与因子雷达 (280px) -->
@@ -225,9 +336,18 @@
               </div>
             </div>
 
+            <div class="c-sr-quick-row" v-if="currentChips?.support_levels?.length || currentChips?.resistance_levels?.length">
+              <span class="sr-pill sup" v-if="currentChips?.support_levels?.[0]">
+                支: ¥{{ currentChips.support_levels[0].price.toFixed(2) }}
+              </span>
+              <span class="sr-pill res" v-if="currentChips?.resistance_levels?.[0]">
+                阻: ¥{{ currentChips.resistance_levels[0].price.toFixed(2) }}
+              </span>
+            </div>
+
             <div class="c-action-footer">
               <button class="chips-view-more-btn" @click="openTechnicalModal('chips')">
-                <span>查看筹码深度直方图 ↗</span>
+                <span>查看筹码量化多空辩论 ↗</span>
               </button>
             </div>
           </div>
@@ -508,12 +628,13 @@ import {
   RefreshRight,
   ArrowDown,
   TrendCharts,
-  DataAnalysis
+  DataAnalysis,
+  WarningFilled
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import StockKlineChart from '@/components/Terminal/StockKlineChart.vue'
 import TechnicalAnalysisModal from '@/components/TechnicalIndicators/TechnicalAnalysisModal.vue'
-import { stocksApi, type StockSearchItem, type ChipsDistribution } from '@/api/stocks'
+import { stocksApi, type StockSearchItem, type ChipsDistribution, type TechnicalSnapshot } from '@/api/stocks'
 import { useFavoritesStore } from '@/stores/favorites'
 
 const route = useRoute()
@@ -537,6 +658,7 @@ const pageLoading = ref(false)
 // 技术指标与筹码透视弹窗控制器
 const technicalModalRef = ref<InstanceType<typeof TechnicalAnalysisModal> | null>(null)
 const currentChips = ref<ChipsDistribution | null>(null)
+const currentIndicators = ref<TechnicalSnapshot | null>(null)
 
 const openTechnicalModal = (tab: string = 'indicators') => {
   technicalModalRef.value?.open(currentStock.value.code, currentStock.value.name, tab)
@@ -577,6 +699,125 @@ const isCurrentIndex = computed(() => {
     c.startsWith('sz399') ||
     ['sh000001', 'sz399001', 'sz399006', 'sh000680'].includes(c)
   )
+})
+
+// ⚡ 量化技术决策引擎与四维买卖点位推演
+const tradeDecision = computed(() => {
+  if (isCurrentIndex.value) return null
+
+  const px = currentStock.value.price || 10.0
+  const chg = currentStock.value.change || 0.0
+  const chips = currentChips.value
+  const ind = currentIndicators.value
+
+  const sup = chips?.support_levels?.[0]
+  const res = chips?.resistance_levels?.[0]
+  const profitRatio = chips?.profit_ratio ?? (chg >= 0 ? 65.0 : 35.0)
+  const trappedRatio = chips?.trapped_ratio ?? +(100.0 - profitRatio).toFixed(1)
+  const conc70 = chips?.concentration_70 ?? 9.5
+  const quantDebate = chips?.quant_debate
+
+  // 1. 基准点位推算
+  const buyPointPx = sup ? sup.price : +(px * 0.96).toFixed(2)
+  const buyDist = +(((buyPointPx - px) / px) * 100).toFixed(2)
+
+  const addPointPx = res ? +(res.price * 1.01).toFixed(2) : +(px * 1.03).toFixed(2)
+  const addDist = +(((addPointPx - px) / px) * 100).toFixed(2)
+
+  const sellPointPx = res ? res.price : (quantDebate?.arbiter?.target_price || +(px * 1.08).toFixed(2))
+  const sellDist = +(((sellPointPx - px) / px) * 100).toFixed(2)
+
+  const stopLossPx = sup ? +(sup.price * 0.97).toFixed(2) : (quantDebate?.arbiter?.stop_loss || +(buyPointPx * 0.96).toFixed(2))
+  const stopDist = +(((stopLossPx - px) / px) * 100).toFixed(2)
+
+  const riskRewardRatio = Math.max(0.5, +(Math.abs(sellPointPx - px) / Math.max(0.01, Math.abs(px - stopLossPx))).toFixed(2))
+
+  // 2. 买入信号与日内买点判定
+  // 判定条件 A: 紧贴支撑位回踩企稳 (当前价格离支撑位 -1.5% ~ +2.2% 的黄金埋伏圈)
+  const isNearSupport = sup && ((px - sup.price) / sup.price >= -0.015) && ((px - sup.price) / sup.price <= 0.022)
+  // 判定条件 B: 放量突破阻力峰且处于上升通道
+  const isBreakout = res && px >= res.price && chg >= 1.5 && conc70 <= 12.0
+  // 判定条件 C: 超跌拐点 (获利盘极低且指标出现超卖拐点)
+  const isOversoldReversal = profitRatio <= 15.0 && (chg > 0.5 || (ind?.kdj?.j ?? 50) < 15)
+
+  let hasBuySignal = false
+  let signalType: 'buy' | 'breakout_buy' | 'trim' | 'wait' = 'wait'
+  let signalTitle = '⚪ 日内暂无买点'
+  let summaryReason = ''
+  let intradayWarning: string | null = null
+
+  if (isNearSupport && trappedRatio < 70) {
+    hasBuySignal = true
+    signalType = 'buy'
+    signalTitle = '🟢 触发回踩建仓买入信号'
+    summaryReason = `现价 (¥${px.toFixed(2)}) 紧贴全市场核心筹码密集峰 S1 支撑位 (¥${sup.price.toFixed(2)})，下档承接力强劲，下行防守空间被锁死，具备波段最高胜率与优异盈亏比。`
+  } else if (isBreakout) {
+    hasBuySignal = true
+    signalType = 'breakout_buy'
+    signalTitle = '🚀 触发放量突破买入信号'
+    summaryReason = `现价 (¥${px.toFixed(2)}) 放量突破上方套牢密集峰 R1 阻力位 (¥${res.price.toFixed(2)})，上方进入筹码真空加速通道，多头主升浪确立，适合果断建仓或加仓顺势做多。`
+  } else if (isOversoldReversal) {
+    hasBuySignal = true
+    signalType = 'buy'
+    signalTitle = '🌟 触发超跌反弹试仓信号'
+    summaryReason = `获利盘低至 ${profitRatio.toFixed(1)}%，全员深套割肉盘释放殆尽，指标初显止跌拐点，做空衰竭，适合小仓位左侧试探博取超跌反弹。`
+  } else if (trappedRatio >= 70) {
+    hasBuySignal = false
+    signalType = 'trim'
+    signalTitle = '🔴 触发高位套牢防守警报'
+    summaryReason = `上方套牢盘高达 ${trappedRatio.toFixed(1)}%，上方筹码峰沉淀重重解套抛压，现价处于弱势下行中枢，反弹易诱多回落。`
+    intradayWarning = `⚠️【日内无买点·防守警报】：上方套牢盘高达 ${trappedRatio.toFixed(1)}%，反弹多为解套抽逃诱多行情，日内绝无安全买点，坚决不建议追高或开仓！`
+  } else {
+    hasBuySignal = false
+    signalType = 'wait'
+    signalTitle = '⚪ 日内无买点：半空中观望'
+    const distToSup = sup ? (((px - sup.price) / sup.price) * 100).toFixed(1) : '3.5'
+    summaryReason = `当前股价处于支撑位与阻力位之间的震荡中枢半空中（距下方支撑峰还有 -${distToSup}% 空间），此时开仓盈亏比不足，追高极易回撤。`
+    intradayWarning = `⚠️【日内开仓预警】：当前股价脱离支撑位处于半空中，日内无高胜率买点，暂不建议买入！切忌盲目追高，请挂单耐心等待回踩至建仓参考位 ¥${buyPointPx.toFixed(2)} 附近。`
+  }
+
+  // 3. 构建 4 个操作点位及其详尽理由
+  const buyPoint = {
+    price: buyPointPx,
+    distancePct: buyDist,
+    label: isNearSupport ? '当前回踩建仓区间' : '挂单回踩低吸点',
+    reason: `以全市场第一核心筹码密集峰(¥${buyPointPx.toFixed(2)})为买点锚点。此处沉淀大量多头真金白银底仓，护盘意愿最强，回踩到位后反弹概率极高，能将最大回撤风险锁死在 2%~3% 之内。`,
+    isActionableToday: isNearSupport || isOversoldReversal
+  }
+
+  const addPoint = {
+    price: addPointPx,
+    distancePct: addDist,
+    label: '放量突破加仓点',
+    reason: `以有效放量站上第一大套牢阻力峰(¥${addPointPx.toFixed(2)})为加仓触发线。确认越过重套牢区后，上方进入筹码真空低阻力通道，无历史解套抛压，可顺势加仓享受主升浪加速。`
+  }
+
+  const sellPoint = {
+    price: sellPointPx,
+    distancePct: sellDist,
+    label: '首要目标减仓点',
+    reason: `逼近上方首要密集套牢峰(¥${sellPointPx.toFixed(2)})。此处沉淀大量历史套牢盘，在处置效应下持筹者保本抛售意愿极强，叠加短线获利盘共振回吐，极易引发脉冲式冲高回落，建议果断分批减仓落袋为安。`
+  }
+
+  const stopLossPoint = {
+    price: stopLossPx,
+    distancePct: stopDist,
+    label: '破位防守止损点',
+    reason: `若有效击穿该支撑底线(¥${stopLossPx.toFixed(2)})，说明多头防线崩溃。下方将陷入筹码稀薄真空区，极易诱发两融强平与多杀多踩踏，必须无条件离场保护小资金本金。`
+  }
+
+  return {
+    hasBuySignal,
+    signalType,
+    signalTitle,
+    summaryReason,
+    intradayWarning,
+    buyPoint,
+    addPoint,
+    sellPoint,
+    stopLossPoint,
+    riskRewardRatio
+  }
 })
 
 // 核心池胶囊高亮判断
@@ -897,6 +1138,7 @@ async function switchStock(code: string) {
   if (!code) return
   selectedCode.value = code
   currentChips.value = null
+  currentIndicators.value = null
   await loadStockDetail(code)
   router.replace({ path: '/terminal/stock', query: { code } })
 }
@@ -905,15 +1147,22 @@ async function switchStock(code: string) {
 async function loadStockDetail(code: string) {
   pageLoading.value = true
   try {
-    // 1. 并发获取实时行情、基本面财务数据与筹码分布
+    // 1. 并发获取实时行情、基本面财务数据、筹码分布与技术指标快照
     const quotePromise = stocksApi.getQuote(code).catch(() => null)
     const fundPromise = stocksApi.getFundamentals(code).catch(() => null)
     const chipsPromise = stocksApi.getChips(code).catch(() => null)
+    const indicatorsPromise = stocksApi.getIndicators(code).catch(() => null)
 
-    const [quoteRes, fundRes, chipsRes] = await Promise.all([quotePromise, fundPromise, chipsPromise])
+    const [quoteRes, fundRes, chipsRes, indRes] = await Promise.all([
+      quotePromise,
+      fundPromise,
+      chipsPromise,
+      indicatorsPromise
+    ])
     const q = (quoteRes as any)?.data || quoteRes
     const f = (fundRes as any)?.data || fundRes
-    currentChips.value = (chipsRes as any)?.data?.chips || (chipsRes as any)?.chips || null
+    currentChips.value = (chipsRes as any)?.data?.chips || (chipsRes as any)?.chips || (indRes as any)?.data?.chips || (indRes as any)?.chips || null
+    currentIndicators.value = (indRes as any)?.data?.snapshot || (indRes as any)?.snapshot || null
 
     if (q && (q.price !== undefined || q.close !== undefined)) {
       const px = Number(q.price ?? q.close ?? 0)
@@ -1510,6 +1759,33 @@ onMounted(() => {
       }
     }
 
+    .c-sr-quick-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 2px;
+
+      .sr-pill {
+        flex: 1;
+        padding: 4px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 700;
+        text-align: center;
+        font-family: monospace;
+
+        &.sup {
+          background: rgba(16, 185, 129, 0.12);
+          color: #059669;
+          border: 1px solid rgba(16, 185, 129, 0.25);
+        }
+        &.res {
+          background: rgba(239, 68, 68, 0.12);
+          color: #dc2626;
+          border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+      }
+    }
+
     .c-action-footer {
       margin-top: 2px;
       .chips-view-more-btn {
@@ -1903,4 +2179,316 @@ onMounted(() => {
 .text-primary { color: #175cd3; }
 .tabular-nums { font-variant-numeric: tabular-nums; }
 .font-mono { font-family: 'JetBrains Mono', 'Roboto Mono', monospace; }
+
+// 量化实盘决策看板样式
+.trade-decision-board {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  .decision-signal-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    border-radius: 10px;
+    background: #ffffff;
+    border: 1px solid #e4e7ec;
+    box-shadow: 0 2px 6px rgba(16, 24, 40, 0.04);
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: #98a2b3;
+    }
+
+    &.buy, &.breakout_buy {
+      border-color: rgba(16, 185, 129, 0.4);
+      background: linear-gradient(135deg, rgba(236, 253, 245, 0.7) 0%, #ffffff 60%);
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.08);
+
+      &::before {
+        background: #10b981;
+      }
+      .pulse-indicator {
+        background: #10b981;
+      }
+    }
+
+    &.trim {
+      border-color: rgba(239, 68, 68, 0.4);
+      background: linear-gradient(135deg, rgba(254, 242, 242, 0.7) 0%, #ffffff 60%);
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.08);
+
+      &::before {
+        background: #ef4444;
+      }
+      .pulse-indicator {
+        background: #ef4444;
+      }
+    }
+
+    &.wait {
+      border-color: rgba(245, 158, 11, 0.35);
+      background: linear-gradient(135deg, rgba(254, 252, 232, 0.6) 0%, #ffffff 60%);
+
+      &::before {
+        background: #f59e0b;
+      }
+      .pulse-indicator {
+        background: #f59e0b;
+      }
+    }
+
+    .banner-left {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+
+      .engine-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        color: #475467;
+        text-transform: uppercase;
+
+        .pulse-indicator {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          animation: pulseDot 2s infinite ease-in-out;
+        }
+      }
+
+      .signal-title-wrap {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+
+        .signal-title {
+          font-size: 18px;
+          font-weight: 800;
+          color: #101828;
+          letter-spacing: -0.2px;
+        }
+
+        .signal-tag {
+          font-weight: 700;
+          border-radius: 4px;
+        }
+      }
+
+      .signal-summary {
+        font-size: 13px;
+        color: #475467;
+        line-height: 1.5;
+        max-width: 850px;
+      }
+    }
+
+    .banner-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+
+      .rr-box {
+        text-align: right;
+        padding-right: 16px;
+        border-right: 1px solid #eaecf0;
+
+        .rr-label {
+          display: block;
+          font-size: 11px;
+          color: #667085;
+          font-weight: 500;
+        }
+
+        .rr-val {
+          font-size: 18px;
+          font-weight: 800;
+          color: #101828;
+
+          &.rr-great {
+            color: #059669;
+          }
+        }
+
+        .rr-sub {
+          display: block;
+          font-size: 10px;
+          color: #667085;
+          margin-top: 2px;
+          white-space: nowrap;
+        }
+      }
+
+      .decision-detail-btn {
+        font-weight: 600;
+      }
+    }
+  }
+
+  .intraday-warning-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    box-shadow: 0 1px 3px rgba(245, 158, 11, 0.06);
+
+    .warning-icon {
+      font-size: 16px;
+      color: #d97706;
+      flex-shrink: 0;
+    }
+
+    .warning-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: #92400e;
+      line-height: 1.4;
+    }
+  }
+
+  .decision-points-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+
+    .point-card {
+      background: #ffffff;
+      border: 1px solid #eaecf0;
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: 0 1px 3px rgba(16, 24, 40, 0.03);
+      position: relative;
+      transition: all 0.2s ease;
+
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px rgba(16, 24, 40, 0.06);
+      }
+
+      &.buy-card {
+        border-top: 3px solid #10b981;
+        &.is-active {
+          background: rgba(16, 185, 129, 0.04);
+          border-color: #a7f3d0;
+          border-top-color: #10b981;
+          box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.2);
+        }
+      }
+
+      &.add-card {
+        border-top: 3px solid #3b82f6;
+      }
+
+      &.sell-card {
+        border-top: 3px solid #f59e0b;
+      }
+
+      &.stop-card {
+        border-top: 3px solid #ef4444;
+      }
+
+      .card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+
+        .point-badge {
+          font-size: 11px;
+          font-weight: 700;
+          padding: 2px 7px;
+          border-radius: 4px;
+
+          &.buy {
+            background: rgba(16, 185, 129, 0.12);
+            color: #059669;
+          }
+          &.add {
+            background: rgba(59, 130, 246, 0.12);
+            color: #2563eb;
+          }
+          &.sell {
+            background: rgba(245, 158, 11, 0.12);
+            color: #d97706;
+          }
+          &.stop {
+            background: rgba(239, 68, 68, 0.12);
+            color: #dc2626;
+          }
+        }
+
+        .point-action-status {
+          font-size: 11px;
+          font-weight: 600;
+          color: #667085;
+        }
+      }
+
+      .card-price-row {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+
+        .price-val {
+          font-size: 20px;
+          font-weight: 800;
+          color: #101828;
+          font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
+        }
+
+        .dist-val {
+          font-size: 12px;
+          font-weight: 700;
+          font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
+        }
+      }
+
+      .card-desc {
+        font-size: 12px;
+        color: #475467;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+    }
+  }
+}
+
+@keyframes pulseDot {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    transform: scale(1.1);
+    opacity: 1;
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.8;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
 </style>

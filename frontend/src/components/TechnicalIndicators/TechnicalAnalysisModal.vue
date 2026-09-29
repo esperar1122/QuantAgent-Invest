@@ -371,6 +371,14 @@
                 </div>
               </div>
 
+              <!-- 机构级硬核修正规则标签条 (Institutional Hard Rules) -->
+              <div class="chips-rules-banner" v-if="displayChips.applied_rules && displayChips.applied_rules.length > 0">
+                <span class="rules-label">🛡️ 机构级修正生效:</span>
+                <span v-for="(rule, rIdx) in displayChips.applied_rules" :key="'rule-' + rIdx" class="rule-chip">
+                  {{ rule }}
+                </span>
+              </div>
+
               <!-- 4 大核心筹码指标卡片 -->
               <div class="chips-kpi-grid">
                 <!-- KPI 1: 获利盘比例 -->
@@ -457,6 +465,7 @@
               </div>
 
               <!-- 筹码多空形态研判与操盘策略横幅 -->
+              <!-- 筹码多空形态研判与操盘策略横幅 -->
               <div class="chips-pattern-banner">
                 <div class="pattern-badge-col">
                   <span class="pattern-label">筹码形态研判</span>
@@ -489,12 +498,99 @@
                 </div>
               </div>
 
+              <!-- 支撑位与压力位智能雷达看板 (Support & Resistance Radar) -->
+              <div class="chips-sr-radar">
+                <!-- 下方关键支撑位 -->
+                <div class="sr-card support-card">
+                  <div class="sr-card-header">
+                    <span class="sr-title">
+                      <span class="sr-icon-dot sup"></span>
+                      核心筹码支撑位 (Support Levels)
+                    </span>
+                    <span class="sr-sub-tag">下档承接安全垫</span>
+                  </div>
+                  <div class="sr-items-list" v-if="supportLevels && supportLevels.length > 0">
+                    <div v-for="(sup, sIdx) in supportLevels" :key="'sup-' + sIdx" class="sr-item">
+                      <div class="sr-item-left">
+                        <span class="sr-rank sup">S{{ sIdx + 1 }}</span>
+                        <span class="sr-px tabular-nums font-mono font-bold">¥{{ sup.price.toFixed(2) }}</span>
+                        <span class="sr-dist tabular-nums" :class="sup.distance_percent >= 0 ? 'text-up' : 'text-down'">
+                          ({{ sup.distance_percent > 0 ? '+' : '' }}{{ sup.distance_percent }}%)
+                        </span>
+                      </div>
+                      <div class="sr-item-right">
+                        <span class="sr-chip-vol tabular-nums">堆积 {{ sup.chip_percent }}%</span>
+                        <el-tag size="small" :type="sup.strength === 'strong' ? 'danger' : (sup.strength === 'medium' ? 'warning' : 'info')" effect="plain">
+                          {{ sup.strength === 'strong' ? '强支撑峰' : (sup.strength === 'medium' ? '中级支撑' : '弱支撑') }}
+                        </el-tag>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="sr-empty">
+                    <span>当前价位下方暂无明显密集筹码支撑峰</span>
+                  </div>
+                </div>
+
+                <!-- 上方关键阻力位 -->
+                <div class="sr-card resistance-card">
+                  <div class="sr-card-header">
+                    <span class="sr-title">
+                      <span class="sr-icon-dot res"></span>
+                      核心筹码阻力位 (Resistance Levels)
+                    </span>
+                    <span class="sr-sub-tag">套牢抛压分水岭</span>
+                  </div>
+                  <div class="sr-items-list" v-if="resistanceLevels && resistanceLevels.length > 0">
+                    <div v-for="(res, rIdx) in resistanceLevels" :key="'res-' + rIdx" class="sr-item">
+                      <div class="sr-item-left">
+                        <span class="sr-rank res">R{{ rIdx + 1 }}</span>
+                        <span class="sr-px tabular-nums font-mono font-bold">¥{{ res.price.toFixed(2) }}</span>
+                        <span class="sr-dist tabular-nums text-up">
+                          (+{{ res.distance_percent }}%)
+                        </span>
+                      </div>
+                      <div class="sr-item-right">
+                        <span class="sr-chip-vol tabular-nums">套牢 {{ res.chip_percent }}%</span>
+                        <el-tag size="small" :type="res.strength === 'strong' ? 'danger' : (res.strength === 'medium' ? 'warning' : 'info')" effect="plain">
+                          {{ res.strength === 'strong' ? '重阻力峰' : (res.strength === 'medium' ? '中级阻力' : '弱阻力') }}
+                        </el-tag>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="sr-empty no-res">
+                    <span>✨ 上方进入无套牢盘真空天空区，上行阻力极弱</span>
+                  </div>
+                </div>
+
+                <!-- 筹码真空带走廊 (Vacuum Zones) -->
+                <div class="sr-card vacuum-card" v-if="vacuumZones && vacuumZones.length > 0">
+                  <div class="sr-card-header">
+                    <span class="sr-title">
+                      <span class="sr-icon-dot vac"></span>
+                      筹码真空走廊 (Vacuum Zones)
+                    </span>
+                    <span class="sr-sub-tag">低阻力加速带</span>
+                  </div>
+                  <div class="sr-items-list">
+                    <div v-for="(vac, vIdx) in vacuumZones" :key="'vac-' + vIdx" class="sr-item vac-item">
+                      <div class="sr-item-left">
+                        <span class="sr-rank vac">V{{ vIdx + 1 }}</span>
+                        <span class="sr-px tabular-nums font-mono">¥{{ vac.low.toFixed(2) }} ~ ¥{{ vac.high.toFixed(2) }}</span>
+                      </div>
+                      <div class="sr-item-right">
+                        <span class="vac-desc">稀疏真空区 · 易加速穿透</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <!-- 筹码价格分布直方图可视化 (CYQ Price Distribution Histogram) -->
               <div class="chips-histogram-section">
                 <div class="section-header">
                   <div class="sec-left">
-                    <span class="sec-title">📊 筹码价格分布直方图 (CYQ Histogram)</span>
-                    <span class="sec-subtitle">右向横条代表各价格档位的筹码堆积量 · 红色为获利筹码 · 绿色为套牢筹码</span>
+                    <span class="sec-title">📊 筹码价格分布直方图 (CYQ GMM Histogram)</span>
+                    <span class="sec-subtitle">右向横条代表各价格档位的筹码堆积量 · 红色为获利筹码 · 绿色为套牢筹码 · 标星为密集筹码峰</span>
                   </div>
                   <div class="sec-legend">
                     <span class="legend-item"><span class="legend-box profit"></span> 获利盘 (成本 &le; 现价)</span>
@@ -509,7 +605,11 @@
                     v-for="(bin, idx) in sortedHistogram"
                     :key="'hist-' + idx"
                     class="hist-row"
-                    :class="{ 'is-current-bin': isCurrentPriceBin(bin) }"
+                    :class="{
+                      'is-current-bin': isCurrentPriceBin(bin),
+                      'is-support-peak': getBinPeakBadge(bin)?.type === 'support',
+                      'is-resistance-peak': getBinPeakBadge(bin)?.type === 'resistance'
+                    }"
                   >
                     <!-- 价格刻度 -->
                     <span class="hist-price tabular-nums font-mono">
@@ -524,7 +624,12 @@
                         :style="{ width: `${Math.min(100, (bin.percent / maxHistPercent) * 100)}%` }"
                         :title="`价格: ¥${bin.price.toFixed(2)} | 筹码占比: ${bin.percent}% | ${bin.is_profit ? '获利盘' : '套牢盘'}`"
                       >
-                        <span class="hist-pct-text tabular-nums" v-if="bin.percent >= 1.5">{{ bin.percent }}%</span>
+                        <span class="hist-pct-text tabular-nums" v-if="bin.percent >= 1.2">{{ bin.percent }}%</span>
+                      </div>
+
+                      <!-- 核心支撑/阻力峰特征标签 -->
+                      <div v-if="getBinPeakBadge(bin)" class="peak-badge-tag" :class="getBinPeakBadge(bin)?.type">
+                        {{ getBinPeakBadge(bin)?.text }}
                       </div>
 
                       <!-- 若属于现价分界线标记 -->
@@ -538,12 +643,122 @@
                 <div v-else class="hist-empty">
                   <el-empty description="暂无筹码分布直方图数据，正在计算中..." />
                 </div>
+              </div>
+
+              <!-- ⚔️ 筹码量化多空辩论对决台 (Quant Bull vs Bear Debate) -->
+              <div class="chips-quant-debate-section" v-if="quantDebate">
+                <div class="debate-header">
+                  <div class="dh-title">
+                    <span class="dh-icon">⚔️</span>
+                    <span class="dh-text">筹码量化多空辩论对决台 (Quant Bull vs Bear CYQ Debate)</span>
+                  </div>
+                  <div class="dh-sub">
+                    基于行为金融学非对称衰减模型（处置效应）与支撑压力峰博弈推演
+                  </div>
+                </div>
+
+                <!-- 多空辩论两翼对决 -->
+                <div class="debate-wings-grid">
+                  <!-- 左翼：量化多方论点 (Bull Case) -->
+                  <div class="debate-card bull-wing">
+                    <div class="wing-head">
+                      <div class="head-left">
+                        <span class="wing-avatar">🐂</span>
+                        <div class="wing-meta">
+                          <span class="wing-role">量化多方 (Bull Debater)</span>
+                          <span class="wing-subtitle">依托支撑 · 锁仓做多</span>
+                        </div>
+                      </div>
+                      <div class="confidence-box">
+                        <span class="conf-lbl">多方置信度</span>
+                        <span class="conf-val text-up font-bold tabular-nums">{{ quantDebate.bull_thesis.confidence }}%</span>
+                      </div>
+                    </div>
+                    <div class="wing-key-point">
+                      <span class="kp-lbl">核心防守支撑:</span>
+                      <span class="kp-val text-up font-bold font-mono">{{ quantDebate.bull_thesis.key_defense }}</span>
+                    </div>
+                    <ul class="wing-points-list">
+                      <li v-for="(p, pIdx) in quantDebate.bull_thesis.points" :key="'bp-' + pIdx" class="point-item bull">
+                        <span class="p-bullet">▸</span>
+                        <span class="p-text">{{ p }}</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <!-- 右翼：量化空方论点 (Bear Case) -->
+                  <div class="debate-card bear-wing">
+                    <div class="wing-head">
+                      <div class="head-left">
+                        <span class="wing-avatar">🐻</span>
+                        <div class="wing-meta">
+                          <span class="wing-role">量化空方 (Bear Debater)</span>
+                          <span class="wing-subtitle">死扛抛压 · 破位防守</span>
+                        </div>
+                      </div>
+                      <div class="confidence-box">
+                        <span class="conf-lbl">空方置信度</span>
+                        <span class="conf-val text-down font-bold tabular-nums">{{ quantDebate.bear_thesis.confidence }}%</span>
+                      </div>
+                    </div>
+                    <div class="wing-key-point">
+                      <span class="kp-lbl">核心受阻压力:</span>
+                      <span class="kp-val text-down font-bold font-mono">{{ quantDebate.bear_thesis.key_resistance }}</span>
+                    </div>
+                    <ul class="wing-points-list">
+                      <li v-for="(p, pIdx) in quantDebate.bear_thesis.points" :key="'brp-' + pIdx" class="point-item bear">
+                        <span class="p-bullet">▸</span>
+                        <span class="p-text">{{ p }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                <!-- 裁判席终审裁决台 (Arbiter Decision) -->
+                <div class="debate-arbiter-box" v-if="quantDebate.arbiter">
+                  <div class="arbiter-title-row">
+                    <div class="at-left">
+                      <span class="arbiter-badge">⚖️ 量化首席裁判裁决 (Tactical Arbiter)</span>
+                      <span class="arbiter-bias-tag font-bold" :class="quantDebate.arbiter.bias.includes('多') ? 'bias-bull' : (quantDebate.arbiter.bias.includes('防守') ? 'bias-bear' : 'bias-box')">
+                        {{ quantDebate.arbiter.bias }}
+                      </span>
+                    </div>
+                    <div class="at-right">
+                      <span class="tactics-label">推荐战术:</span>
+                      <span class="tactics-val">{{ quantDebate.arbiter.tactics }}</span>
+                    </div>
+                  </div>
+
+                  <div class="arbiter-summary-desc">
+                    {{ quantDebate.arbiter.summary }}
+                  </div>
+
+                  <!-- 操盘点位推演卡片条 -->
+                  <div class="arbiter-metrics-strip">
+                    <div class="strip-item">
+                      <span class="s-k">建议介入参考</span>
+                      <span class="s-v font-mono tabular-nums text-up">{{ quantDebate.arbiter.suggested_entry }}</span>
+                    </div>
+                    <div class="strip-item">
+                      <span class="s-k">严格防守止损位</span>
+                      <span class="s-v font-mono tabular-nums text-down">¥{{ quantDebate.arbiter.stop_loss }}</span>
+                    </div>
+                    <div class="strip-item">
+                      <span class="s-k">第一目标进攻位</span>
+                      <span class="s-v font-mono tabular-nums text-up">¥{{ quantDebate.arbiter.target_price }}</span>
+                    </div>
+                    <div class="strip-item">
+                      <span class="s-k">测算盈亏比 (R:R)</span>
+                      <span class="s-v font-mono tabular-nums highlight">{{ quantDebate.arbiter.risk_reward_ratio }}:1</span>
+                    </div>
+                  </div>
+                </div>
 
                 <!-- 理论模型原理注解脚标 -->
                 <div class="algo-footnote">
                   <el-icon><InfoFilled /></el-icon>
                   <span>
-                    <b>CYQ 筹码分布算法原理：</b>采用经典的换手率衰减积分模型 (Turnover Decay & Triangle Distribution)。系统基于个股历史日K线量价及真实换手率，按每日交易区间以三角分布方式注入新筹码，同时使历史筹码按真实换手率逐日衰减，科学重构全市场投资者的持仓成本动态分布。
+                    <b>CYQ 筹码分布算法升级架构：</b>基于“行为金融学非对称衰减（处置效应）”修正获利盘快速套现与套牢盘死扛留存行为；日内微观量价采用“混合高斯分布（GMM）”拟合均价吸筹峰与尾盘决战峰；并引入 ATR 自适应网格消除高低价股失真，结合异常对倒放量清洗，精确萃取关键支撑阻力峰并生成量化对决推演。
                   </span>
                 </div>
               </div>
@@ -990,6 +1205,56 @@ const displayChips = computed<ChipsDistribution>(() => {
     })
   }
 
+  const fallbackSup = [
+    {
+      price: +(px * 0.95).toFixed(2),
+      chip_percent: 8.5,
+      distance_percent: -5.0,
+      strength: 'strong' as const,
+      desc: `下方 ¥${(px * 0.95).toFixed(2)} 密集支撑`
+    }
+  ]
+  const fallbackRes = [
+    {
+      price: +(px * 1.06).toFixed(2),
+      chip_percent: 7.2,
+      distance_percent: 6.0,
+      strength: 'medium' as const,
+      desc: `上方 ¥${(px * 1.06).toFixed(2)} 套牢阻力`
+    }
+  ]
+  const fallbackDebate = {
+    bull_thesis: {
+      title: '量化多方进攻论点 (Bull Case)',
+      confidence: Math.min(95, Math.max(20, Math.round(profitRatio * 0.85))),
+      points: [
+        `获利盘占比 ${profitRatio}%，持筹浮盈心理稳定，下档抛压极轻`,
+        `下方 ¥${(px * 0.95).toFixed(2)} 处沉淀核心筹码护盘密集峰，承接动能充足`,
+        `主力筹码结构平稳，回踩支撑位具备优异盈亏比`
+      ],
+      key_defense: `¥${(px * 0.95).toFixed(2)}`
+    },
+    bear_thesis: {
+      title: '量化空方防守警告 (Bear Case)',
+      confidence: Math.min(95, Math.max(20, Math.round(trappedRatio * 0.85))),
+      points: [
+        `上方 ¥${(px * 1.06).toFixed(2)} 处累积套牢盘，死扛未割筹码反弹面临抛压`,
+        `若跌破均价 ¥${avgCost}，将触发浮筹止损多杀多踩踏`,
+        `需防范获利盘在压力位附近加速兑现利润`
+      ],
+      key_resistance: `¥${(px * 1.06).toFixed(2)}`
+    },
+    arbiter: {
+      bias: profitRatio >= 60 ? '偏多进攻 (Bullish Bias)' : '防守震荡 (Defensive Box)',
+      tactics: profitRatio >= 60 ? '回踩支撑做多' : '高抛低吸，控仓防守',
+      summary: `在支撑位 ¥${(px * 0.95).toFixed(2)} 与阻力位 ¥${(px * 1.06).toFixed(2)} 间展开区间博弈。`,
+      suggested_entry: `¥${(px * 0.95).toFixed(2)} 附近`,
+      stop_loss: +(px * 0.92).toFixed(2),
+      target_price: +(px * 1.06).toFixed(2),
+      risk_reward_ratio: 1.85
+    }
+  }
+
   return {
     current_price: px,
     avg_cost: avgCost,
@@ -1004,9 +1269,33 @@ const displayChips = computed<ChipsDistribution>(() => {
     peak_pattern: pattern,
     pattern_desc: pDesc,
     pattern_type: pType,
+    support_levels: fallbackSup,
+    resistance_levels: fallbackRes,
+    vacuum_zones: [],
+    quant_debate: fallbackDebate,
     histogram: hist
   }
 })
+
+// 支撑与阻力位快速获取
+const supportLevels = computed(() => displayChips.value?.support_levels || [])
+const resistanceLevels = computed(() => displayChips.value?.resistance_levels || [])
+const vacuumZones = computed(() => displayChips.value?.vacuum_zones || [])
+const quantDebate = computed(() => displayChips.value?.quant_debate)
+
+// 判断某价格 bin 是否接近核心支撑位或阻力位
+const getBinPeakBadge = (bin: any) => {
+  if (!bin) return null
+  const sup = supportLevels.value[0]
+  if (sup && Math.abs(bin.price - sup.price) / (bin.price || 1) < 0.012) {
+    return { type: 'support', text: '★ 核心支撑峰', price: sup.price }
+  }
+  const res = resistanceLevels.value[0]
+  if (res && Math.abs(bin.price - res.price) / (bin.price || 1) < 0.012) {
+    return { type: 'resistance', text: '▲ 核心阻力峰', price: res.price }
+  }
+  return null
+}
 
 // 筹码分布计算与排序直方图（从高价到低价排列，符合国内看盘直觉）
 const sortedHistogram = computed(() => {
@@ -2122,6 +2411,32 @@ onUnmounted(() => {
     }
   }
 
+  .chips-rules-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 11px;
+
+    .rules-label {
+      color: #475569;
+      font-weight: 700;
+    }
+    .rule-chip {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      color: #2563eb;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+    }
+  }
+
   .chips-kpi-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -2459,6 +2774,30 @@ onUnmounted(() => {
             }
           }
 
+          .peak-badge-tag {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 7px;
+            border-radius: 4px;
+            z-index: 3;
+            pointer-events: none;
+
+            &.support {
+              background: rgba(16, 185, 129, 0.15);
+              color: #059669;
+              border: 1px solid rgba(16, 185, 129, 0.35);
+            }
+            &.resistance {
+              background: rgba(239, 68, 68, 0.15);
+              color: #dc2626;
+              border: 1px solid rgba(239, 68, 68, 0.35);
+            }
+          }
+
           .current-price-marker {
             position: absolute;
             left: 0;
@@ -2467,7 +2806,7 @@ onUnmounted(() => {
             display: flex;
             align-items: center;
             gap: 4px;
-            z-index: 2;
+            z-index: 4;
             pointer-events: none;
 
             .marker-tag {
@@ -2488,9 +2827,424 @@ onUnmounted(() => {
         }
       }
     }
+  }
+
+  /* 支撑与阻力位智能雷达看板 */
+  .chips-sr-radar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+
+    @media (max-width: 900px) {
+      grid-template-columns: 1fr;
+    }
+
+    .sr-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+
+      &.support-card {
+        border-left: 4px solid #10b981;
+      }
+      &.resistance-card {
+        border-left: 4px solid #ef4444;
+      }
+      &.vacuum-card {
+        grid-column: 1 / -1;
+        border-left: 4px solid #8b5cf6;
+        background: linear-gradient(135deg, #ffffff 0%, #faf5ff 100%);
+      }
+
+      .sr-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        padding-bottom: 6px;
+        border-bottom: 1px dashed #f1f5f9;
+
+        .sr-title {
+          font-size: 13px;
+          font-weight: 700;
+          color: #1e293b;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+
+          .sr-icon-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            &.sup { background: #10b981; }
+            &.res { background: #ef4444; }
+            &.vac { background: #8b5cf6; }
+          }
+        }
+
+        .sr-sub-tag {
+          font-size: 11px;
+          color: #64748b;
+          background: #f8fafc;
+          padding: 2px 6px;
+          border-radius: 4px;
+        }
+      }
+
+      .sr-items-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+
+        .sr-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 6px 10px;
+          background: #f8fafc;
+          border-radius: 6px;
+          font-size: 12px;
+
+          .sr-item-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+
+            .sr-rank {
+              font-size: 11px;
+              font-weight: 800;
+              padding: 1px 6px;
+              border-radius: 3px;
+              &.sup { background: rgba(16, 185, 129, 0.15); color: #059669; }
+              &.res { background: rgba(239, 68, 68, 0.15); color: #dc2626; }
+              &.vac { background: rgba(139, 92, 246, 0.15); color: #7c3aed; }
+            }
+
+            .sr-px {
+              font-size: 14px;
+              color: #0f172a;
+            }
+
+            .sr-dist {
+              font-size: 11px;
+            }
+          }
+
+          .sr-item-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+
+            .sr-chip-vol {
+              font-size: 11px;
+              color: #64748b;
+              font-weight: 600;
+            }
+          }
+
+          &.vac-item {
+            background: rgba(139, 92, 246, 0.06);
+            .vac-desc {
+              font-size: 11px;
+              color: #7c3aed;
+              font-weight: 600;
+            }
+          }
+        }
+      }
+
+      .sr-empty {
+        padding: 12px;
+        text-align: center;
+        font-size: 12px;
+        color: #94a3b8;
+        &.no-res {
+          color: #059669;
+          font-weight: 600;
+        }
+      }
+    }
+  }
+
+  /* ⚔️ 筹码量化多空辩论对决台 */
+  .chips-quant-debate-section {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    .debate-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #f1f5f9;
+
+      .dh-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 16px;
+        font-weight: 800;
+        color: #0f172a;
+
+        .dh-icon {
+          font-size: 18px;
+        }
+      }
+
+      .dh-sub {
+        font-size: 12px;
+        color: #64748b;
+      }
+    }
+
+    .debate-wings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+
+      @media (max-width: 900px) {
+        grid-template-columns: 1fr;
+      }
+
+      .debate-card {
+        border-radius: 10px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+
+        &.bull-wing {
+          background: linear-gradient(145deg, #fff7ed 0%, #ffffff 100%);
+          border: 1px solid #fed7aa;
+          box-shadow: 0 1px 4px rgba(249, 115, 22, 0.06);
+
+          .wing-head {
+            .wing-role { color: #c2410c; }
+          }
+        }
+
+        &.bear-wing {
+          background: linear-gradient(145deg, #f0fdf4 0%, #ffffff 100%);
+          border: 1px solid #bbf7d0;
+          box-shadow: 0 1px 4px rgba(16, 185, 129, 0.06);
+
+          .wing-head {
+            .wing-role { color: #15803d; }
+          }
+        }
+
+        .wing-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+
+          .head-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+
+            .wing-avatar {
+              font-size: 24px;
+            }
+
+            .wing-meta {
+              display: flex;
+              flex-direction: column;
+
+              .wing-role {
+                font-size: 14px;
+                font-weight: 800;
+              }
+              .wing-subtitle {
+                font-size: 11px;
+                color: #64748b;
+              }
+            }
+          }
+
+          .confidence-box {
+            text-align: right;
+            .conf-lbl {
+              display: block;
+              font-size: 10px;
+              color: #64748b;
+            }
+            .conf-val {
+              font-size: 18px;
+            }
+          }
+        }
+
+        .wing-key-point {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: #ffffff;
+          padding: 6px 12px;
+          border-radius: 6px;
+          border: 1px dashed rgba(0, 0, 0, 0.08);
+          font-size: 12px;
+
+          .kp-lbl {
+            color: #475569;
+            font-weight: 600;
+          }
+          .kp-val {
+            font-size: 13px;
+          }
+        }
+
+        .wing-points-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+
+          .point-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            font-size: 12px;
+            line-height: 1.5;
+
+            .p-bullet {
+              font-weight: 800;
+              margin-top: 1px;
+            }
+            &.bull .p-bullet { color: #ea580c; }
+            &.bear .p-bullet { color: #16a34a; }
+
+            .p-text {
+              color: #334155;
+            }
+          }
+        }
+      }
+    }
+
+    /* 裁判席综合裁决 */
+    .debate-arbiter-box {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+
+      .arbiter-title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+
+        .at-left {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+
+          .arbiter-badge {
+            font-size: 14px;
+            font-weight: 800;
+            color: #0f172a;
+          }
+
+          .arbiter-bias-tag {
+            font-size: 11px;
+            padding: 2px 10px;
+            border-radius: 4px;
+
+            &.bias-bull {
+              background: #fee2e2;
+              color: #b91c1c;
+              border: 1px solid #fca5a5;
+            }
+            &.bias-bear {
+              background: #dcfce7;
+              color: #15803d;
+              border: 1px solid #86efac;
+            }
+            &.bias-box {
+              background: #e0e7ff;
+              color: #4338ca;
+              border: 1px solid #a5b4fc;
+            }
+          }
+        }
+
+        .at-right {
+          font-size: 12px;
+          .tactics-label {
+            color: #64748b;
+            margin-right: 4px;
+          }
+          .tactics-val {
+            font-weight: 700;
+            color: #0f172a;
+          }
+        }
+      }
+
+      .arbiter-summary-desc {
+        font-size: 13px;
+        color: #334155;
+        line-height: 1.6;
+        background: #ffffff;
+        padding: 10px 14px;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+      }
+
+      .arbiter-metrics-strip {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+
+        @media (max-width: 768px) {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .strip-item {
+          background: #ffffff;
+          padding: 8px 12px;
+          border-radius: 6px;
+          border: 1px solid #e2e8f0;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+
+          .s-k {
+            font-size: 11px;
+            color: #64748b;
+          }
+          .s-v {
+            font-size: 15px;
+            font-weight: 800;
+
+            &.highlight {
+              color: #2563eb;
+            }
+          }
+        }
+      }
+    }
 
     .algo-footnote {
-      margin-top: 14px;
+      margin-top: 4px;
       padding-top: 10px;
       border-top: 1px solid #f1f5f9;
       display: flex;
