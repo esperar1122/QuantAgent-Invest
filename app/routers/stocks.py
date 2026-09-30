@@ -1379,6 +1379,39 @@ async def get_stock_chips(
     })
 
 
+@router.get("/{code}/dossier", response_model=dict)
+async def get_stock_dossier_endpoint(code: str):
+    """
+    获取多智能体证据案卷库 (Case Files)
+    穿透真实离线大模型报告与实时量化多因子多空辩论
+    动态测算置信度与证据级别，杜绝硬编码写死
+    """
+    from app.services.dossier_service import get_stock_dossier
+    market, normalized_code = _detect_market_and_code(code)
+    try:
+        data = await get_stock_dossier(normalized_code)
+        return ok(data)
+    except Exception as e:
+        logger.error(f"获取多智能体案卷库失败: {code}, 错误: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取多智能体案卷库失败: {str(e)}")
+
+
+@router.post("/{code}/workflow/execute", response_model=dict)
+async def execute_stock_workflow_endpoint(code: str):
+    """
+    真实执行 7 级多智能体协同流水线推演
+    摒弃前端假动画与写死日志，进行事实级量化与多智能体推导
+    """
+    from app.services.dossier_service import execute_stock_workflow
+    market, normalized_code = _detect_market_and_code(code)
+    try:
+        data = await execute_stock_workflow(normalized_code)
+        return ok(data)
+    except Exception as e:
+        logger.error(f"执行多智能体工作流流水线失败: {code}, 错误: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"执行工作流流水线失败: {str(e)}")
+
+
 @router.get("/{code}/news", response_model=dict)
 async def get_news(code: str, days: int = 30, limit: int = 50, include_announcements: bool = True, current_user: Optional[dict] = Depends(get_optional_current_user)):
     """获取A股新闻与公告"""

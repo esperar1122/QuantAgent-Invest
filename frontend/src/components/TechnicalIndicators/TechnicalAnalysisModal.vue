@@ -843,80 +843,105 @@
                   <span class="arb-title">多智能体协同研判收敛结论</span>
                 </div>
                 <div class="arb-right">
-                  <span class="arb-rating" :class="displaySnapshot?.overall?.type === 'bullish' ? 'bullish' : 'neutral'">
-                    最终评级: {{ displayRating }} ({{ displayScore }}分)
+                  <span class="arb-rating" :class="dossierData?.arbitration?.bias === 'bullish' ? 'bullish' : 'neutral'">
+                    最终评级: {{ dossierData?.arbitration?.rating || displayRating }} ({{ dossierData?.arbitration?.score ? Number(dossierData.arbitration.score).toFixed(1) : displayScore }}分)
                   </span>
                   <span class="arb-range tabular-nums">
-                    建议操作区间: ¥{{ (currentStock.price * 0.98).toFixed(2) }} - ¥{{ (currentStock.price * 1.02).toFixed(2) }}
+                    建议操作区间: ¥{{ dossierData?.arbitration?.suggested_entry_low ? Number(dossierData.arbitration.suggested_entry_low).toFixed(pxPrec) : (currentStock.price * 0.98).toFixed(pxPrec) }} - ¥{{ dossierData?.arbitration?.suggested_entry_high ? Number(dossierData.arbitration.suggested_entry_high).toFixed(pxPrec) : (currentStock.price * 1.02).toFixed(pxPrec) }}
                   </span>
                 </div>
               </div>
 
-              <!-- 4 大智能体专题案卷网格 -->
+              <!-- 4 大智能体专题案卷网格 (真·动态置信度与证据级别) -->
               <div class="case-grid">
-                <!-- 宏观政策 -->
-                <div class="case-card">
-                  <div class="case-header">
-                    <span class="agent-tag macro">MACRO AGENT 宏观政策</span>
-                    <span class="verify-badge">已核验</span>
+                <template v-if="dossierData?.cases && dossierData.cases.length > 0">
+                  <div 
+                    v-for="cItem in dossierData.cases" 
+                    :key="cItem.id" 
+                    class="case-card"
+                    :class="{ 'risk-card': cItem.is_risk }"
+                  >
+                    <div class="case-header">
+                      <span class="agent-tag" :class="cItem.id">{{ cItem.agent_name }}</span>
+                      <span class="verify-badge" :class="{ warn: cItem.is_risk }">{{ cItem.is_risk ? '风险审查' : '已核验' }}</span>
+                    </div>
+                    <div class="case-title">{{ cItem.title }}</div>
+                    <div class="case-body">{{ cItem.body }}</div>
+                    <div class="case-footer" :class="{ warn: cItem.is_risk }">
+                      <span>{{ cItem.is_risk ? '风控模型: ' + cItem.evidence_level : '证据级别: ' + cItem.evidence_level }}</span>
+                      <span class="tabular-nums">置信度: {{ cItem.confidence }}%</span>
+                      <template v-if="cItem.is_risk">
+                        <span>止损: ¥{{ Number(cItem.stop_loss).toFixed(pxPrec) }}</span>
+                        <span>上限: {{ cItem.max_position }}</span>
+                      </template>
+                    </div>
                   </div>
-                  <div class="case-title">{{ currentStock.sector }} 产业支持与宏观流动性共振</div>
-                  <div class="case-body">
-                    顶层产业支持政策持续落地，{{ currentStock.name }} ({{ currentStock.code }}) 处于行业核心生态位，享受产业资本与政策专项定向赋能，资产配置价值凸显。
+                </template>
+                <template v-else>
+                  <!-- 宏观政策 -->
+                  <div class="case-card">
+                    <div class="case-header">
+                      <span class="agent-tag macro">MACRO AGENT 宏观政策</span>
+                      <span class="verify-badge">已核验</span>
+                    </div>
+                    <div class="case-title">{{ currentStock.sector }} 产业支持与宏观流动性共振</div>
+                    <div class="case-body">
+                      顶层产业支持政策持续落地，{{ currentStock.name }} ({{ currentStock.code }}) 处于行业核心生态位，享受产业资本与政策专项定向赋能，资产配置价值凸显。
+                    </div>
+                    <div class="case-footer">
+                      <span>证据级别: 强事实</span>
+                      <span>置信度: 91%</span>
+                    </div>
                   </div>
-                  <div class="case-footer">
-                    <span>证据级别: 强事实</span>
-                    <span>置信度: 91%</span>
-                  </div>
-                </div>
 
-                <!-- 技术形态 -->
-                <div class="case-card">
-                  <div class="case-header">
-                    <span class="agent-tag tech">TECHNICAL AGENT 技术形态</span>
-                    <span class="verify-badge">已核验</span>
+                  <!-- 技术形态 -->
+                  <div class="case-card">
+                    <div class="case-header">
+                      <span class="agent-tag tech">TECHNICAL AGENT 技术形态</span>
+                      <span class="verify-badge">已核验</span>
+                    </div>
+                    <div class="case-title">{{ displaySnapshot?.ma?.arrangement || '日K线顺向多头排列，量能温和放大' }}</div>
+                    <div class="case-body">
+                      标的现点位 ¥{{ currentStock.price.toFixed(pxPrec) }}，均线系统呈现{{ displaySnapshot?.ma?.arrangement || '顺向排列' }}。MACD 处于{{ displaySnapshot?.macd?.signal || '良性运行区间' }}（柱体态势: {{ displaySnapshot?.macd?.hist_trend || '红柱放大' }}），成交额 {{ currentStock.amount }} 亿，日换手率 {{ currentStock.turnover.toFixed(2) }}%，量价结构与动能指标保持算法推演共振。
+                    </div>
+                    <div class="case-footer">
+                      <span>证据级别: 量价共振</span>
+                      <span>置信度: 88%</span>
+                    </div>
                   </div>
-                  <div class="case-title">{{ displaySnapshot?.ma?.arrangement || '日K线顺向多头排列，量能温和放大' }}</div>
-                  <div class="case-body">
-                    标的现点位 ¥{{ currentStock.price.toFixed(pxPrec) }}，均线系统呈现{{ displaySnapshot?.ma?.arrangement || '顺向排列' }}。MACD 处于{{ displaySnapshot?.macd?.signal || '良性运行区间' }}（柱体态势: {{ displaySnapshot?.macd?.hist_trend || '红柱放大' }}），成交额 {{ currentStock.amount }} 亿，日换手率 {{ currentStock.turnover.toFixed(2) }}%，量价结构与动能指标保持算法推演共振。
-                  </div>
-                  <div class="case-footer">
-                    <span>证据级别: 量价共振</span>
-                    <span>置信度: 88%</span>
-                  </div>
-                </div>
 
-                <!-- 基本面产业 -->
-                <div class="case-card">
-                  <div class="case-header">
-                    <span class="agent-tag fund">FUNDAMENTAL AGENT 基本面</span>
-                    <span class="verify-badge">已核验</span>
+                  <!-- 基本面产业 -->
+                  <div class="case-card">
+                    <div class="case-header">
+                      <span class="agent-tag fund">FUNDAMENTAL AGENT 基本面</span>
+                      <span class="verify-badge">已核验</span>
+                    </div>
+                    <div class="case-title">经营韧性稳固，总市值规模达 {{ currentStock.marketCap }} 亿元</div>
+                    <div class="case-body">
+                      当前动态市盈率 {{ currentStock.pe }} 倍，市净率 {{ currentStock.pb }} 倍。基本面盈利与营收指标具备抗周期性，核心产品市场份额居行业第一梯队，抗风险护城河深厚。
+                    </div>
+                    <div class="case-footer">
+                      <span>证据级别: 财报与产业调研</span>
+                      <span>置信度: 85%</span>
+                    </div>
                   </div>
-                  <div class="case-title">经营韧性稳固，总市值规模达 {{ currentStock.marketCap }} 亿元</div>
-                  <div class="case-body">
-                    当前动态市盈率 {{ currentStock.pe }} 倍，市净率 {{ currentStock.pb }} 倍。基本面盈利与营收指标具备抗周期性，核心产品市场份额居行业第一梯队，抗风险护城河深厚。
-                  </div>
-                  <div class="case-footer">
-                    <span>证据级别: 财报与产业调研</span>
-                    <span>置信度: 85%</span>
-                  </div>
-                </div>
 
-                <!-- 风险控制 -->
-                <div class="case-card risk-card">
-                  <div class="case-header">
-                    <span class="agent-tag risk">RISK AGENT 风险审计</span>
-                    <span class="verify-badge warn">风险审查</span>
+                  <!-- 风险控制 -->
+                  <div class="case-card risk-card">
+                    <div class="case-header">
+                      <span class="agent-tag risk">RISK AGENT 风险审计</span>
+                      <span class="verify-badge warn">风险审查</span>
+                    </div>
+                    <div class="case-title">系统性波动防御与动态风控阈值指引</div>
+                    <div class="case-body">
+                      防范大盘系统性回撤及行业供需短期错配扰动。建议严格依据左侧仓位管理模型，防守位止损线设置于近期关键支撑位。
+                    </div>
+                    <div class="case-footer warn">
+                      <span>建议止损线: ¥{{ (currentStock.price * 0.92).toFixed(pxPrec) }}</span>
+                      <span>单票敞口上限: 20%</span>
+                    </div>
                   </div>
-                  <div class="case-title">系统性波动防御与动态风控阈值指引</div>
-                  <div class="case-body">
-                    防范大盘系统性回撤及行业供需短期错配扰动。建议严格依据左侧仓位管理模型，防守位止损线设置于近期关键支撑位。
-                  </div>
-                  <div class="case-footer warn">
-                    <span>建议止损线: ¥{{ (currentStock.price * 0.92).toFixed(pxPrec) }}</span>
-                    <span>单票敞口上限: 20%</span>
-                  </div>
-                </div>
+                </template>
               </div>
             </div>
           </el-tab-pane>
@@ -1453,12 +1478,15 @@ function updateClock() {
   liveClock.value = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
 }
 
+const dossierData = ref<any>(null)
+
 // 供外部打开调用
-const open = (code: string, name?: string, tab: string = 'indicators') => {
+const open = (code: string, name?: string, tab: string = 'indicators', passedDossier: any = null) => {
   currentCode.value = code
   currentName.value = name || ''
   activeTab.value = tab || 'indicators'
   visible.value = true
+  dossierData.value = passedDossier || null
   updateClock()
 
   // 状态彻底清空，防止出现上一只股票残留的快照与指标
@@ -1547,8 +1575,13 @@ const fetchAllData = async (force = false) => {
     const quotePromise = stocksApi.getQuote(code, force).catch(() => null)
     // 2. 获取专业技术指标全套诊断与K线序列
     const indicatorPromise = stocksApi.getIndicators(code, period.value, 120, force).catch(() => null)
+    // 3. 获取多智能体证据案卷库
+    const dossierPromise = stocksApi.getDossier(code).catch(() => null)
 
-    const [quoteRes, indicatorRes] = await Promise.all([quotePromise, indicatorPromise])
+    const [quoteRes, indicatorRes, dossierRes] = await Promise.all([quotePromise, indicatorPromise, dossierPromise])
+    if (dossierRes) {
+      dossierData.value = (dossierRes as any)?.data || dossierRes
+    }
 
     // 处理实时行情
     if (quoteRes) {

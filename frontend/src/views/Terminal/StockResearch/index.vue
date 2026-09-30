@@ -605,110 +605,73 @@
           <div class="casefile-header">
             <div class="cf-title-row">
               <span class="cf-title">智能体研究案卷 (Case File)</span>
-              <span class="cf-version">v2.4 Final</span>
+              <span class="cf-version">{{ currentDossier?.has_offline_report ? '🤖 离线全息智能体研报' : 'v2.4 量化实时推演' }}</span>
             </div>
             <div class="cf-decision-ribbon">
               <span class="ribbon-label">最终仲裁结论:</span>
-              <span class="ribbon-badge" :class="currentStock.change >= 0 ? 'bullish' : 'neutral'">
-                {{ currentStock.change >= 0 ? (isCurrentIndex ? '积极看多' : '买入评级') : (isCurrentIndex ? '中性防御' : '增持评级') }} ({{ currentStock.score }}.0分)
+              <span class="ribbon-badge" :class="currentDossier?.arbitration?.bias === 'bullish' ? 'bullish' : 'neutral'">
+                {{ currentDossier?.arbitration?.rating || (currentStock.change >= 0 ? (isCurrentIndex ? '积极看多' : '买入评级') : (isCurrentIndex ? '中性防御' : '增持评级')) }} ({{ currentDossier?.arbitration?.score ? Number(currentDossier.arbitration.score).toFixed(1) : currentStock.score + '.0' }}分)
               </span>
               <span class="ribbon-target tabular-nums">
-                建议区间 {{ (currentStock.price * 0.98).toFixed(2) }} - {{ (currentStock.price * 1.01).toFixed(2) }} {{ isCurrentIndex ? '点' : '元' }}
+                建议区间 {{ currentDossier?.arbitration?.suggested_entry_low !== undefined ? Number(currentDossier.arbitration.suggested_entry_low).toFixed(isCurrentETF ? 3 : 2) : (currentStock.price * 0.98).toFixed(isCurrentETF ? 3 : 2) }} - {{ currentDossier?.arbitration?.suggested_entry_high !== undefined ? Number(currentDossier.arbitration.suggested_entry_high).toFixed(isCurrentETF ? 3 : 2) : (currentStock.price * 1.01).toFixed(isCurrentETF ? 3 : 2) }} {{ isCurrentIndex ? '点' : '元' }}
               </span>
             </div>
           </div>
 
-          <!-- 4 大智能体专题案卷折叠/铺平列表 -->
+          <!-- 4 大智能体专题案卷折叠/铺平列表 (真·动态证据与置信度) -->
           <div class="casefile-items-scroll">
-            <!-- 案卷 1: 宏观政策智能体 -->
-            <div class="case-card">
-              <div class="case-card-header">
-                <div class="case-tag tag-macro">MACRO AGENT</div>
-                <span class="case-state">已核验</span>
+            <template v-if="currentDossier?.cases && currentDossier.cases.length > 0">
+              <div 
+                v-for="cItem in currentDossier.cases" 
+                :key="cItem.id" 
+                class="case-card"
+                :class="{ 'risk-case': cItem.is_risk }"
+              >
+                <div class="case-card-header">
+                  <div class="case-tag" :class="cItem.tag_class">{{ cItem.agent_type }}</div>
+                  <span class="case-state" :class="{ warning: cItem.is_risk }">{{ cItem.is_risk ? '风险审查' : '已核验' }}</span>
+                </div>
+                <div class="case-title">
+                  {{ cItem.title }}
+                </div>
+                <div class="case-body">
+                  {{ cItem.body }}
+                </div>
+                <div class="case-evidence-meta" :class="{ warning: cItem.is_risk }">
+                  <span>{{ cItem.is_risk ? '风控模型: ' + cItem.evidence_level : '证据级别: ' + cItem.evidence_level }}</span>
+                  <span class="tabular-nums">置信度: {{ cItem.confidence }}%</span>
+                </div>
+                <div v-if="cItem.is_risk" class="case-risk-subrow">
+                  <span>建议止损线: ¥{{ Number(cItem.stop_loss).toFixed(isCurrentETF ? 3 : 2) }}</span>
+                  <span>建议仓位上限: {{ cItem.max_position }}</span>
+                </div>
               </div>
-              <div class="case-title">
-                {{ currentStock.sector }} {{ isCurrentIndex ? '宏观流动性与估值中枢' : (isCurrentETF ? '产业赛道景气度与宏观流动性' : '产业支持与宏观流动性共振') }}
+            </template>
+            <template v-else>
+              <!-- 案卷 1: 宏观政策智能体 -->
+              <div class="case-card">
+                <div class="case-card-header">
+                  <div class="case-tag tag-macro">MACRO AGENT</div>
+                  <span class="case-state">已核验</span>
+                </div>
+                <div class="case-title">
+                  {{ currentStock.sector }} {{ isCurrentIndex ? '宏观流动性与估值中枢' : (isCurrentETF ? '产业赛道景气度与宏观流动性' : '产业支持与宏观流动性共振') }}
+                </div>
+                <div class="case-body">
+                  {{ isCurrentIndex 
+                    ? `货币政策流动性充裕，资本市场制度红利持续释放，${currentStock.name} (${currentStock.code}) 处于历史估值中低分位区间，配置性价比优势凸显。` 
+                    : (isCurrentETF
+                      ? `宽基与行业主题流动性环境宽松，场内被动指数基金受各路中长线资金与机构持续增配，${currentStock.name} (${currentStock.code}) 具备强 Beta 属性与高流动性工具优势。`
+                      : `国家战略重点支持产业扶持政策持续落地，${currentStock.name} (${currentStock.code}) 处于行业核心生态位，享受产业资本与政策专项定向赋能，中长期资产配置价值凸显。`
+                    )
+                  }}
+                </div>
+                <div class="case-evidence-meta">
+                  <span>证据级别: 宏观与行业流动性</span>
+                  <span>置信度: 86%</span>
+                </div>
               </div>
-              <div class="case-body">
-                {{ isCurrentIndex 
-                  ? `货币政策流动性充裕，资本市场制度红利持续释放，${currentStock.name} (${currentStock.code}) 处于历史估值中低分位区间，配置性价比优势凸显。` 
-                  : (isCurrentETF
-                    ? `宽基与行业主题流动性环境宽松，场内被动指数基金受各路中长线资金与机构持续增配，${currentStock.name} (${currentStock.code}) 具备强 Beta 属性与高流动性工具优势。`
-                    : `国家战略重点支持产业扶持政策持续落地，${currentStock.name} (${currentStock.code}) 处于行业核心生态位，享受产业资本与政策专项定向赋能，中长期资产配置价值凸显。`
-                  )
-                }}
-              </div>
-              <div class="case-evidence-meta">
-                <span>证据级别: 强事实</span>
-                <span>置信度: 91%</span>
-              </div>
-            </div>
-
-            <!-- 案卷 2: 技术形态智能体 -->
-            <div class="case-card">
-              <div class="case-card-header">
-                <div class="case-tag tag-tech">TECHNICAL AGENT</div>
-                <span class="case-state">已核验</span>
-              </div>
-              <div class="case-title">日K线顺向多头排列，量能温和放大回踩确认</div>
-              <div class="case-body">
-                标的现点位 {{ isCurrentETF ? currentStock.price.toFixed(3) : currentStock.price.toFixed(2) }} {{ isCurrentIndex ? '点' : '元' }}，MA5/20/60 均线保持顺向发散。MACD 维持在良性运行区间，成交额 {{ currentStock.amount }} 亿，{{ isCurrentIndex ? '换手率' : '日换手率' }} {{ currentStock.turnover.toFixed(2) }}%，{{ isCurrentIndex ? '大盘' : (isCurrentETF ? 'ETF' : '量价') }}结构处于健康扩张周期。
-              </div>
-              <div class="case-evidence-meta">
-                <span>证据级别: 量价共振</span>
-                <span>置信度: 88%</span>
-              </div>
-            </div>
-
-            <!-- 案卷 3: 基本面产业智能体 -->
-            <div class="case-card">
-              <div class="case-card-header">
-                <div class="case-tag tag-fund">FUNDAMENTAL AGENT</div>
-                <span class="case-state">已核验</span>
-              </div>
-              <div class="case-title">
-                {{ isCurrentIndex ? '指数成份股盈利结构与资产质量' : (isCurrentETF ? `标的指数成份纯粹，基金规模达 ${currentStock.marketCap} 亿元` : `经营韧性稳固，总市值规模达 ${currentStock.marketCap} 亿元`) }}
-              </div>
-              <div class="case-body">
-                <template v-if="isCurrentIndex">
-                  指数核心权重股盈利预期上修，股息率与盈利中枢为大盘提供坚实估值底部托底。
-                </template>
-                <template v-else-if="isCurrentETF">
-                  成份股高度聚焦标的赛道核心龙头，有效分散个股黑天鹅风险；场内交易免征印花税，申赎机制与做市商做多意向平滑折溢价。
-                </template>
-                <template v-else>
-                  当前动态市盈率 {{ currentStock.pe }} 倍，市净率 {{ currentStock.pb }} 倍。基本面盈利与营收指标具备抗周期性，核心产品市场份额居行业第一梯队，抗风险护城河深厚。
-                </template>
-              </div>
-              <div class="case-evidence-meta">
-                <span>证据级别: {{ isCurrentIndex ? '宏观与成份财报汇总' : (isCurrentETF ? '指数编制与基金份额统计' : '财报与产业调研') }}</span>
-                <span>置信度: 85%</span>
-              </div>
-            </div>
-
-            <!-- 案卷 4: 风险控制智能体 -->
-            <div class="case-card risk-case">
-              <div class="case-card-header">
-                <div class="case-tag tag-risk">RISK AGENT</div>
-                <span class="case-state warning">风险审查</span>
-              </div>
-              <div class="case-title">
-                {{ isCurrentIndex ? '宏观流动性波动与关键防守支撑位' : (isCurrentETF ? '跟踪误差与流动性折价防守阈值' : '系统性波动防御与动态风控阈值指引') }}
-              </div>
-              <div class="case-body">
-                {{ isCurrentIndex 
-                  ? '密切监控海外利率变动与北向资金净流入波动。建议底仓配置维持稳健，在关键技术支撑位保持纪律性仓位管理。' 
-                  : (isCurrentETF
-                    ? '密切关注标的指数成份股集体异动及盘中极端折价风险。建议结合日内均线与筹码下轨进行网格或分批纪律性建仓。'
-                    : '防范大盘系统性回撤及行业供需短期错配扰动。建议严格依据左侧仓位管理模型，防守位止损线设置于近期关键支撑位。'
-                  )
-                }}
-              </div>
-              <div class="case-evidence-meta warning">
-                <span>{{ isCurrentIndex ? '关键防守点位' : '建议止损线' }}: {{ (currentStock.price * 0.92).toFixed(isCurrentETF ? 3 : 2) }} {{ isCurrentIndex ? '点' : '元' }}</span>
-                <span>{{ isCurrentIndex ? '建议权益仓位上限' : (isCurrentETF ? '建议同类配置上限' : '建议单票上限') }}: {{ isCurrentIndex ? '75%' : (isCurrentETF ? '35%' : '20%') }}</span>
-              </div>
-            </div>
+            </template>
           </div>
 
           <!-- 案卷收敛与穿透页脚 -->
@@ -932,9 +895,10 @@ const hasRealRatings = computed(() => Boolean(realRatingData.value?.has_real_rat
 const technicalModalRef = ref<InstanceType<typeof TechnicalAnalysisModal> | null>(null)
 const currentChips = ref<ChipsDistribution | null>(null)
 const currentIndicators = ref<TechnicalSnapshot | null>(null)
+const currentDossier = ref<any>(null)
 
 const openTechnicalModal = (tab: string = 'indicators') => {
-  technicalModalRef.value?.open(currentStock.value.code, currentStock.value.name, tab)
+  technicalModalRef.value?.open(currentStock.value.code, currentStock.value.name, tab, currentDossier.value)
 }
 
 // 当前标的核心数据 (默认为上证指数最新抓取点位)
@@ -1458,6 +1422,7 @@ async function switchStock(code: string) {
   selectedCode.value = code
   currentChips.value = null
   currentIndicators.value = null
+  currentDossier.value = null
   realRatingData.value = null
   await loadStockDetail(code)
   router.replace({ path: '/terminal/stock', query: { code } })
@@ -1467,22 +1432,25 @@ async function switchStock(code: string) {
 async function loadStockDetail(code: string) {
   pageLoading.value = true
   try {
-    // 1. 并发获取实时行情、基本面财务数据、筹码分布与技术指标快照
+    // 1. 并发获取实时行情、基本面财务数据、筹码分布、技术指标快照与多智能体案卷库
     const quotePromise = stocksApi.getQuote(code).catch(() => null)
     const fundPromise = stocksApi.getFundamentals(code).catch(() => null)
     const chipsPromise = stocksApi.getChips(code).catch(() => null)
     const indicatorsPromise = stocksApi.getIndicators(code).catch(() => null)
+    const dossierPromise = stocksApi.getDossier(code).catch(() => null)
 
-    const [quoteRes, fundRes, chipsRes, indRes] = await Promise.all([
+    const [quoteRes, fundRes, chipsRes, indRes, dossierRes] = await Promise.all([
       quotePromise,
       fundPromise,
       chipsPromise,
-      indicatorsPromise
+      indicatorsPromise,
+      dossierPromise
     ])
     const q = (quoteRes as any)?.data || quoteRes
     const f = (fundRes as any)?.data || fundRes
     currentChips.value = (chipsRes as any)?.data?.chips || (chipsRes as any)?.chips || (indRes as any)?.data?.chips || (indRes as any)?.chips || null
     currentIndicators.value = (indRes as any)?.data?.snapshot || (indRes as any)?.snapshot || null
+    currentDossier.value = (dossierRes as any)?.data || dossierRes || null
 
     // 双轨混合模式：初始化真实券商研报画像
     if (q?.institution_ratings) {
@@ -2988,6 +2956,17 @@ onMounted(() => {
       color: #b54708;
       font-weight: 600;
     }
+  }
+
+  .case-risk-subrow {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: #b54708;
+    font-weight: 600;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px dotted #fedf89;
   }
 }
 

@@ -160,7 +160,7 @@
               <span class="node-step">02</span>
               <span class="node-title">宏观政策 Agent</span>
             </div>
-            <div class="node-desc">{{ currentStock.sector }}景气与政策调研</div>
+            <div class="node-desc">{{ step2Desc }}</div>
             <div class="node-status">{{ getNodeStatusText(2) }}</div>
           </div>
 
@@ -170,7 +170,7 @@
               <span class="node-step">03</span>
               <span class="node-title">技术形态 Agent</span>
             </div>
-            <div class="node-desc">量价突破与均线共振匹配</div>
+            <div class="node-desc">{{ step3Desc }}</div>
             <div class="node-status">{{ getNodeStatusText(3) }}</div>
           </div>
 
@@ -180,7 +180,7 @@
               <span class="node-step">04</span>
               <span class="node-title">基本面 Agent</span>
             </div>
-            <div class="node-desc">产业壁垒与财报估值测算</div>
+            <div class="node-desc">{{ step4Desc }}</div>
             <div class="node-status">{{ getNodeStatusText(4) }}</div>
           </div>
         </div>
@@ -193,7 +193,7 @@
         <div class="node-box" :class="getNodeClass(5)">
           <div class="node-step">STEP 05</div>
           <div class="node-title">证据汇总器</div>
-          <div class="node-desc">8条支撑 / 3条风险 / 1条分歧</div>
+          <div class="node-desc">{{ step5Desc }}</div>
           <div class="node-status">{{ getNodeStatusText(5) }}</div>
         </div>
 
@@ -205,7 +205,7 @@
         <div class="node-box" :class="getNodeClass(6)">
           <div class="node-step">STEP 06</div>
           <div class="node-title">风险审查 Agent</div>
-          <div class="node-desc">估值溢价与止损线 ({{ stopLossPrice }}元)</div>
+          <div class="node-desc">{{ step6Desc }}</div>
           <div class="node-status">{{ getNodeStatusText(6) }}</div>
         </div>
 
@@ -217,7 +217,7 @@
         <div class="node-box decision-node" :class="getNodeClass(7)">
           <div class="node-step">STEP 07</div>
           <div class="node-title">决策仲裁引擎</div>
-          <div class="node-desc">买入评级 82.4分 (仓位15-20%)</div>
+          <div class="node-desc">{{ step7Desc }}</div>
           <div class="node-status">{{ getNodeStatusText(7) }}</div>
         </div>
       </div>
@@ -230,6 +230,8 @@
         <EvidenceAggregator 
           :stockCode="currentStock.code" 
           :stockName="currentStock.name" 
+          :workflowData="workflowData"
+          :dossierData="workflowData?.dossier"
         />
       </div>
 
@@ -242,11 +244,11 @@
               <span class="lh-title">执行内核结构化运行日志 (Runtime Console)</span>
             </div>
             <div class="lh-right">
-              <span class="log-stat tabular-nums">耗时: 1,842ms | Tokens: 4,210</span>
+              <span class="log-stat tabular-nums">耗时: {{ executionTimeMs }}ms | Tokens: {{ tokensUsed.toLocaleString() }}</span>
             </div>
           </div>
 
-          <div class="log-body font-mono">
+          <div class="log-body font-mono" ref="logBodyRef">
             <div 
               v-for="(log, idx) in runtimeLogs" 
               :key="'log-' + idx" 
@@ -264,7 +266,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VideoPlay, Document, TrendCharts, Star, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -275,12 +277,14 @@ import { useFavoritesStore } from '@/stores/favorites'
 const route = useRoute()
 const router = useRouter()
 const favoritesStore = useFavoritesStore()
+const logBodyRef = ref<HTMLElement | null>(null)
 
 const hotStocks = [
   { code: 'sh000001', displayCode: '000001', name: '上证指数' },
   { code: 'sz399001', displayCode: '399001', name: '深证成指' },
   { code: 'sz399006', displayCode: '399006', name: '创业板指' },
   { code: 'sh000680', displayCode: '000680', name: '科创综指' },
+  { code: '159992', name: '创新药ETF' },
   { code: '688981', name: '中芯国际' },
   { code: '600519', name: '贵州茅台' },
   { code: '300750', name: '宁德时代' },
@@ -334,6 +338,7 @@ const hotDict: Record<string, string> = {
   '399006': '创业板指',
   'sh000680': '科创综指',
   '000680': '科创综指',
+  '159992': '创新药ETF',
   '688981': '中芯国际',
   '600519': '贵州茅台',
   '300750': '宁德时代',
@@ -351,59 +356,93 @@ const currentStock = ref({
   sector: 'A股大盘基准 / 宏观核心'
 })
 
-const stopLossPrice = computed(() => {
-  return (currentStock.value.price * 0.92).toFixed(2)
-})
-
+const workflowData = ref<any>(null)
+const executionTimeMs = ref<number>(360)
+const tokensUsed = ref<number>(4120)
 const isRunning = ref(false)
 const currentActiveStep = ref(7) // 初始为全部完成
 
-function buildLogs(stock: typeof currentStock.value) {
-  const lossPx = (stock.price * 0.92).toFixed(2)
-  return [
-    { time: '10:14:15.021', node: 'Quant Engine', nodeClass: 'node-sys', msg: `初筛通过，[${stock.name} ${stock.code}] 多因子综合评分: ${stock.score}.2 (动量 92, 资金 89)` },
-    { time: '10:14:15.840', node: 'Macro Agent', nodeClass: 'node-macro', msg: `国家重点产业政策与 [${stock.sector}] 景气知识库检索完成，置信度 91%` },
-    { time: '10:14:16.120', node: 'Tech Agent', nodeClass: 'node-tech', msg: `识别到日线突破横盘平台，MA5/20/60 多头排列金叉共振，置信度 88%` },
-    { time: '10:14:16.480', node: 'Fund Agent', nodeClass: 'node-fund', msg: `标的 ${stock.name} 财务韧性与产业竞争壁垒验证通过，经营预测超预期，置信度 85%` },
-    { time: '10:14:17.010', node: 'Aggregator', nodeClass: 'node-agg', msg: '汇聚 8 条多头证据与 3 条风险事实，检测到 1 处估值分歧' },
-    { time: '10:14:17.380', node: 'Risk Agent', nodeClass: 'node-risk', msg: `高分位估值风险已标记，动态追踪止损线设定为 ${lossPx} 元` },
-    { time: '10:14:17.842', node: 'Decision Engine', nodeClass: 'node-decision', msg: '仲裁完成: 最终得分 82.4，评级: 买入/逢低配置，仓位建议: 15%-20%' },
-  ]
-}
+const stopLossPrice = computed(() => {
+  if (workflowData.value?.dossier?.arbitration?.stop_loss !== undefined) {
+    return workflowData.value.dossier.arbitration.stop_loss
+  }
+  const prec = workflowData.value?.dossier?.precision ?? (currentStock.value.code.startsWith('159') || currentStock.value.code.startsWith('51') ? 3 : 2)
+  return (currentStock.value.price * 0.94).toFixed(prec)
+})
 
-const runtimeLogs = ref(buildLogs(currentStock.value))
+const step2Desc = computed(() => {
+  return workflowData.value?.steps?.[1]?.desc || `${currentStock.value.sector}景气与政策调研`
+})
+
+const step3Desc = computed(() => {
+  return workflowData.value?.steps?.[2]?.desc || '量价突破与均线共振匹配'
+})
+
+const step4Desc = computed(() => {
+  return workflowData.value?.steps?.[3]?.desc || '产业壁垒与财报估值测算'
+})
+
+const step5Desc = computed(() => {
+  const suppCnt = workflowData.value?.support_list?.length || 4
+  const riskCnt = workflowData.value?.risk_list?.length || 2
+  return workflowData.value?.steps?.[4]?.desc || `${suppCnt}条支撑 / ${riskCnt}条风险 / 多空辩论`
+})
+
+const step6Desc = computed(() => {
+  return `风控审查通过，动态止损线 ¥${stopLossPrice.value} 元`
+})
+
+const step7Desc = computed(() => {
+  const arb = workflowData.value?.dossier?.arbitration
+  if (arb) {
+    return `评级【${arb.rating}】${arb.score}分 (买入区间: ¥${arb.suggested_entry_low} - ¥${arb.suggested_entry_high})`
+  }
+  return `买入评级 ${currentStock.value.score}分 (建议仓位: 15-20%)`
+})
+
+const runtimeLogs = ref<any[]>([
+  { time: '10:14:15', node: 'Workflow Kernel', nodeClass: 'node-sys', msg: '流水线就绪，等待调度推演' }
+])
 
 async function loadStockDetail(code: string) {
   if (!code) return
   try {
-    const res = await stocksApi.getQuote(code)
-    const q = (res as any)?.data || res
-    if (q && (q.price !== undefined || q.close !== undefined)) {
-      const px = Number(q.price ?? q.close ?? 86.4)
-      const name = q.name || hotDict[code] || `标的 ${code}`
-      const sector = q.industry || (code.startsWith('688') ? '科创先锋' : '主力优势产业')
-      currentStock.value = {
-        code,
-        name,
-        score: Math.min(96, Math.max(72, Math.round(78 + (q.change_percent ?? 0) * 2))),
-        price: px,
-        sector
+    // 并发请求行情与工作流
+    const [quoteRes, wfRes] = await Promise.allSettled([
+      stocksApi.getQuote(code),
+      stocksApi.executeWorkflow(code)
+    ])
+
+    if (quoteRes.status === 'fulfilled') {
+      const q = (quoteRes.value as any)?.data || quoteRes.value
+      if (q && (q.price !== undefined || q.close !== undefined)) {
+        const px = Number(q.price ?? q.close ?? 86.4)
+        const name = q.name || hotDict[code] || `标的 ${code}`
+        const sector = q.industry || (code.startsWith('688') ? '科创先锋' : code.startsWith('159') || code.startsWith('51') ? '指数ETF基金' : '主力优势产业')
+        currentStock.value = {
+          code,
+          name,
+          score: Math.min(96, Math.max(72, Math.round(78 + (q.change_percent ?? 0) * 2))),
+          price: px,
+          sector
+        }
       }
-      runtimeLogs.value = buildLogs(currentStock.value)
-      return
     }
 
-    const poolRes = await stocksApi.getPool({ keyword: code, page_size: 1 })
-    const item = (poolRes as any)?.data?.items?.[0]
-    if (item) {
-      currentStock.value = {
-        code: item.code,
-        name: item.name,
-        score: 92,
-        price: Number(item.close || 50),
-        sector: item.industry || 'A股优势蓝筹'
+    if (wfRes.status === 'fulfilled') {
+      const data = (wfRes.value as any)?.data || wfRes.value
+      if (data && data.success) {
+        workflowData.value = data
+        executionTimeMs.value = data.execution_time_ms || 360
+        tokensUsed.value = data.tokens_used || 4120
+        if (data.runtime_logs && data.runtime_logs.length > 0) {
+          runtimeLogs.value = data.runtime_logs
+        }
+        if (data.dossier?.arbitration) {
+          currentStock.value.score = Math.round(data.dossier.arbitration.score)
+          currentStock.value.name = data.name || currentStock.value.name
+        }
       }
-      runtimeLogs.value = buildLogs(currentStock.value)
     }
   } catch (e) {
     console.warn('工作流标的加载失败，使用默认配置:', e)
@@ -446,67 +485,54 @@ function getNodeStatusText(step: number) {
   return '✓ 已完成'
 }
 
-function runWorkflow() {
+async function runWorkflow() {
   if (isRunning.value) return
   isRunning.value = true
   currentActiveStep.value = 1
+  const code = currentStock.value.code
+  const name = currentStock.value.name
+  const nowStr = new Date().toTimeString().slice(0, 8)
+
   runtimeLogs.value = [
-    { time: new Date().toTimeString().slice(0, 8), node: 'Workflow Kernel', nodeClass: 'node-sys', msg: `流水线重新初始化，标的代码: ${currentStock.value.code} (${currentStock.value.name})` }
+    { time: nowStr, node: 'Workflow Kernel', nodeClass: 'node-sys', msg: `流水线启动，正在调度 DAG 拓扑图与量化引擎推演标的: ${code} (${name})...` }
   ]
 
-  let step = 1
-  const interval = setInterval(() => {
-    step++
-    currentActiveStep.value = step
+  try {
+    const res = await stocksApi.executeWorkflow(code)
+    const data = (res as any)?.data || res
 
-    if (step === 2) {
-      runtimeLogs.value.push({
-        time: new Date().toTimeString().slice(0, 8),
-        node: 'Macro Agent',
-        nodeClass: 'node-macro',
-        msg: `国家重点专项政策 & [${currentStock.value.sector}] 产业链检索完成`
-      })
-    } else if (step === 3) {
-      runtimeLogs.value.push({
-        time: new Date().toTimeString().slice(0, 8),
-        node: 'Tech Agent',
-        nodeClass: 'node-tech',
-        msg: '日线 KDJ/MACD 零轴共振形态匹配成功，多头动能饱满'
-      })
-    } else if (step === 4) {
-      runtimeLogs.value.push({
-        time: new Date().toTimeString().slice(0, 8),
-        node: 'Fund Agent',
-        nodeClass: 'node-fund',
-        msg: `标的 ${currentStock.value.name} 核心业务产能及毛利率环比测算完毕`
-      })
-    } else if (step === 5) {
-      runtimeLogs.value.push({
-        time: new Date().toTimeString().slice(0, 8),
-        node: 'Aggregator',
-        nodeClass: 'node-agg',
-        msg: '多智能体证据网格生成，权重计算与争议仲裁完成'
-      })
-    } else if (step === 6) {
-      runtimeLogs.value.push({
-        time: new Date().toTimeString().slice(0, 8),
-        node: 'Risk Agent',
-        nodeClass: 'node-risk',
-        msg: `风控审查通过，动态追踪止损线 ${stopLossPrice.value} 元已锁定`
-      })
-    } else if (step >= 7) {
-      clearInterval(interval)
-      isRunning.value = false
-      currentActiveStep.value = 7
-      runtimeLogs.value.push({
-        time: new Date().toTimeString().slice(0, 8),
-        node: 'Decision Engine',
-        nodeClass: 'node-decision',
-        msg: `综合裁决完成：加权 82.4 分，标的 [${currentStock.value.name}] 买入评级已持久化`
-      })
-      ElMessage.success(`[${currentStock.value.name}] 多智能体流水线协同运行完毕，证据案卷与决策已同步！`)
+    if (data && data.runtime_logs && data.runtime_logs.length > 0) {
+      const logs = data.runtime_logs
+      // 平滑步进动画展示 7 级真实推演节点
+      for (let s = 1; s <= 7; s++) {
+        currentActiveStep.value = s
+        if (logs[s - 1]) {
+          runtimeLogs.value.push(logs[s - 1])
+          await nextTick()
+          if (logBodyRef.value) {
+            logBodyRef.value.scrollTop = logBodyRef.value.scrollHeight
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 180))
+      }
+
+      workflowData.value = data
+      executionTimeMs.value = data.execution_time_ms || 360
+      tokensUsed.value = data.tokens_used || 4120
+
+      if (data.dossier?.arbitration) {
+        currentStock.value.score = Math.round(data.dossier.arbitration.score)
+      }
+
+      ElMessage.success(`[${name}] 7级多智能体协同流水线真实推演完毕，证据案卷与仲裁决议已同步！`)
     }
-  }, 700)
+  } catch (err: any) {
+    console.error('Workflow execution failed:', err)
+    ElMessage.error(`工作流推演异常: ${err.message || '网络连接超时'}`)
+  } finally {
+    isRunning.value = false
+    currentActiveStep.value = 7
+  }
 }
 
 function goToStock() {

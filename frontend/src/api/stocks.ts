@@ -204,6 +204,21 @@ export const stocksApi = {
   },
 
   /**
+   * 获取多智能体证据案卷库 (Case Files)
+   * 穿透真实离线大模型报告与实时量化多因子多空辩论
+   */
+  async getDossier(symbol: string) {
+    return ApiClient.get<any>(`/api/stocks/${symbol}/dossier`)
+  },
+
+  /**
+   * 真实执行多智能体协同流水线推演
+   */
+  async executeWorkflow(symbol: string) {
+    return ApiClient.post<any>(`/api/stocks/${symbol}/workflow/execute`)
+  },
+
+  /**
    * 获取市场总览全景数据（KPI宏观指标、行业板块、量化主线、事件流）
    */
   async getMarketOverview(forceRefresh = false) {

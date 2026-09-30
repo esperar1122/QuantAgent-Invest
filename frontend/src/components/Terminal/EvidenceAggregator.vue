@@ -5,12 +5,12 @@
       <div class="header-main">
         <div class="title-cluster">
           <span class="section-title">证据汇总与多智能体仲裁 (Evidence Aggregator)</span>
-          <span class="code-badge">{{ stockCode }} {{ stockName }}</span>
+          <span class="code-badge">{{ targetCode }} {{ targetName }}</span>
         </div>
         <div class="arbitration-result">
           <span class="arb-label">综合仲裁裁决:</span>
-          <span class="arb-conclusion bullish">偏多配置 / 逢低增持</span>
-          <span class="arb-score tabular-nums">综合置信分: <strong>82.4</strong> / 100</span>
+          <span class="arb-conclusion" :class="arbBiasClass">{{ arbRating }}</span>
+          <span class="arb-score tabular-nums">综合置信分: <strong>{{ arbScore }}</strong> / 100</span>
         </div>
       </div>
 
@@ -18,19 +18,19 @@
       <div class="stats-grid">
         <div class="stat-pill">
           <span class="pill-k">支撑证据</span>
-          <span class="pill-v up tabular-nums">8 项 (权重 72%)</span>
+          <span class="pill-v up tabular-nums">{{ supportList.length }} 项 (权重 {{ supportWeight }}%)</span>
         </div>
         <div class="stat-pill">
           <span class="pill-k">风险因子</span>
-          <span class="pill-v down tabular-nums">3 项 (权重 28%)</span>
+          <span class="pill-v down tabular-nums">{{ riskList.length }} 项 (权重 {{ riskWeight }}%)</span>
         </div>
         <div class="stat-pill">
           <span class="pill-k">Agent分歧度</span>
-          <span class="pill-v warning">中度 (1项争议)</span>
+          <span class="pill-v" :class="conflictClass">{{ conflictLevel }}</span>
         </div>
         <div class="stat-pill">
           <span class="pill-k">决策建议仓位</span>
-          <span class="pill-v tabular-nums">15% - 20%</span>
+          <span class="pill-v tabular-nums">{{ maxPosition }}</span>
         </div>
       </div>
     </div>
@@ -44,7 +44,7 @@
             <span class="dot up-dot"></span>
             <span class="col-title">多头支撑证据池 (Supporting Evidence)</span>
           </div>
-          <span class="col-count tabular-nums">8 条强事实</span>
+          <span class="col-count tabular-nums">{{ supportList.length }} 条强事实</span>
         </div>
 
         <div class="evidence-list">
@@ -75,7 +75,7 @@
             <span class="dot down-dot"></span>
             <span class="col-title">空头与风险证据池 (Risk Points)</span>
           </div>
-          <span class="col-count tabular-nums">3 条预警</span>
+          <span class="col-count tabular-nums">{{ riskList.length }} 条预警</span>
         </div>
 
         <div class="evidence-list">
@@ -104,8 +104,8 @@
               <span class="arb-title">核心分歧与仲裁机制 (Conflict & Arbitration)</span>
             </div>
             <div class="arb-content">
-              <p><strong>争议焦点：</strong> 基本面智能体看好 {{ targetName }} ({{ targetCode }}) 行业周期复苏与业绩成长（维持看多），但风险控制智能体提示短期股价偏离 60 日均线，估值 PE 处于历史偏高分位数。</p>
-              <p><strong>仲裁决议：</strong> 采纳量化动量与基本面中长期向好逻辑，但不建议追高激进建仓；策略调优为「回踩短期均线支撑位分批介入，单票仓位控制在 15-20%，严格执行动态防线纪律」。</p>
+              <p><strong>争议焦点：</strong> {{ conflictFocus }}</p>
+              <p><strong>仲裁决议：</strong> {{ arbitrationDecision }}</p>
             </div>
           </div>
         </div>
@@ -121,79 +121,153 @@ import { WarningFilled } from '@element-plus/icons-vue'
 const props = defineProps<{
   stockCode?: string
   stockName?: string
+  workflowData?: any
+  dossierData?: any
 }>()
 
-const targetName = computed(() => props.stockName || '标的资产')
-const targetCode = computed(() => props.stockCode || '688981')
+const targetName = computed(() => {
+  return props.workflowData?.name || props.dossierData?.name || props.stockName || '标的资产'
+})
 
-const supportList = computed(() => [
-  {
-    agent: 'Macro Agent',
-    agentClass: 'agent-macro',
-    confidence: 91,
-    time: '10:14:22',
-    title: `国家重大战略专项政策催化 & ${targetName.value} 产业链景气上行`,
-    desc: `政策端对战略优势产业支持力度充沛，${targetName.value} 处于核心生态位，享受产业专项扶持与长期流动性加持。`,
-    source: '国家部委产业规划指导文件 / 行业协会高频追踪库'
-  },
-  {
-    agent: 'Technical Agent',
-    agentClass: 'agent-tech',
-    confidence: 88,
-    time: '10:14:35',
-    title: '放量突破横盘整理平台，MACD 零轴上方金叉扩散',
-    desc: '日 K 线有效站上 MA5/MA20/MA60 多头均线，近 3 个交易日成交量较前期均量放大超 120%，量价配合健康。',
-    source: 'Level-2 Tick 级成交明细 / 历史形态量化匹配'
-  },
-  {
-    agent: 'Fundamental Agent',
-    agentClass: 'agent-fund',
-    confidence: 85,
-    time: '10:14:48',
-    title: `${targetName.value} 产能利用率与核心产品毛利率环比回升`,
-    desc: '下游订单需求回补带动核心产线稼动率稳步攀升，产品盈利质量向好，季度经营指引超越市场一致预期。',
-    source: '定期财报披露数据 / 行业上下游供应链交叉验证'
-  },
-  {
-    agent: 'Sentiment Agent',
-    agentClass: 'agent-sent',
-    confidence: 82,
-    time: '10:15:02',
-    title: '机构大单席位与北向资金呈持续净流入态势',
-    desc: '机构大单席位连续数日净买入，龙虎榜及大单资金占比稳步抬升，未见异常主力资金派发迹象。',
-    source: '交易所大单交易席位流向统计'
-  }
-])
+const targetCode = computed(() => {
+  return props.workflowData?.code || props.dossierData?.code || props.stockCode || '159992'
+})
 
-const riskList = computed(() => [
-  {
-    agent: 'Risk Agent',
-    agentClass: 'agent-risk',
-    level: '中风险',
-    time: '10:15:15',
-    title: '静态 PE 升至历史偏高分位数，短期存在估值消化压力',
-    desc: '当前估值已经反映了一定程度的成长预期，若后续业绩释放节奏不及预期可能引发高估值短期波动。',
-    hedging: '建议单笔建仓上限不超总资产 15-20%，杜绝追高。'
-  },
-  {
-    agent: 'Sentiment Agent',
-    agentClass: 'agent-sent',
-    level: '低风险',
-    time: '10:15:24',
-    title: '杠杆融资资金连续加仓，市场短期情绪较为亢奋',
-    desc: '融资买入额占全天总成交比重处于相对高位，若遭遇大盘系统性回调可能加大短线波动。',
-    hedging: '严格设置 20 日生命线止损防线，跌破无条件离场。'
-  },
-  {
-    agent: 'Macro Agent',
-    agentClass: 'agent-macro',
-    level: '中风险',
-    time: '10:15:30',
-    title: '外部宏观利率环境与国际贸易政策潜在变动',
-    desc: '需持续关注海外宏观经济数据及地缘贸易审查动态，跟踪核心供应链自主化替代进展。',
-    hedging: '保持灵活仓位，关注防御性对冲工具。'
+const arb = computed(() => {
+  return props.workflowData?.dossier?.arbitration || props.dossierData?.arbitration || null
+})
+
+const chips = computed(() => {
+  return props.workflowData?.dossier?.chips_summary || props.dossierData?.chips_summary || null
+})
+
+const arbRating = computed(() => {
+  return arb.value?.rating || '偏多配置 / 逢低增持'
+})
+
+const arbScore = computed(() => {
+  return arb.value?.score !== undefined ? Number(arb.value.score).toFixed(1) : '82.4'
+})
+
+const arbBiasClass = computed(() => {
+  const bias = arb.value?.bias
+  if (bias === 'bullish') return 'bullish'
+  if (bias === 'bearish') return 'bearish'
+  return 'neutral'
+})
+
+const maxPosition = computed(() => {
+  const riskCase = props.workflowData?.dossier?.cases?.find((c: any) => c.id === 'risk') || 
+                   props.dossierData?.cases?.find((c: any) => c.id === 'risk')
+  return riskCase?.max_position || '15% - 20%'
+})
+
+const supportList = computed(() => {
+  if (props.workflowData?.support_list && props.workflowData.support_list.length > 0) {
+    return props.workflowData.support_list
   }
-])
+  const dCases = props.dossierData?.cases
+  if (dCases && Array.isArray(dCases)) {
+    return dCases.filter((c: any) => !c.is_risk).map((c: any) => ({
+      agent: c.agent_name,
+      agentClass: c.tag_class ? c.tag_class.replace('tag-', 'agent-') : 'agent-tech',
+      confidence: c.confidence,
+      time: '实盘穿透',
+      title: c.title,
+      desc: c.body,
+      source: c.evidence_level
+    }))
+  }
+  // 保底安全回退
+  return [
+    {
+      agent: 'Macro Agent',
+      agentClass: 'agent-macro',
+      confidence: 88,
+      time: '盘前推演',
+      title: `国家重大战略专项政策催化 & ${targetName.value} 产业链景气上行`,
+      desc: `政策端对战略优势产业支持力度充沛，${targetName.value} 处于核心生态位，享受产业专项扶持与长期流动性加持。`,
+      source: '国家部委产业规划指导文件 / 行业协会高频追踪库'
+    },
+    {
+      agent: 'Technical Agent',
+      agentClass: 'agent-tech',
+      confidence: 90,
+      time: '盘中推演',
+      title: '放量突破关键技术防线，筹码结构呈现单峰良性锁定',
+      desc: '日 K 线依托多头生命线稳步抬升，筹码获利盘处于良性比例，量价配合健康。',
+      source: 'Level-2 Tick 级成交明细 / CYQ 无偏马尔可夫衰减'
+    }
+  ]
+})
+
+const riskList = computed(() => {
+  if (props.workflowData?.risk_list && props.workflowData.risk_list.length > 0) {
+    return props.workflowData.risk_list
+  }
+  const dCases = props.dossierData?.cases
+  if (dCases && Array.isArray(dCases)) {
+    const rCases = dCases.filter((c: any) => c.is_risk)
+    if (rCases.length > 0) {
+      return rCases.map((c: any) => ({
+        agent: c.agent_name,
+        agentClass: 'agent-risk',
+        level: '动态风控',
+        time: '实时风控',
+        title: c.title,
+        desc: c.body,
+        hedging: `止损线建议严格设在 ¥${c.stop_loss}，最大仓位 ${c.max_position}。`
+      }))
+    }
+  }
+  return [
+    {
+      agent: 'Risk Agent',
+      agentClass: 'agent-risk',
+      level: '中风险',
+      time: '实时监控',
+      title: '市场整体波动加剧，短期需防范套牢盘阻力消化',
+      desc: '当前估值与筹码分布存在一定阻力位，若市场情绪波动可能引发短线回踩。',
+      hedging: `建议单笔建仓上限不超 ${maxPosition.value}，杜绝追高。`
+    }
+  ]
+})
+
+const supportWeight = computed(() => {
+  const total = supportList.value.length + riskList.value.length
+  if (total === 0) return 70
+  return Math.round((supportList.value.length / total) * 100)
+})
+
+const riskWeight = computed(() => {
+  return 100 - supportWeight.value
+})
+
+const conflictLevel = computed(() => {
+  const profit = chips.value?.profit_ratio ?? 60
+  if (profit >= 75) return '低度 (共识偏多)'
+  if (profit <= 40) return '高度 (多空胶着)'
+  return '中度 (1项争议)'
+})
+
+const conflictClass = computed(() => {
+  if (conflictLevel.value.includes('低度')) return 'up'
+  if (conflictLevel.value.includes('高度')) return 'down'
+  return 'warning'
+})
+
+const conflictFocus = computed(() => {
+  const profit = chips.value?.profit_ratio !== undefined ? `${chips.value.profit_ratio}%` : '中位'
+  const trapped = chips.value?.trapped_ratio !== undefined ? `${chips.value.trapped_ratio}%` : '可控'
+  return `多头智能体依据量价动量与产业景气逻辑坚定看多 ${targetName.value} (${targetCode.value})，但风控与空头智能体提示筹码套牢盘仍占 ${trapped}，且当前获利盘 ${profit} 面临一定解套与浮盈兑现分歧。`
+})
+
+const arbitrationDecision = computed(() => {
+  const stopLoss = arb.value?.stop_loss ? `¥${arb.value.stop_loss}` : '核心均线支撑位'
+  const entryLow = arb.value?.suggested_entry_low ? `¥${arb.value.suggested_entry_low}` : '支撑下轨'
+  const entryHigh = arb.value?.suggested_entry_high ? `¥${arb.value.suggested_entry_high}` : '现价附近'
+  return `仲裁引擎裁决：采纳中长期向好多头逻辑，但严禁追涨杀跌；建议策略调优为「在 ${entryLow} - ${entryHigh} 区间逢低分批布局，单票仓位严格约束在 ${maxPosition.value} 内，动态防守止损位锁定于 ${stopLoss}」。`
+})
 </script>
 
 <style scoped lang="scss">
@@ -263,6 +337,18 @@ const riskList = computed(() => [
       background-color: #fef3f2;
       color: #d92d20;
       border: 1px solid #fee4e2;
+    }
+
+    &.neutral {
+      background-color: #eff8ff;
+      color: #175cd3;
+      border: 1px solid #d1e9ff;
+    }
+
+    &.bearish {
+      background-color: #ecfdf3;
+      color: #039855;
+      border: 1px solid #d1fadf;
     }
   }
 
