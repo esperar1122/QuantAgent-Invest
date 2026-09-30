@@ -189,10 +189,10 @@ const isTickerRefreshing = ref(false)
 const lastTickerUpdate = ref('')
 
 const indices = ref([
-  { code: '000001', fullCode: 'sh000001', name: '上证指数', price: 3901.66, changePercent: -0.89 },
-  { code: '399001', fullCode: 'sz399001', name: '深证成指', price: 13401.49, changePercent: -1.72 },
-  { code: '399006', fullCode: 'sz399006', name: '创业板指', price: 3315.97, changePercent: -1.88 },
-  { code: '000680', fullCode: 'sh000680', name: '科创综指', price: 1935.07, changePercent: -1.70 }
+  { code: '000001', fullCode: 'sh000001', name: '上证指数', price: 3843.0, changePercent: 0.0 },
+  { code: '399001', fullCode: 'sz399001', name: '深证成指', price: 12917.0, changePercent: 0.0 },
+  { code: '399006', fullCode: 'sz399006', name: '创业板指', price: 3146.0, changePercent: 0.0 },
+  { code: '000680', fullCode: 'sh000680', name: '科创综指', price: 1832.0, changePercent: 0.0 }
 ])
 
 async function fetchLiveIndices(force = false) {
@@ -204,14 +204,15 @@ async function fetchLiveIndices(force = false) {
     if (data && Array.isArray(data.indices) && data.indices.length > 0) {
       data.indices.forEach((remoteIdx: any) => {
         const local = indices.value.find(
-          (i) => i.code === remoteIdx.code || i.fullCode === remoteIdx.full_code || i.fullCode === remoteIdx.code
+          (i) => i.code === remoteIdx.code || i.fullCode === remoteIdx.full_code || i.fullCode === remoteIdx.fullCode || i.fullCode === remoteIdx.code
         )
         if (local) {
           if (remoteIdx.price !== undefined && remoteIdx.price !== null) {
             local.price = Number(remoteIdx.price)
           }
-          if (remoteIdx.change_percent !== undefined && remoteIdx.change_percent !== null) {
-            local.changePercent = Number(remoteIdx.change_percent)
+          const chgPct = remoteIdx.changePercent ?? remoteIdx.change_percent ?? remoteIdx.pct_chg
+          if (chgPct !== undefined && chgPct !== null) {
+            local.changePercent = Number(chgPct)
           }
         }
       })

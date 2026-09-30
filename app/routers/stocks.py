@@ -2314,6 +2314,7 @@ async def get_market_indices(
             "name": item["name"],
             "price": round(price, 2),
             "changePercent": round(change_percent, 2),
+            "change_percent": round(change_percent, 2),
             "change": round(change, 2),
             "amount": amount
         })
