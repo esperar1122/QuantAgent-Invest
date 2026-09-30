@@ -46,6 +46,7 @@ CORE_ETF_CATALOG: List[Dict[str, Any]] = [
     {"code": "159865", "symbol": "159865.SZ", "tx_sym": "sz159865", "name": "养殖ETF国泰", "category": "industry", "category_name": "制造周期", "tag": "农业周期反转"},
     {"code": "512690", "symbol": "512690.SH", "tx_sym": "sh512690", "name": "酒ETF鹏华", "category": "industry", "category_name": "制造周期", "tag": "白酒高ROE资产"},
     {"code": "512010", "symbol": "512010.SH", "tx_sym": "sh512010", "name": "医药ETF易方达", "category": "industry", "category_name": "制造周期", "tag": "创新药与医疗"},
+    {"code": "159992", "symbol": "159992.SZ", "tx_sym": "sz159992", "name": "创新药ETF银华", "category": "industry", "category_name": "制造周期", "tag": "创新药领头羊"},
     {"code": "512400", "symbol": "512400.SH", "tx_sym": "sh512400", "name": "有色金属ETF南方", "category": "industry", "category_name": "制造周期", "tag": "工业金属周期"},
     {"code": "515220", "symbol": "515220.SH", "tx_sym": "sh515220", "name": "煤炭ETF国泰", "category": "industry", "category_name": "制造周期", "tag": "高股息周期"},
     {"code": "515080", "symbol": "515080.SH", "tx_sym": "sh515080", "name": "中证红利ETF招商", "category": "industry", "category_name": "制造周期", "tag": "红利策略标杆"},

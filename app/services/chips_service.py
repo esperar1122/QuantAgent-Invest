@@ -30,7 +30,10 @@ def calculate_chips_distribution(
     vis_bins: int = 40,
     margin_ratio: Optional[float] = None,
     block_trades: Optional[List[Dict[str, Any]]] = None,
-    capital_events: Optional[List[Dict[str, Any]]] = None
+    capital_events: Optional[List[Dict[str, Any]]] = None,
+    total_shares: Optional[float] = None,
+    is_etf: Optional[bool] = None,
+    precision: Optional[int] = None
 ) -> Optional[Dict[str, Any]]:
     """
     根据历史K线序列计算筹码分布数据（全面升级：行为金融学非对称衰减 + GMM + ATR自适应 + 6大硬核修正规则）
@@ -92,6 +95,10 @@ def calculate_chips_distribution(
         if current_price is None or current_price <= 0:
             current_price = float(df["close"].iloc[-1])
 
+        if precision is None:
+            # ETF 或低价标的（< 5.0元）自动启用 3 位小数（厘）精度
+            precision = 3 if (is_etf or current_price < 5.0) else 2
+
         p_min = float(df["low"].min()) * 0.98
         p_max = float(df["high"].max()) * 1.02
         if p_max <= p_min:
@@ -109,16 +116,16 @@ def calculate_chips_distribution(
             atr_14 = (p_max - p_min) / 100.0
 
         if bins_count is None:
-            dynamic_step = max(0.01, atr_14 * 0.25)
+            dynamic_step = max(0.002 if precision == 3 else 0.01, atr_14 * 0.25)
             calc_bins = int((p_max - p_min) / dynamic_step)
-            bins_count = max(80, min(200, calc_bins))
+            bins_count = max(120 if precision == 3 else 80, min(200, calc_bins))
 
         prices = np.linspace(p_min, p_max, bins_count)
         step = prices[1] - prices[0]
         chips = np.zeros(bins_count)
 
         # -------------------------------------------------------------
-        # 2. 异常对倒清洗过滤器 (Wash-Trading Outlier Filter)
+        # 2. 异常对倒清洗与换手率补全 (Wash-Trading Outlier Filter)
         # -------------------------------------------------------------
         if has_turnover:
             df["turnover_clean"] = df["turnover_rate"].fillna(2.0)
@@ -126,11 +133,18 @@ def calculate_chips_distribution(
             amp = (df["high"] - df["low"]) / df["close"].replace(0, np.nan).fillna(1.0)
             is_manipulated = (df["turnover_clean"] > ma5_turnover * 3.0) & (amp < 0.02)
             df.loc[is_manipulated, "turnover_clean"] = ma5_turnover.loc[is_manipulated] * 1.5
+        elif total_shares and total_shares > 0:
+            df["turnover_clean"] = (df["volume"] / total_shares) * 100.0
         else:
-            df["turnover_clean"] = 2.0
+            med_vol = df["volume"].median() if "volume" in df.columns else 1.0
+            if med_vol > 0:
+                est_shares = med_vol / 0.025
+                df["turnover_clean"] = (df["volume"] / est_shares) * 100.0
+            else:
+                df["turnover_clean"] = 2.5
 
         # -------------------------------------------------------------
-        # 3. 逐日更新迭代 (融合：停牌衰减重置 + 一字板折减 + 非对称衰减 + GMM)
+        # 3. 逐日更新迭代 (融合：停牌衰减重置 + 一字板折减 + 标准无偏马尔可夫衰减 + VWAP三角分布)
         # -------------------------------------------------------------
         prev_date = None
         prev_close = None
@@ -161,15 +175,22 @@ def calculate_chips_distribution(
             if vol <= 0:
                 vol = 1.0
 
-            # 当日均价 VWAP (优先 amount/volume)
+            # 当日均价 VWAP (按成交额/成交量精准加权)
             if has_amount and pd.notna(row.get("amount")) and float(row["amount"]) > 0 and vol > 0:
-                avg_price = float(row["amount"]) / vol
-                avg_price = max(l, min(h, avg_price))
+                amt_val = float(row["amount"])
+                p_lot = amt_val / (vol * 100.0)
+                p_share = amt_val / vol
+                if l * 0.9 <= p_lot <= h * 1.1:
+                    avg_price = max(l, min(h, p_lot))
+                elif l * 0.9 <= p_share <= h * 1.1:
+                    avg_price = max(l, min(h, p_share))
+                else:
+                    avg_price = (o + c + h + l) / 4.0
             else:
                 avg_price = (o + c + h + l) / 4.0
 
             # 基础换手率
-            raw_t = min(float(row["turnover_clean"]) / 100.0, 0.80)
+            raw_t = min(max(float(row["turnover_clean"]) / 100.0, 0.0001), 0.80)
 
             # ---------------------------------------------------------
             # 规则 1: 涨跌停板当日换手率折减
@@ -179,7 +200,6 @@ def calculate_chips_distribution(
                 day_amp = (h - l) / prev_close
                 day_pct_chg = abs((c - prev_close) / prev_close) * 100.0
                 if day_amp <= 0.012 and day_pct_chg >= 9.5:
-                    # 将当日换手率乘以 0.4 折减系数，排除恐慌盘集中出逃形成的虚假成本峰
                     raw_t = raw_t * 0.4
                     limit_board_count += 1
 
@@ -187,19 +207,11 @@ def calculate_chips_distribution(
 
             base_alpha = min(raw_t * decay_factor, 0.95)
 
-            # --- 非对称衰减模型 (行为金融学处置效应) ---
-            # 获利盘：散户急于落袋为安，加速衰减 (alpha * 1.25)
-            # 套牢盘：散户死扛装死，减缓衰减 (alpha * 0.75)
-            profit_mask = prices < c
-            decay_rates = np.where(
-                profit_mask,
-                np.minimum(0.95, base_alpha * 1.25),
-                np.minimum(0.95, base_alpha * 0.75)
-            )
-            chips = chips * (1.0 - decay_rates)
+            # --- 标准无偏马尔可夫换手衰减 (同花顺/通达信基准：所有价格筹码按当日换手率严格物理守恒衰减) ---
+            chips = chips * (1.0 - base_alpha)
 
-            # --- 混合高斯分布 (GMM) 日内筹码注入 ---
-            new_chip_amount = base_alpha * vol
+            # --- 筹码守恒新注入量 (保持总量归一守恒，彻底消除 vol^2 平方量纲失真) ---
+            new_chip_amount = base_alpha
             idx_low = max(0, int((l - p_min) / step))
             idx_high = min(bins_count - 1, int((h - p_min) / step))
 
@@ -207,25 +219,18 @@ def calculate_chips_distribution(
                 chips[idx_low] += new_chip_amount
             else:
                 day_prices = prices[idx_low : idx_high + 1]
-                price_range = max(0.01, h - l)
-
-                # 混合高斯三元分量：
-                # 1. 主峰 (70%): VWAP 中心，主力全天密集吸筹/出货
-                sigma1 = max(step * 0.5, price_range / 6.0)
-                g1 = np.exp(-0.5 * ((day_prices - avg_price) / sigma1) ** 2)
-
-                # 2. 次峰 (20%): Close 尾盘集合竞价与决战中心
-                sigma2 = max(step * 0.5, price_range / 8.0)
-                g2 = np.exp(-0.5 * ((day_prices - c) / sigma2) ** 2)
-
-                # 3. 宽尾 (10%): 全天宽幅扩散扫单
-                sigma3 = max(step * 0.5, price_range / 2.5)
-                g3 = np.exp(-0.5 * ((day_prices - (h + l) / 2.0) / sigma3) ** 2)
-
-                g_composite = 0.70 * g1 + 0.20 * g2 + 0.10 * g3
-                sum_g = g_composite.sum()
-                if sum_g > 0:
-                    chips[idx_low : idx_high + 1] += (g_composite / sum_g) * new_chip_amount
+                # 标准有界三角分布：以日内 VWAP 均价为顶点峰值，底边覆盖 [l, h]
+                w = np.where(
+                    day_prices <= avg_price,
+                    (day_prices - l) / (avg_price - l + 1e-6),
+                    (h - day_prices) / (h - avg_price + 1e-6)
+                )
+                w = np.maximum(0.0, w)
+                sum_w = w.sum()
+                if sum_w > 0:
+                    chips[idx_low : idx_high + 1] += (w / sum_w) * new_chip_amount
+                else:
+                    chips[idx_low : idx_high + 1] += new_chip_amount / (idx_high - idx_low + 1)
 
         # -------------------------------------------------------------
         # 规则 6: 股东变更 / 股本变动事件硬修正
@@ -343,7 +348,7 @@ def calculate_chips_distribution(
             pattern_type = "bullish" if current_price >= avg_cost else "neutral"
         elif abs(current_price - avg_cost) / avg_cost <= 0.025:
             peak_pattern = "成本线胶着博弈"
-            pattern_desc = f"现价接近主力平均成本 (¥{avg_cost:.2f})，多空双方在成本中枢剧烈拉锯。"
+            pattern_desc = f"现价接近主力平均成本 (¥{avg_cost:.{precision}f})，多空双方在成本中枢剧烈拉锯。"
             pattern_type = "neutral"
         elif current_price < avg_cost:
             peak_pattern = "上方阻力沉重"
@@ -373,19 +378,19 @@ def calculate_chips_distribution(
             strength = "strong" if pct >= 5.0 else ("medium" if pct >= 2.5 else "light")
             if p_peak < current_price:
                 support_levels.append({
-                    "price": round(float(p_peak), 2),
+                    "price": round(float(p_peak), precision),
                     "chip_percent": round(float(pct), 2),
                     "distance_percent": round(float(dist_pct), 2),
                     "strength": strength,
-                    "desc": f"下方 ¥{p_peak:.2f} 堆积 {pct:.1f}% 密集筹码支撑"
+                    "desc": f"下方 ¥{p_peak:.{precision}f} 堆积 {pct:.1f}% 密集筹码支撑"
                 })
             else:
                 resistance_levels.append({
-                    "price": round(float(p_peak), 2),
+                    "price": round(float(p_peak), precision),
                     "chip_percent": round(float(pct), 2),
                     "distance_percent": round(float(dist_pct), 2),
                     "strength": strength,
-                    "desc": f"上方 ¥{p_peak:.2f} 堆积 {pct:.1f}% 套牢抛压阻力"
+                    "desc": f"上方 ¥{p_peak:.{precision}f} 堆积 {pct:.1f}% 套牢抛压阻力"
                 })
 
         # 合并大宗交易解禁阻力峰
@@ -428,9 +433,9 @@ def calculate_chips_distribution(
                     vac_high = prices[right]
                     if not any(abs(v["low"] - vac_low) < step * 2 for v in vacuum_zones):
                         vacuum_zones.append({
-                            "low": round(float(vac_low), 2),
-                            "high": round(float(vac_high), 2),
-                            "desc": f"¥{vac_low:.2f} ~ ¥{vac_high:.2f} 筹码稀薄真空区 (快速突破/回落通道)"
+                            "low": round(float(vac_low), precision),
+                            "high": round(float(vac_high), precision),
+                            "desc": f"¥{vac_low:.{precision}f} ~ ¥{vac_high:.{precision}f} 筹码稀薄真空区 (快速突破/回落通道)"
                         })
 
         # -------------------------------------------------------------
@@ -445,7 +450,7 @@ def calculate_chips_distribution(
         if profit_ratio >= 70:
             bull_points.append(f"获利盘占比高达 {profit_ratio:.1f}%，大部分持筹者处于盈利状态，浮动杀跌抛压极轻，多头进攻动能强劲。")
         if primary_sup:
-            sup_desc = f"现价紧贴下方核心密集支撑峰 ¥{primary_sup['price']} (距离仅 {abs(primary_sup['distance_percent']):.1f}%)"
+            sup_desc = f"现价紧贴下方核心密集支撑峰 ¥{primary_sup['price']:.{precision}f} (距离仅 {abs(primary_sup['distance_percent']):.1f}%)"
             if not has_high_margin:
                 sup_desc += "，下档护盘承接有力，具备扎实安全垫。"
             else:
@@ -456,9 +461,9 @@ def calculate_chips_distribution(
         if not resistance_levels:
             bull_points.append("现价上方无显著套牢密集峰压制，已进入筹码天空领空，向上阻力微弱。")
         elif primary_res and abs(primary_res["distance_percent"]) > 8.0:
-            bull_points.append(f"距上方首个主要阻力位 ¥{primary_res['price']} 尚有 +{primary_res['distance_percent']:.1f}% 开阔空间，短线盈亏比优异。")
+            bull_points.append(f"距上方首个主要阻力位 ¥{primary_res['price']:.{precision}f} 尚有 +{primary_res['distance_percent']:.1f}% 开阔空间，短线盈亏比优异。")
         if not bull_points:
-            bull_points.append(f"现价在 ¥{avg_cost:.2f} 筹码中枢附近蓄势整固，清洗浮筹后有望展开向上试盘。")
+            bull_points.append(f"现价在 ¥{avg_cost:.{precision}f} 筹码中枢附近蓄势整固，清洗浮筹后有望展开向上试盘。")
 
         # 空方辩手论点
         bear_points = []
@@ -469,13 +474,13 @@ def calculate_chips_distribution(
         if trapped_ratio >= 60:
             bear_points.append(f"上方套牢盘高达 {trapped_ratio:.1f}%；在处置效应（死扛心理）下高位未割套牢筹码大量留存，反弹逼近成本将遭凶猛解套抛压。")
         if primary_res:
-            bear_points.append(f"上方 ¥{primary_res['price']} 处盘踞着显著套牢峰 (阻力筹码占比 {primary_res['chip_percent']}%)，距离现价仅 {primary_res['distance_percent']:.1f}%，空间被严密压制。")
+            bear_points.append(f"上方 ¥{primary_res['price']:.{precision}f} 处盘踞着显著套牢峰 (阻力筹码占比 {primary_res['chip_percent']}%)，距离现价仅 {primary_res['distance_percent']:.1f}%，空间被严密压制。")
         if profit_premium < -4.0:
-            bear_points.append(f"现价跌破全市场平均成本线 ¥{avg_cost:.2f} (折价 {profit_premium:.1f}%)，多头成本防线告破，需防范多杀多踩踏。")
+            bear_points.append(f"现价跌破全市场平均成本线 ¥{avg_cost:.{precision}f} (折价 {profit_premium:.1f}%)，多头成本防线告破，需防范多杀多踩踏。")
         if not primary_sup:
             bear_points.append("现价下方缺乏密集筹码峰保护，下档承接虚浮，若大盘转弱容易加速下探。")
         elif primary_sup and abs(primary_sup["distance_percent"]) > 10.0:
-            bear_points.append(f"距离下方首个有效支撑峰 ¥{primary_sup['price']} 尚有 {abs(primary_sup['distance_percent']):.1f}% 回调空间，下行防守位偏远。")
+            bear_points.append(f"距离下方首个有效支撑峰 ¥{primary_sup['price']:.{precision}f} 尚有 {abs(primary_sup['distance_percent']):.1f}% 回调空间，下行防守位偏远。")
         if not bear_points:
             bear_points.append("虽处获利格局，但需严防获利盘高位兑现欲望加剧引发冲高回落。")
 
@@ -484,45 +489,45 @@ def calculate_chips_distribution(
             verdict_bias = "强烈看多 (Strong Bullish)"
             tactics = "主升浪持股与顺势做多"
             strategy_summary = "筹码呈高位强凝聚与突破态势，下方强支撑护盘，建议以核心支撑位上方为依托顺势加仓或持股。"
-            stop_loss = round(primary_sup["price"] * 0.97, 2) if primary_sup else round(current_price * 0.95, 2)
-            target_price = round(primary_res["price"], 2) if primary_res else round(current_price * 1.15, 2)
+            stop_loss = round(primary_sup["price"] * 0.97, precision) if primary_sup else round(current_price * 0.95, precision)
+            target_price = round(primary_res["price"], precision) if primary_res else round(current_price * 1.15, precision)
         elif trapped_ratio >= 70 or has_high_margin:
             verdict_bias = "谨慎防守 (Bearish Defence)"
             tactics = "逢高减仓与防守观望"
             strategy_summary = "上方套牢盘厚重或两融杠杆偏高，反弹多为解套抽逃行情，切忌盲目追高，等待底部长周期换手单峰凝聚。"
-            stop_loss = round(primary_sup["price"] * 0.96, 2) if primary_sup else round(current_price * 0.93, 2)
-            target_price = round(primary_res["price"] * 0.98, 2) if primary_res else round(avg_cost, 2)
+            stop_loss = round(primary_sup["price"] * 0.96, precision) if primary_sup else round(current_price * 0.93, precision)
+            target_price = round(primary_res["price"] * 0.98, precision) if primary_res else round(avg_cost, precision)
         elif conc70 <= 9.0:
             verdict_bias = "变盘临界 (Breakout Watch)"
             tactics = "突破跟随与两手准备"
             strategy_summary = "筹码极致收敛，单峰高度控盘，多空进入决战临界点。密切关注放量突破阻力位方向跟随入场。"
-            stop_loss = round((primary_sup["price"] if primary_sup else p15) * 0.98, 2)
-            target_price = round((primary_res["price"] if primary_res else p85) * 1.05, 2)
+            stop_loss = round((primary_sup["price"] if primary_sup else p15) * 0.98, precision)
+            target_price = round((primary_res["price"] if primary_res else p85) * 1.05, precision)
         else:
             verdict_bias = "箱体博弈 (Neutral Box)"
             tactics = "支撑低吸，阻力高抛"
-            strategy_summary = f"在支撑位 ¥{primary_sup['price'] if primary_sup else p15:.2f} 与压力位 ¥{primary_res['price'] if primary_res else p85:.2f} 之间进行网格震荡波段操作。"
-            stop_loss = round(p5 * 0.98, 2)
-            target_price = round(primary_res["price"] if primary_res else p85, 2)
+            strategy_summary = f"在支撑位 ¥{(primary_sup['price'] if primary_sup else p15):.{precision}f} 与压力位 ¥{(primary_res['price'] if primary_res else p85):.{precision}f} 之间进行网格震荡波段操作。"
+            stop_loss = round(p5 * 0.98, precision)
+            target_price = round(primary_res["price"] if primary_res else p85, precision)
 
         quant_debate = {
             "bull_thesis": {
                 "title": "量化多方进攻论点 (Bull Case)",
                 "confidence": min(95, max(10, int(profit_ratio * 0.8 + (10 - min(10, conc70)) * 2))),
                 "points": bull_points,
-                "key_defense": f"¥{primary_sup['price']:.2f}" if primary_sup else "无明显密集峰"
+                "key_defense": f"¥{primary_sup['price']:.{precision}f}" if primary_sup else "无明显密集峰"
             },
             "bear_thesis": {
                 "title": "量化空方防守警告 (Bear Case)",
                 "confidence": min(95, max(10, int((100 - profit_ratio) * 0.8 + conc70 * 1.5 + (15 if has_high_margin else 0)))),
                 "points": bear_points,
-                "key_resistance": f"¥{primary_res['price']:.2f}" if primary_res else "无历史套牢峰"
+                "key_resistance": f"¥{primary_res['price']:.{precision}f}" if primary_res else "无历史套牢峰"
             },
             "arbiter": {
                 "bias": verdict_bias,
                 "tactics": tactics,
                 "summary": strategy_summary,
-                "suggested_entry": f"¥{primary_sup['price'] if primary_sup else avg_cost:.2f} 附近",
+                "suggested_entry": f"¥{(primary_sup['price'] if primary_sup else avg_cost):.{precision}f} 附近",
                 "stop_loss": stop_loss,
                 "target_price": target_price,
                 "risk_reward_ratio": round(abs((target_price - current_price) / max(0.01, (current_price - stop_loss))), 2) if stop_loss < current_price else 1.0
@@ -544,7 +549,7 @@ def calculate_chips_distribution(
             mid_idx = (start_idx + end_idx - 1) // 2
             mid_price = float(prices[min(mid_idx, bins_count - 1)])
             histogram.append({
-                "price": round(mid_price, 2),
+                "price": round(mid_price, precision),
                 "percent": round(pct_sum, 2),
                 "is_profit": mid_price <= current_price
             })
@@ -564,16 +569,16 @@ def calculate_chips_distribution(
             applied_rules.append(f"股本变动事件修正生效({len(capital_events)}项)")
 
         return {
-            "current_price": round(current_price, 2),
-            "avg_cost": round(avg_cost, 2),
+            "current_price": round(current_price, precision),
+            "avg_cost": round(avg_cost, precision),
             "profit_ratio": round(profit_ratio, 1),
             "trapped_ratio": trapped_ratio,
             "profit_premium": round(profit_premium, 2),
-            "cost_range_90": [round(p5, 2), round(p95, 2)],
+            "cost_range_90": [round(p5, precision), round(p95, precision)],
             "concentration_90": round(conc90, 1),
-            "cost_range_70": [round(p15, 2), round(p85, 2)],
+            "cost_range_70": [round(p15, precision), round(p85, precision)],
             "concentration_70": round(conc70, 1),
-            "median_cost": round(p50, 2),
+            "median_cost": round(p50, precision),
             "peak_pattern": peak_pattern,
             "pattern_desc": pattern_desc,
             "pattern_type": pattern_type,

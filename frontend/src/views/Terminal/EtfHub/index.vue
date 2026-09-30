@@ -89,6 +89,7 @@
           >
             <span class="leader-rank">{{ idx + 1 }}</span>
             <span class="leader-name">{{ item.name }}</span>
+            <span class="leader-price tabular-nums font-mono" v-if="item.price">¥{{ item.price.toFixed(3) }}</span>
             <span class="leader-pct tabular-nums color-up">+{{ item.pct_chg.toFixed(2) }}%</span>
           </div>
         </div>
@@ -187,6 +188,7 @@
           >
             <span class="arrow">{{ etf.pct_chg >= 0 ? '▲' : '▼' }}</span>
             <span class="val">{{ etf.pct_chg >= 0 ? '+' : '' }}{{ etf.pct_chg.toFixed(2) }}%</span>
+            <span class="sub-change-amt" v-if="etf.change !== undefined">({{ etf.change >= 0 ? '+' : '' }}{{ etf.change.toFixed(3) }})</span>
           </div>
         </div>
 
@@ -998,6 +1000,13 @@ onUnmounted(() => {
 
       .arrow {
         font-size: 10px;
+      }
+
+      .sub-change-amt {
+        font-size: 10px;
+        font-weight: 500;
+        opacity: 0.85;
+        margin-left: 2px;
       }
 
       &.badge-up {

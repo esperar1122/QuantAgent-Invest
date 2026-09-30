@@ -1009,17 +1009,18 @@ const tradeDecision = computed(() => {
   const conc70 = chips?.concentration_70 ?? 9.5
   const quantDebate = chips?.quant_debate
 
-  // 1. 基准点位推算
-  const buyPointPx = sup ? sup.price : +(px * 0.96).toFixed(2)
+  // 1. 基准点位推算（ETF自动精确到厘: 3位小数，股票精确到分: 2位小数）
+  const prec = isCurrentETF.value ? 3 : 2
+  const buyPointPx = sup ? +(sup.price.toFixed(prec)) : +(px * 0.96).toFixed(prec)
   const buyDist = +(((buyPointPx - px) / px) * 100).toFixed(2)
 
-  const addPointPx = res ? +(res.price * 1.01).toFixed(2) : +(px * 1.03).toFixed(2)
+  const addPointPx = res ? +(res.price * 1.01).toFixed(prec) : +(px * 1.03).toFixed(prec)
   const addDist = +(((addPointPx - px) / px) * 100).toFixed(2)
 
-  const sellPointPx = res ? res.price : (quantDebate?.arbiter?.target_price || +(px * 1.08).toFixed(2))
+  const sellPointPx = res ? +(res.price.toFixed(prec)) : (quantDebate?.arbiter?.target_price ? +(Number(quantDebate.arbiter.target_price).toFixed(prec)) : +(px * 1.08).toFixed(prec))
   const sellDist = +(((sellPointPx - px) / px) * 100).toFixed(2)
 
-  const stopLossPx = sup ? +(sup.price * 0.97).toFixed(2) : (quantDebate?.arbiter?.stop_loss || +(buyPointPx * 0.96).toFixed(2))
+  const stopLossPx = sup ? +(sup.price * 0.97).toFixed(prec) : (quantDebate?.arbiter?.stop_loss ? +(Number(quantDebate.arbiter.stop_loss).toFixed(prec)) : +(buyPointPx * 0.96).toFixed(prec))
   const stopDist = +(((stopLossPx - px) / px) * 100).toFixed(2)
 
   const riskRewardRatio = Math.max(0.5, +(Math.abs(sellPointPx - px) / Math.max(0.01, Math.abs(px - stopLossPx))).toFixed(2))
@@ -1042,12 +1043,12 @@ const tradeDecision = computed(() => {
     hasBuySignal = true
     signalType = 'buy'
     signalTitle = '🟢 触发回踩建仓买入信号'
-    summaryReason = `现价 (¥${px.toFixed(2)}) 紧贴全市场核心筹码密集峰 S1 支撑位 (¥${sup.price.toFixed(2)})，下档承接力强劲，下行防守空间被锁死，具备波段最高胜率与优异盈亏比。`
+    summaryReason = `现价 (¥${px.toFixed(prec)}) 紧贴全市场核心筹码密集峰 S1 支撑位 (¥${sup.price.toFixed(prec)})，下档承接力强劲，下行防守空间被锁死，具备波段最高胜率与优异盈亏比。`
   } else if (isBreakout) {
     hasBuySignal = true
     signalType = 'breakout_buy'
     signalTitle = '🚀 触发放量突破买入信号'
-    summaryReason = `现价 (¥${px.toFixed(2)}) 放量突破上方套牢密集峰 R1 阻力位 (¥${res.price.toFixed(2)})，上方进入筹码真空加速通道，多头主升浪确立，适合果断建仓或加仓顺势做多。`
+    summaryReason = `现价 (¥${px.toFixed(prec)}) 放量突破上方套牢密集峰 R1 阻力位 (¥${res.price.toFixed(prec)})，上方进入筹码真空加速通道，多头主升浪确立，适合果断建仓或加仓顺势做多。`
   } else if (isOversoldReversal) {
     hasBuySignal = true
     signalType = 'buy'
@@ -1065,7 +1066,7 @@ const tradeDecision = computed(() => {
     signalTitle = '⚪ 日内无买点：半空中观望'
     const distToSup = sup ? (((px - sup.price) / sup.price) * 100).toFixed(1) : '3.5'
     summaryReason = `当前股价处于支撑位与阻力位之间的震荡中枢半空中（距下方支撑峰还有 -${distToSup}% 空间），此时开仓盈亏比不足，追高极易回撤。`
-    intradayWarning = `⚠️【日内开仓预警】：当前股价脱离支撑位处于半空中，日内无高胜率买点，暂不建议买入！切忌盲目追高，请挂单耐心等待回踩至建仓参考位 ¥${buyPointPx.toFixed(2)} 附近。`
+    intradayWarning = `⚠️【日内开仓预警】：当前股价脱离支撑位处于半空中，日内无高胜率买点，暂不建议买入！切忌盲目追高，请挂单耐心等待回踩至建仓参考位 ¥${buyPointPx.toFixed(prec)} 附近。`
   }
 
   // 3. 构建 4 个操作点位及其详尽理由
@@ -1073,7 +1074,7 @@ const tradeDecision = computed(() => {
     price: buyPointPx,
     distancePct: buyDist,
     label: isNearSupport ? '当前回踩建仓区间' : '挂单回踩低吸点',
-    reason: `以全市场第一核心筹码密集峰(¥${buyPointPx.toFixed(2)})为买点锚点。此处沉淀大量多头真金白银底仓，护盘意愿最强，回踩到位后反弹概率极高，能将最大回撤风险锁死在 2%~3% 之内。`,
+    reason: `以全市场第一核心筹码密集峰(¥${buyPointPx.toFixed(prec)})为买点锚点。此处沉淀大量多头真金白银底仓，护盘意愿最强，回踩到位后反弹概率极高，能将最大回撤风险锁死在 2%~3% 之内。`,
     isActionableToday: isNearSupport || isOversoldReversal
   }
 
@@ -1081,21 +1082,21 @@ const tradeDecision = computed(() => {
     price: addPointPx,
     distancePct: addDist,
     label: '放量突破加仓点',
-    reason: `以有效放量站上第一大套牢阻力峰(¥${addPointPx.toFixed(2)})为加仓触发线。确认越过重套牢区后，上方进入筹码真空低阻力通道，无历史解套抛压，可顺势加仓享受主升浪加速。`
+    reason: `以有效放量站上第一大套牢阻力峰(¥${addPointPx.toFixed(prec)})为加仓触发线。确认越过重套牢区后，上方进入筹码真空低阻力通道，无历史解套抛压，可顺势加仓享受主升浪加速。`
   }
 
   const sellPoint = {
     price: sellPointPx,
     distancePct: sellDist,
     label: '首要目标减仓点',
-    reason: `逼近上方首要密集套牢峰(¥${sellPointPx.toFixed(2)})。此处沉淀大量历史套牢盘，在处置效应下持筹者保本抛售意愿极强，叠加短线获利盘共振回吐，极易引发脉冲式冲高回落，建议果断分批减仓落袋为安。`
+    reason: `逼近上方首要密集套牢峰(¥${sellPointPx.toFixed(prec)})。此处沉淀大量历史套牢盘，在处置效应下持筹者保本抛售意愿极强，叠加短线获利盘共振回吐，极易引发脉冲式冲高回落，建议果断分批减仓落袋为安。`
   }
 
   const stopLossPoint = {
     price: stopLossPx,
     distancePct: stopDist,
     label: '破位防守止损点',
-    reason: `若有效击穿该支撑底线(¥${stopLossPx.toFixed(2)})，说明多头防线崩溃。下方将陷入筹码稀薄真空区，极易诱发两融强平与多杀多踩踏，必须无条件离场保护小资金本金。`
+    reason: `若有效击穿该支撑底线(¥${stopLossPx.toFixed(prec)})，说明多头防线崩溃。下方将陷入筹码稀薄真空区，极易诱发两融强平与多杀多踩踏，必须无条件离场保护小资金本金。`
   }
 
   return {

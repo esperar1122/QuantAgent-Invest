@@ -779,21 +779,21 @@
                   <div class="order-side ask-side">
                     <div v-for="ask in askOrders" :key="ask.level" class="order-row">
                       <span class="order-lvl">{{ ask.level }}</span>
-                      <span class="order-px tabular-nums color-up">{{ ask.price.toFixed(2) }}</span>
+                      <span class="order-px tabular-nums color-up">{{ ask.price.toFixed(pxPrec) }}</span>
                       <span class="order-qty tabular-nums">{{ ask.qty }} 手</span>
                       <div class="order-bar" :style="{ width: Math.min(100, ((ask.qty || 0) / maxOrderQty) * 100) + '%' }"></div>
                     </div>
                   </div>
 
                   <div class="orderbook-divider">
-                    <span class="divider-label">现价 ¥{{ currentStock.price.toFixed(2) }}</span>
+                    <span class="divider-label">现价 ¥{{ currentStock.price.toFixed(pxPrec) }}</span>
                   </div>
 
                   <!-- 买盘五档 (买一至买五正序) -->
                   <div class="order-side bid-side">
                     <div v-for="bid in bidOrders" :key="bid.level" class="order-row">
                       <span class="order-lvl">{{ bid.level }}</span>
-                      <span class="order-px tabular-nums color-up">{{ bid.price.toFixed(2) }}</span>
+                      <span class="order-px tabular-nums color-up">{{ bid.price.toFixed(pxPrec) }}</span>
                       <span class="order-qty tabular-nums">{{ bid.qty }} 手</span>
                       <div class="order-bar bid-bar" :style="{ width: Math.min(100, ((bid.qty || 0) / maxOrderQty) * 100) + '%' }"></div>
                     </div>
@@ -878,7 +878,7 @@
                   </div>
                   <div class="case-title">{{ displaySnapshot?.ma?.arrangement || '日K线顺向多头排列，量能温和放大' }}</div>
                   <div class="case-body">
-                    标的现点位 ¥{{ currentStock.price.toFixed(2) }}，均线系统呈现{{ displaySnapshot?.ma?.arrangement || '顺向排列' }}。MACD 处于{{ displaySnapshot?.macd?.signal || '良性运行区间' }}（柱体态势: {{ displaySnapshot?.macd?.hist_trend || '红柱放大' }}），成交额 {{ currentStock.amount }} 亿，日换手率 {{ currentStock.turnover.toFixed(2) }}%，量价结构与动能指标保持算法推演共振。
+                    标的现点位 ¥{{ currentStock.price.toFixed(pxPrec) }}，均线系统呈现{{ displaySnapshot?.ma?.arrangement || '顺向排列' }}。MACD 处于{{ displaySnapshot?.macd?.signal || '良性运行区间' }}（柱体态势: {{ displaySnapshot?.macd?.hist_trend || '红柱放大' }}），成交额 {{ currentStock.amount }} 亿，日换手率 {{ currentStock.turnover.toFixed(2) }}%，量价结构与动能指标保持算法推演共振。
                   </div>
                   <div class="case-footer">
                     <span>证据级别: 量价共振</span>
@@ -913,7 +913,7 @@
                     防范大盘系统性回撤及行业供需短期错配扰动。建议严格依据左侧仓位管理模型，防守位止损线设置于近期关键支撑位。
                   </div>
                   <div class="case-footer warn">
-                    <span>建议止损线: ¥{{ (currentStock.price * 0.92).toFixed(2) }}</span>
+                    <span>建议止损线: ¥{{ (currentStock.price * 0.92).toFixed(pxPrec) }}</span>
                     <span>单票敞口上限: 20%</span>
                   </div>
                 </div>
@@ -1030,6 +1030,14 @@ const currentStock = ref({
   score: 85,
   tradeDate: ''
 })
+
+// ETF判断与显示精度（ETF精确到厘 3位小数，股票精确到分 2位小数）
+const isCurrentETF = computed(() => {
+  const c = currentStock.value.code || currentCode.value || ''
+  const n = currentStock.value.name || currentName.value || ''
+  return c.startsWith('51') || c.startsWith('15') || c.startsWith('56') || c.startsWith('58') || n.includes('ETF')
+})
+const pxPrec = computed(() => isCurrentETF.value ? 3 : 2)
 
 // 五档挂单盘口
 const askOrders = ref([

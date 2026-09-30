@@ -1282,7 +1282,16 @@ async def get_technical_indicators(
 
     # 筹码分布分析 (CYQ)
     from app.services.chips_service import calculate_chips_distribution
-    chips_data = calculate_chips_distribution(items, close_val)
+    rt_turnover = float(rt_q.get("turnover_rate") or 0.0) if rt_q else 0.0
+    rt_vol = float(rt_q.get("volume") or 0.0) if rt_q else 0.0
+    total_shares = (rt_vol / (rt_turnover / 100.0)) if rt_vol > 0 and rt_turnover > 0 else None
+    if total_shares:
+        for it in items:
+            if it.get("turnover_rate") is None or it.get("turnover_rate") <= 0:
+                v = float(it.get("volume") or 0.0)
+                it["turnover_rate"] = round((v / total_shares) * 100.0, 3)
+
+    chips_data = calculate_chips_distribution(items, close_val, total_shares=total_shares)
     snapshot_data["chips"] = chips_data
 
     return ok({
@@ -1300,7 +1309,7 @@ async def get_technical_indicators(
 async def get_stock_chips(
     code: str,
     period: str = Query("day", description="周期: day/week"),
-    limit: int = Query(120, ge=30, le=250, description="K线样本数"),
+    limit: int = Query(250, ge=30, le=500, description="K线样本数"),
     force_refresh: bool = Query(False, description="是否强制刷新"),
     current_user: Optional[dict] = Depends(get_optional_current_user)
 ):
@@ -1319,12 +1328,16 @@ async def get_stock_chips(
     market, normalized_code = _detect_market_and_code(code)
     code_padded = normalized_code
 
+    limit_val = limit if isinstance(limit, int) else 250
+    period_val = period if isinstance(period, str) else "day"
+    force_val = force_refresh if isinstance(force_refresh, bool) else False
+
     kline_res = await get_kline(
         code=code_padded,
-        period=period,
-        limit=limit,
+        period=period_val,
+        limit=limit_val,
         adj="none",
-        force_refresh=force_refresh,
+        force_refresh=force_val,
         current_user=current_user
     )
     items = kline_res.get("data", {}).get("items", [])
@@ -1334,14 +1347,34 @@ async def get_stock_chips(
     rt_q = await asyncio.to_thread(fetch_realtime_stock_quote, code_padded)
     current_px = float(rt_q["price"]) if rt_q and rt_q.get("price") else float(items[-1].get("close", 0))
 
-    chips = calculate_chips_distribution(items, current_px)
+    # 计算总流通股本并为历史K线精准补全真实换手率
+    rt_vol = float(rt_q.get("volume") or 0.0) if rt_q else 0.0
+    rt_turnover = float(rt_q.get("turnover_rate") or 0.0) if rt_q else 0.0
+    total_shares = (rt_vol / (rt_turnover / 100.0)) if rt_vol > 0 and rt_turnover > 0 else None
+
+    if total_shares:
+        for it in items:
+            if it.get("turnover_rate") is None or it.get("turnover_rate") <= 0:
+                v = float(it.get("volume") or 0.0)
+                it["turnover_rate"] = round((v / total_shares) * 100.0, 3)
+
+    is_etf = code_padded.startswith(("51", "56", "58", "159")) or current_px < 5.0
+    px_prec = 3 if is_etf else 2
+
+    chips = calculate_chips_distribution(
+        items,
+        current_px,
+        total_shares=total_shares,
+        is_etf=is_etf,
+        precision=px_prec
+    )
     if not chips:
         raise HTTPException(status_code=500, detail="筹码分布计算失败")
 
     return ok({
         "code": code_padded,
         "name": (rt_q.get("name") if rt_q else None) or code_padded,
-        "current_price": current_px,
+        "current_price": round(current_px, px_prec),
         "chips": chips
     })
 
