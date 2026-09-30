@@ -23,8 +23,8 @@
           @click="selectIndex(item.key)"
         >
           <span class="btn-name">{{ item.name }}</span>
-          <span class="btn-val" :class="item.change >= 0 ? 'up' : 'down'">
-            {{ item.change >= 0 ? '+' : '' }}{{ item.change.toFixed(2) }}%
+          <span class="btn-val" :class="item.changePercent >= 0 ? 'up' : 'down'">
+            {{ item.changePercent >= 0 ? '+' : '' }}{{ Number(item.changePercent || 0).toFixed(2) }}%
           </span>
         </button>
       </div>
@@ -417,56 +417,56 @@ const indexOptions = ref<IndexMeta[]>([
     key: 'sh',
     code: 'sh000001',
     name: '上证指数',
-    change: -12.80,
-    changePercent: -0.33,
-    currentPrice: 3923.72,
-    prevClose: 3936.52,
-    high: 3929.53,
-    low: 3921.49,
+    change: 11.74,
+    changePercent: 0.31,
+    currentPrice: 3842.19,
+    prevClose: 3830.45,
+    high: 3855.20,
+    low: 3828.10,
     maxRatio: 0.008,
-    totalAmount: 182500000000,
+    totalAmount: 414560000000,
     items: []
   },
   {
     key: 'sz',
     code: 'sz399001',
     name: '深证成指',
-    change: -113.57,
-    changePercent: -0.83,
-    currentPrice: 13522.50,
-    prevClose: 13636.07,
-    high: 13575.15,
-    low: 13521.73,
-    maxRatio: 0.012,
-    totalAmount: 215000000000,
+    change: -14.33,
+    changePercent: -0.11,
+    currentPrice: 12887.62,
+    prevClose: 12901.95,
+    high: 12950.30,
+    low: 12850.10,
+    maxRatio: 0.010,
+    totalAmount: 494715000000,
     items: []
   },
   {
     key: 'cyb',
     code: 'sz399006',
     name: '创业板指',
-    change: -31.35,
-    changePercent: -0.93,
-    currentPrice: 3348.26,
-    prevClose: 3379.61,
-    high: 3368.66,
-    low: 3348.08,
-    maxRatio: 0.015,
-    totalAmount: 98000000000,
+    change: -7.28,
+    changePercent: -0.23,
+    currentPrice: 3135.28,
+    prevClose: 3142.56,
+    high: 3160.10,
+    low: 3120.50,
+    maxRatio: 0.012,
+    totalAmount: 133666000000,
     items: []
   },
   {
     key: 'kcb',
     code: 'sh000688',
     name: '科创50',
-    change: -20.33,
-    changePercent: -1.22,
-    currentPrice: 1640.52,
-    prevClose: 1660.85,
-    high: 1650.98,
-    low: 1640.12,
-    maxRatio: 0.018,
-    totalAmount: 43000000000,
+    change: -39.33,
+    changePercent: -2.51,
+    currentPrice: 1530.01,
+    prevClose: 1569.34,
+    high: 1572.00,
+    low: 1525.60,
+    maxRatio: 0.025,
+    totalAmount: 73170000000,
     items: []
   }
 ])
@@ -550,16 +550,18 @@ async function loadTimelineData(item: IndexMeta) {
   try {
     const res = await (stocksApi as any).getTimeline(item.code)
     const d = (res as any)?.data || res
-    if (d && Array.isArray(d.items) && d.items.length > 0) {
-      item.prevClose = d.prev_close || item.prevClose
-      item.currentPrice = d.current_price || item.currentPrice
-      item.change = d.change || item.change
-      item.changePercent = d.change_percent || item.changePercent
-      item.high = d.high || item.high
-      item.low = d.low || item.low
-      item.maxRatio = Math.max(d.max_ratio || 0.005, 0.005)
-      item.totalAmount = d.total_amount || item.totalAmount
-      item.items = d.items
+    if (d) {
+      if (d.prev_close !== undefined && d.prev_close > 0) item.prevClose = d.prev_close
+      if (d.current_price !== undefined && d.current_price > 0) item.currentPrice = d.current_price
+      if (d.change !== undefined) item.change = d.change
+      if (d.change_percent !== undefined) item.changePercent = d.change_percent
+      if (d.high !== undefined && d.high > 0) item.high = d.high
+      if (d.low !== undefined && d.low > 0) item.low = d.low
+      if (d.max_ratio !== undefined && d.max_ratio > 0) item.maxRatio = Math.max(d.max_ratio, 0.005)
+      if (d.total_amount !== undefined) item.totalAmount = d.total_amount
+      if (Array.isArray(d.items) && d.items.length > 0) {
+        item.items = d.items
+      }
     }
   } catch (e) {
     // 若网络暂时波动，保持原数据
