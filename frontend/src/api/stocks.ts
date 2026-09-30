@@ -110,6 +110,16 @@ export const stocksApi = {
   },
 
   /**
+   * 获取标的真实机构研报与评级画像（双轨混合模式）
+   */
+  async getInstitutionRatings(symbol: string, price?: number) {
+    return ApiClient.get<any>(
+      `/api/stocks/${symbol}/ratings`,
+      price ? { price } : undefined
+    )
+  },
+
+  /**
    * 获取股票行情
    * @param symbol 6位股票代码或指数代码
    * @param forceRefresh 是否强制刷新

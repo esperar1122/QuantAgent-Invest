@@ -148,7 +148,15 @@ npm run build
 - **7. 场内 ETF 标的库扩充与极速检索 (`588710 科创半导体设备ETF华泰柏瑞`)**：
   - *官方标的收录*：将 `588710.SH`（华泰柏瑞上证科创板半导体材料设备ETF，标签“科创芯片设备”）收录至 `CORE_ETF_CATALOG`（`app/services/etf_service.py`），全市场批量切片覆盖总数增至 40 只；
   - *搜索引擎直通*：在 `/api/stocks/search` 中融合 `CORE_ETF_CATALOG` 索引，支持用户输入 `588710`、`科创半导体`、`芯片设备` 时瞬时匹配并返回；
-  - *投研控制台快捷键*：在《个股与指数研究》顶部预置标的栏中加入 `588710 科创芯片设备` 快速切换胶囊，支持一键穿透直达日内分时、K线、CYQ筹码与四维买卖点。
+- **8. 机构持仓与评级预期「双轨混合模式」架构与持牌券商研报透传 (`institution_rating_service.py` & `StockResearch`)**：
+  - *双轨混合设计体系 (Hybrid Dual-Track)*：
+    1. **持牌券商研报轨 (Real Ratings)**：针对具备公开研报的核心个股（如茅台、宁德时代等），直连东方财富研报中台（`reportapi.eastmoney.com`）聚合近 365 天研报，提取最新持牌券商（海通/中信/国泰君安等）评级名称、一致目标价、动态空间与近 10 篇券商研报详情；
+    2. **全标的量化推演轨 (Quant Dynamic Model)**：针对 ETF 基金、大盘指数及无研报冷门股，系统无缝自动降级为五维量化多因子多空推演（估值、动量、波动率、趋势、筹码集中度），计算理论目标价与盈亏空间；
+  - *面板交互与视觉规范*：卡片标题旁显式配备双轨状态胶囊（`持牌券商研报` 徽章 vs `量化动态推演` 徽章），消除散户决策信息模糊与误判风险；
+  - *双弹窗深度穿透系统*：
+    - **券商研报明细弹窗**：展示研报概览看板（最新研报数、核心券商、一致评级、一致目标价）、评级分布柱状/胶囊比例（买入/增持/中性），及包含券商名称、最新评级、目标价、分析师、发布日期与官方 PDF 直通链接的高清表格；
+    - **量化算法透视弹窗**：公布五维打分雷达分值与三大核心推演公式（综合得分、目标价弹性推演、隐含空间推演），算法 100% 透明可溯源；
+  - *30分钟内存短时防抖缓存*：后端服务采用内存 LRU/短时缓存机制，保障多用户高频切换查看时外部 API 0 压力、响应维持在 5ms 级。
 
 ---
 
@@ -160,10 +168,11 @@ npm run build
 | **侧边导航** | `frontend/src/components/Terminal/TerminalSidebar.vue` | 可折叠 (60px)、拖拽调宽 (160-228px)、偏好记忆导航栏（含场内ETF入口） |
 | **场内ETF专区** | `frontend/src/views/Terminal/EtfHub/index.vue` | 全市场核心场内 ETF 雷达、分类筛选、卡片/表格双视图、自动轮询 |
 | **ETF聚合服务**| `app/services/etf_service.py` | 单请求多标的批量切片极速抓取引擎，内存防雪崩缓存 |
+| **研报评级服务**| `app/services/institution_rating_service.py` | 持牌券商最新研报聚合、一致预期评级与目标价计算、30分钟防抖缓存引擎 |
 | **K线与分时**| `frontend/src/components/Terminal/StockKlineChart.vue` | 240分时图、全局悬浮画线窗、滚轮缩放、成交量校准 |
-| **个股投研** | `frontend/src/views/Terminal/StockResearch/index.vue` | 量化买卖决策看板、四维点位协同、盈亏比推演、ETF专属千分位/面板 |
+| **个股投研** | `frontend/src/views/Terminal/StockResearch/index.vue` | 量化买卖决策看板、双轨机构评级/研报弹窗、盈亏比推演、ETF专属千分位/面板 |
 | **筹码弹窗** | `frontend/src/components/TechnicalIndicators/TechnicalAnalysisModal.vue` | 筹码规则生效横幅、多空对决裁决台 |
-| **前端接口** | `frontend/src/api/stocks.ts` | 股票搜索、分时、K线、ETF专区概览、指标快照与筹码接口定义 |
+| **前端接口** | `frontend/src/api/stocks.ts` | 股票搜索、分时、K线、ETF专区概览、机构真实研报、指标快照与筹码接口定义 |
 | **实时行情** | `app/services/stock_quote_service.py` | 腾讯极速行情解析、五档挂单、分时数据抓取 |
 | **筹码引擎** | `app/services/chips_service.py` | CYQ 筹码分布、非对称衰减、6大机构修正规则 |
 

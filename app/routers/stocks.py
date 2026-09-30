@@ -397,7 +397,29 @@ async def get_quote(
         "revenue_growth": (b or {}).get("revenue_growth"),
     }
 
+    # 🔥 双轨混合模式：获取持牌券商研报评级与一致预期
+    try:
+        from app.services.institution_rating_service import get_institution_ratings
+        ratings_data = await asyncio.to_thread(get_institution_ratings, code6, float(close or 0.0))
+        data["institution_ratings"] = ratings_data
+    except Exception as re_err:
+        logger.debug(f"加载机构研报评级失败: {re_err}")
+
     return ok(data)
+
+
+@router.get("/{code}/ratings", response_model=dict)
+async def get_stock_ratings(
+    code: str,
+    price: Optional[float] = Query(None, description="最新现价，用于动态推算上行空间"),
+    current_user: Optional[dict] = Depends(get_optional_current_user)
+):
+    """
+    获取标的的持牌券商机构评级、一致目标价与最新研报列表（双轨混合模式）
+    """
+    from app.services.institution_rating_service import get_institution_ratings
+    res = await asyncio.to_thread(get_institution_ratings, code, float(price or 0.0))
+    return ok(res)
 
 
 @router.get("/{code}/fundamentals", response_model=dict)
