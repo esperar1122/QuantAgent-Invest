@@ -447,7 +447,10 @@ async def execute_stock_workflow(code: str) -> Dict[str, Any]:
         "code": code_raw,
         "name": stock_name,
         "execution_time_ms": max(320, elapsed_ms),
-        "tokens_used": tokens_est,
+        "tokens_used": 0,  # 实时工作台使用本地量化因子与筹码引擎，零 API Token 消耗
+        "tokens_estimated": tokens_est,  # 等效大模型提示词上下文容量
+        "is_llm_called": False,
+        "engine_mode": "极速量化内核 (0 Token 消耗)",
         "steps": steps,
         "runtime_logs": runtime_logs,
         "support_list": support_list,

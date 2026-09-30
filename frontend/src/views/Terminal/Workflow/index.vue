@@ -244,7 +244,7 @@
               <span class="lh-title">执行内核结构化运行日志 (Runtime Console)</span>
             </div>
             <div class="lh-right">
-              <span class="log-stat tabular-nums">耗时: {{ executionTimeMs }}ms | Tokens: {{ tokensUsed.toLocaleString() }}</span>
+              <span class="log-stat tabular-nums">耗时: {{ executionTimeMs }}ms | {{ tokensUsed > 0 ? `LLM Tokens: ${tokensUsed.toLocaleString()}` : '本地量化内核 (0 Token 消耗)' }}</span>
             </div>
           </div>
 
@@ -358,7 +358,7 @@ const currentStock = ref({
 
 const workflowData = ref<any>(null)
 const executionTimeMs = ref<number>(360)
-const tokensUsed = ref<number>(4120)
+const tokensUsed = ref<number>(0)
 const isRunning = ref(false)
 const currentActiveStep = ref(7) // 初始为全部完成
 
@@ -434,7 +434,7 @@ async function loadStockDetail(code: string) {
       if (data && data.success) {
         workflowData.value = data
         executionTimeMs.value = data.execution_time_ms || 360
-        tokensUsed.value = data.tokens_used || 4120
+        tokensUsed.value = data.tokens_used ?? 0
         if (data.runtime_logs && data.runtime_logs.length > 0) {
           runtimeLogs.value = data.runtime_logs
         }
@@ -518,7 +518,7 @@ async function runWorkflow() {
 
       workflowData.value = data
       executionTimeMs.value = data.execution_time_ms || 360
-      tokensUsed.value = data.tokens_used || 4120
+      tokensUsed.value = data.tokens_used ?? 0
 
       if (data.dossier?.arbitration) {
         currentStock.value.score = Math.round(data.dossier.arbitration.score)
