@@ -92,6 +92,12 @@
           </template>
         </el-dropdown>
 
+        <!-- 引擎状态胶囊 (当后端未连通时醒目提示骨架等待) -->
+        <div v-if="!appStore.apiConnected" class="offline-engine-badge" title="未连接后端投研中台服务，当前展示骨架等待数据流入">
+          <span class="offline-pulse-dot"></span>
+          <span>引擎离线 · 骨架等待中</span>
+        </div>
+
         <!-- 收藏/取消收藏按钮 -->
         <el-button
           size="small"
@@ -620,11 +626,16 @@
                 <div class="case-tag tag-macro">MACRO AGENT</div>
                 <span class="case-state">已核验</span>
               </div>
-              <div class="case-title">{{ currentStock.sector }} {{ isCurrentIndex ? '宏观流动性与估值中枢' : '产业支持与宏观流动性共振' }}</div>
+              <div class="case-title">
+                {{ currentStock.sector }} {{ isCurrentIndex ? '宏观流动性与估值中枢' : (isCurrentETF ? '产业赛道景气度与宏观流动性' : '产业支持与宏观流动性共振') }}
+              </div>
               <div class="case-body">
                 {{ isCurrentIndex 
                   ? `货币政策流动性充裕，资本市场制度红利持续释放，${currentStock.name} (${currentStock.code}) 处于历史估值中低分位区间，配置性价比优势凸显。` 
-                  : `国家战略重点支持产业扶持政策持续落地，${currentStock.name} (${currentStock.code}) 处于行业核心生态位，享受产业资本与政策专项定向赋能，中长期资产配置价值凸显。` 
+                  : (isCurrentETF
+                    ? `宽基与行业主题流动性环境宽松，场内被动指数基金受各路中长线资金与机构持续增配，${currentStock.name} (${currentStock.code}) 具备强 Beta 属性与高流动性工具优势。`
+                    : `国家战略重点支持产业扶持政策持续落地，${currentStock.name} (${currentStock.code}) 处于行业核心生态位，享受产业资本与政策专项定向赋能，中长期资产配置价值凸显。`
+                  )
                 }}
               </div>
               <div class="case-evidence-meta">
@@ -641,7 +652,7 @@
               </div>
               <div class="case-title">日K线顺向多头排列，量能温和放大回踩确认</div>
               <div class="case-body">
-                标的现点位 {{ currentStock.price.toFixed(2) }} {{ isCurrentIndex ? '点' : '元' }}，MA5/20/60 均线保持顺向发散。MACD 维持在良性运行区间，成交额 {{ currentStock.amount }} 亿，{{ isCurrentIndex ? '换手率' : '日换手率' }} {{ currentStock.turnover.toFixed(2) }}%，{{ isCurrentIndex ? '大盘' : '量价' }}结构处于健康扩张周期。
+                标的现点位 {{ isCurrentETF ? currentStock.price.toFixed(3) : currentStock.price.toFixed(2) }} {{ isCurrentIndex ? '点' : '元' }}，MA5/20/60 均线保持顺向发散。MACD 维持在良性运行区间，成交额 {{ currentStock.amount }} 亿，{{ isCurrentIndex ? '换手率' : '日换手率' }} {{ currentStock.turnover.toFixed(2) }}%，{{ isCurrentIndex ? '大盘' : (isCurrentETF ? 'ETF' : '量价') }}结构处于健康扩张周期。
               </div>
               <div class="case-evidence-meta">
                 <span>证据级别: 量价共振</span>
@@ -655,12 +666,22 @@
                 <div class="case-tag tag-fund">FUNDAMENTAL AGENT</div>
                 <span class="case-state">已核验</span>
               </div>
-              <div class="case-title">{{ isCurrentIndex ? '指数成份股盈利结构与资产质量' : `经营韧性稳固，总市值规模达 ${currentStock.marketCap} 亿元` }}</div>
+              <div class="case-title">
+                {{ isCurrentIndex ? '指数成份股盈利结构与资产质量' : (isCurrentETF ? `标的指数成份纯粹，基金规模达 ${currentStock.marketCap} 亿元` : `经营韧性稳固，总市值规模达 ${currentStock.marketCap} 亿元`) }}
+              </div>
               <div class="case-body">
-                当前动态市盈率 {{ currentStock.pe }} 倍，市净率 {{ currentStock.pb }} 倍。{{ isCurrentIndex ? '指数核心权重股盈利预期上修，股息率与盈利中枢为大盘提供坚实估值底部托底。' : '基本面盈利与营收指标具备抗周期性，核心产品市场份额居行业第一梯队，抗风险护城河深厚。' }}
+                <template v-if="isCurrentIndex">
+                  指数核心权重股盈利预期上修，股息率与盈利中枢为大盘提供坚实估值底部托底。
+                </template>
+                <template v-else-if="isCurrentETF">
+                  成份股高度聚焦标的赛道核心龙头，有效分散个股黑天鹅风险；场内交易免征印花税，申赎机制与做市商做多意向平滑折溢价。
+                </template>
+                <template v-else>
+                  当前动态市盈率 {{ currentStock.pe }} 倍，市净率 {{ currentStock.pb }} 倍。基本面盈利与营收指标具备抗周期性，核心产品市场份额居行业第一梯队，抗风险护城河深厚。
+                </template>
               </div>
               <div class="case-evidence-meta">
-                <span>证据级别: {{ isCurrentIndex ? '宏观与成份财报汇总' : '财报与产业调研' }}</span>
+                <span>证据级别: {{ isCurrentIndex ? '宏观与成份财报汇总' : (isCurrentETF ? '指数编制与基金份额统计' : '财报与产业调研') }}</span>
                 <span>置信度: 85%</span>
               </div>
             </div>
@@ -671,15 +692,34 @@
                 <div class="case-tag tag-risk">RISK AGENT</div>
                 <span class="case-state warning">风险审查</span>
               </div>
-              <div class="case-title">{{ isCurrentIndex ? '宏观流动性波动与关键防守支撑位' : '系统性波动防御与动态风控阈值指引' }}</div>
+              <div class="case-title">
+                {{ isCurrentIndex ? '宏观流动性波动与关键防守支撑位' : (isCurrentETF ? '跟踪误差与流动性折价防守阈值' : '系统性波动防御与动态风控阈值指引') }}
+              </div>
               <div class="case-body">
-                {{ isCurrentIndex ? '密切监控海外利率变动与北向资金净流入波动。建议底仓配置维持稳健，在关键技术支撑位保持纪律性仓位管理。' : '防范大盘系统性回撤及行业供需短期错配扰动。建议严格依据左侧仓位管理模型，防守位止损线设置于近期关键支撑位。' }}
+                {{ isCurrentIndex 
+                  ? '密切监控海外利率变动与北向资金净流入波动。建议底仓配置维持稳健，在关键技术支撑位保持纪律性仓位管理。' 
+                  : (isCurrentETF
+                    ? '密切关注标的指数成份股集体异动及盘中极端折价风险。建议结合日内均线与筹码下轨进行网格或分批纪律性建仓。'
+                    : '防范大盘系统性回撤及行业供需短期错配扰动。建议严格依据左侧仓位管理模型，防守位止损线设置于近期关键支撑位。'
+                  )
+                }}
               </div>
               <div class="case-evidence-meta warning">
-                <span>{{ isCurrentIndex ? '关键防守点位' : '建议止损线' }}: {{ (currentStock.price * 0.92).toFixed(2) }} {{ isCurrentIndex ? '点' : '元' }}</span>
-                <span>{{ isCurrentIndex ? '建议权益仓位上限' : '建议单票上限' }}: {{ isCurrentIndex ? '75%' : '20%' }}</span>
+                <span>{{ isCurrentIndex ? '关键防守点位' : '建议止损线' }}: {{ (currentStock.price * 0.92).toFixed(isCurrentETF ? 3 : 2) }} {{ isCurrentIndex ? '点' : '元' }}</span>
+                <span>{{ isCurrentIndex ? '建议权益仓位上限' : (isCurrentETF ? '建议同类配置上限' : '建议单票上限') }}: {{ isCurrentIndex ? '75%' : (isCurrentETF ? '35%' : '20%') }}</span>
               </div>
             </div>
+          </div>
+
+          <!-- 案卷收敛与穿透页脚 -->
+          <div class="casefile-footer">
+            <div class="cf-foot-left">
+              <span class="status-pulse-dot"></span>
+              <span class="status-text">多智能体证据闭环 · 校验已收敛</span>
+            </div>
+            <button class="cf-foot-btn" @click="openTechnicalModal('casefiles')">
+              全景穿透 ↗
+            </button>
           </div>
         </div>
       </aside>
@@ -857,10 +897,12 @@ import StockKlineChart from '@/components/Terminal/StockKlineChart.vue'
 import TechnicalAnalysisModal from '@/components/TechnicalIndicators/TechnicalAnalysisModal.vue'
 import { stocksApi, type StockSearchItem, type ChipsDistribution, type TechnicalSnapshot } from '@/api/stocks'
 import { useFavoritesStore } from '@/stores/favorites'
+import { useAppStore } from '@/stores/app'
 
 const route = useRoute()
 const router = useRouter()
 const favoritesStore = useFavoritesStore()
+const appStore = useAppStore()
 
 // 热门核心资产标的（核心指数与场内热门 ETF）
 const hotStocks = [
@@ -1717,7 +1759,34 @@ onMounted(() => {
     display: flex;
     align-items: center;
     gap: 8px;
+
+    .offline-engine-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background-color: #fffaeb;
+      color: #b54708;
+      border: 1px solid #fedf89;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+
+      .offline-pulse-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: #f79009;
+        animation: offline-dot-pulse 1.5s infinite;
+      }
+    }
   }
+}
+
+@keyframes offline-dot-pulse {
+  0% { transform: scale(0.9); opacity: 0.5; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.5; }
 }
 
 // 标的下拉弹窗样式
@@ -2778,12 +2847,76 @@ onMounted(() => {
 }
 
 .casefile-items-scroll {
-  padding: 12px 14px;
+  padding: 12px 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  max-height: 560px;
+
+  // 自定义优雅滚动条
+  &::-webkit-scrollbar {
+    width: 5px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #e4e7ec;
+    border-radius: 4px;
+
+    &:hover {
+      background: #d0d5dd;
+    }
+  }
+}
+
+.casefile-footer {
+  padding: 8px 14px;
+  background-color: #fafbfc;
+  border-top: 1px solid #eaecf0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  flex-shrink: 0;
+
+  .cf-foot-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #667085;
+
+    .status-pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #12b76a;
+      box-shadow: 0 0 0 2px rgba(18, 183, 106, 0.2);
+    }
+
+    .status-text {
+      font-size: 10px;
+      font-weight: 500;
+    }
+  }
+
+  .cf-foot-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #175cd3;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s ease;
+
+    &:hover {
+      color: #154294;
+      text-decoration: underline;
+    }
+  }
 }
 
 .case-card {

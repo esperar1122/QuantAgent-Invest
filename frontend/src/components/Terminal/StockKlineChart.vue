@@ -17,17 +17,32 @@
         <div class="divider"></div>
         <!-- 分时模式：显示均价、昨收与最新现价 -->
         <div v-if="currentPeriod === 'timeline'" class="indicator-tags timeline-tags">
-          <span class="indicator-badge timeline-prev">昨收: {{ timelinePrevClose.toFixed(2) }}</span>
-          <span class="indicator-badge timeline-avg">均价: {{ currentTimelineAvg.toFixed(2) }}</span>
-          <span class="indicator-badge timeline-latest" :class="timelineChange >= 0 ? 'up' : 'down'">
-            现价: {{ currentTimelinePrice.toFixed(2) }} ({{ timelineChange >= 0 ? '+' : '' }}{{ timelinePct.toFixed(2) }}%)
-          </span>
+          <template v-if="isOfflineEmpty">
+            <span class="indicator-badge timeline-prev">昨收: --</span>
+            <span class="indicator-badge timeline-avg">均价: --</span>
+            <span class="indicator-badge offline-pill">离线等待数据</span>
+          </template>
+          <template v-else>
+            <span class="indicator-badge timeline-prev">昨收: {{ timelinePrevClose.toFixed(2) }}</span>
+            <span class="indicator-badge timeline-avg">均价: {{ currentTimelineAvg.toFixed(2) }}</span>
+            <span class="indicator-badge timeline-latest" :class="timelineChange >= 0 ? 'up' : 'down'">
+              现价: {{ currentTimelinePrice.toFixed(2) }} ({{ timelineChange >= 0 ? '+' : '' }}{{ timelinePct.toFixed(2) }}%)
+            </span>
+          </template>
         </div>
         <!-- K线模式：显示 MA 均线 -->
         <div v-else class="indicator-tags">
-          <span class="indicator-badge ma5">MA5: {{ (currentHoverItem ? currentHoverItem.ma5 : latestItem?.ma5 || 0).toFixed(2) }}</span>
-          <span class="indicator-badge ma20">MA20: {{ (currentHoverItem ? currentHoverItem.ma20 : latestItem?.ma20 || 0).toFixed(2) }}</span>
-          <span class="indicator-badge ma60">MA60: {{ (currentHoverItem ? currentHoverItem.ma60 : latestItem?.ma60 || 0).toFixed(2) }}</span>
+          <template v-if="isOfflineEmpty">
+            <span class="indicator-badge ma5">MA5: --</span>
+            <span class="indicator-badge ma20">MA20: --</span>
+            <span class="indicator-badge ma60">MA60: --</span>
+            <span class="indicator-badge offline-pill">离线等待数据</span>
+          </template>
+          <template v-else>
+            <span class="indicator-badge ma5">MA5: {{ (currentHoverItem ? currentHoverItem.ma5 : latestItem?.ma5 || 0).toFixed(2) }}</span>
+            <span class="indicator-badge ma20">MA20: {{ (currentHoverItem ? currentHoverItem.ma20 : latestItem?.ma20 || 0).toFixed(2) }}</span>
+            <span class="indicator-badge ma60">MA60: {{ (currentHoverItem ? currentHoverItem.ma60 : latestItem?.ma60 || 0).toFixed(2) }}</span>
+          </template>
         </div>
       </div>
 
@@ -620,6 +635,57 @@
           <div class="tt-item"><span class="k">分时量</span><span class="v tabular-nums">{{ (currentHoverTimelineItem.volume / 100).toFixed(0) }}手</span></div>
         </div>
       </div>
+
+      <!-- 🔥 骨架扫光层 (当后端离线/未连接且无真实数据时展示，代替 8.27 虚假数据) -->
+      <div v-if="isOfflineEmpty" class="kline-skeleton-layer">
+        <!-- 骨架扫描背景蜡烛条与网格 -->
+        <div class="skeleton-chart-canvas">
+          <div class="skeleton-grid-lines">
+            <span v-for="n in 5" :key="'g-'+n" class="sk-grid-row"></span>
+          </div>
+          <div class="skeleton-candles-flow">
+            <div 
+              v-for="(bar, bIdx) in skeletonCandles" 
+              :key="'sk-bar-'+bIdx" 
+              class="sk-candle-item"
+              :style="{ height: bar.height + '%', marginTop: bar.offset + '%' }"
+            >
+              <span class="sk-candle-wick" :style="{ top: -bar.wickTop + 'px', bottom: -bar.wickBottom + 'px' }"></span>
+              <span class="sk-candle-body"></span>
+            </div>
+          </div>
+          <div class="skeleton-volume-flow">
+            <div 
+              v-for="(vol, vIdx) in skeletonVolumes" 
+              :key="'sk-vol-'+vIdx" 
+              class="sk-vol-bar"
+              :style="{ height: vol + '%' }"
+            ></div>
+          </div>
+        </div>
+
+        <!-- 骨架动态扫光光幕 -->
+        <div class="skeleton-shimmer-sweep"></div>
+
+        <!-- 居中高科技状态浮层 -->
+        <div class="skeleton-status-card">
+          <div class="status-pulse-ring">
+            <span class="pulse-beacon"></span>
+            <span class="beacon-core">⚡</span>
+          </div>
+          <div class="status-title">投研中台未连接 · 骨架就绪等待数据流</div>
+          <div class="status-subtitle">
+            系统已屏蔽 8.27 虚假模拟数据以确保合规真实性，请启动后端服务或检查接口链路
+          </div>
+          <div class="status-action-row">
+            <button class="sk-retry-btn" :disabled="loading || timelineLoading" @click="handleManualRetry">
+              <span class="btn-spin" v-if="loading || timelineLoading">⏳</span>
+              <span v-else>↺</span>
+              <span>{{ (loading || timelineLoading) ? '连接中...' : '重试获取实时数据' }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -847,45 +913,66 @@ const timelineChange = computed(() => currentTimelinePrice.value - timelinePrevC
 const timelinePct = computed(() => (timelineChange.value / (timelinePrevClose.value || 1)) * 100)
 const latestTimelineVol = computed(() => latestTimelineItem.value?.volume || 0)
 
-// 生成拟真分时走势（休市或备选）
-function generateSimulatedTimeline(basePx: number) {
-  const items: TimelineItem[] = []
-  const prev = basePx
-  let cur = basePx
-  let totalVol = 0
-  let totalAmt = 0
+// 🔥 骨架扫光模式：当后端断开/未启动且无真实数据时激活
+const isOfflineEmpty = ref(false)
+const timelineLoading = ref(false)
 
-  for (let i = 0; i < 120; i++) {
-    const hr = i < 60 ? 9 : 10
-    const mn = i < 60 ? 30 + i : i - 60
-    const timeStr = `${String(hr).padStart(2, '0')}:${String(mn).padStart(2, '0')}`
+// 静态美学骨架蜡烛数据 (36根自然起伏蜡烛高度与偏移)
+const skeletonCandles = [
+  { height: 28, offset: 25, wickTop: 6, wickBottom: 8 },
+  { height: 35, offset: 22, wickTop: 8, wickBottom: 5 },
+  { height: 32, offset: 26, wickTop: 5, wickBottom: 9 },
+  { height: 42, offset: 20, wickTop: 10, wickBottom: 6 },
+  { height: 38, offset: 24, wickTop: 7, wickBottom: 7 },
+  { height: 48, offset: 18, wickTop: 9, wickBottom: 10 },
+  { height: 52, offset: 15, wickTop: 8, wickBottom: 6 },
+  { height: 45, offset: 21, wickTop: 6, wickBottom: 8 },
+  { height: 40, offset: 25, wickTop: 7, wickBottom: 5 },
+  { height: 50, offset: 19, wickTop: 9, wickBottom: 8 },
+  { height: 58, offset: 14, wickTop: 11, wickBottom: 7 },
+  { height: 54, offset: 17, wickTop: 8, wickBottom: 9 },
+  { height: 46, offset: 22, wickTop: 7, wickBottom: 6 },
+  { height: 60, offset: 12, wickTop: 12, wickBottom: 8 },
+  { height: 64, offset: 10, wickTop: 10, wickBottom: 11 },
+  { height: 58, offset: 15, wickTop: 9, wickBottom: 7 },
+  { height: 66, offset: 9, wickTop: 11, wickBottom: 8 },
+  { height: 62, offset: 13, wickTop: 8, wickBottom: 10 },
+  { height: 70, offset: 7, wickTop: 13, wickBottom: 7 },
+  { height: 65, offset: 11, wickTop: 9, wickBottom: 9 },
+  { height: 59, offset: 16, wickTop: 8, wickBottom: 8 },
+  { height: 68, offset: 9, wickTop: 10, wickBottom: 10 },
+  { height: 72, offset: 6, wickTop: 12, wickBottom: 8 },
+  { height: 64, offset: 12, wickTop: 8, wickBottom: 9 },
+  { height: 76, offset: 4, wickTop: 14, wickBottom: 9 },
+  { height: 71, offset: 8, wickTop: 10, wickBottom: 11 },
+  { height: 67, offset: 11, wickTop: 9, wickBottom: 8 },
+  { height: 75, offset: 5, wickTop: 11, wickBottom: 9 },
+  { height: 80, offset: 2, wickTop: 13, wickBottom: 10 },
+  { height: 74, offset: 7, wickTop: 9, wickBottom: 8 },
+  { height: 78, offset: 4, wickTop: 12, wickBottom: 9 },
+  { height: 82, offset: 1, wickTop: 14, wickBottom: 11 },
+  { height: 76, offset: 6, wickTop: 10, wickBottom: 8 },
+  { height: 85, offset: 0, wickTop: 15, wickBottom: 10 },
+  { height: 80, offset: 4, wickTop: 11, wickBottom: 9 },
+  { height: 84, offset: 2, wickTop: 13, wickBottom: 12 }
+]
 
-    const delta = (Math.sin(i * 0.12) * 0.15 + (Math.random() - 0.49) * 0.2) * (basePx * 0.008)
-    cur = +(cur + delta).toFixed(2)
-    const vol = Math.floor(1200 + Math.random() * 3800)
-    totalVol += vol
-    totalAmt += vol * cur
-    const avg = +(totalAmt / Math.max(1, totalVol)).toFixed(2)
-    const chg = +(cur - prev).toFixed(2)
-    const pct = +((chg / prev) * 100).toFixed(2)
+const skeletonVolumes = [
+  30, 45, 38, 52, 40, 65, 70, 55, 42, 60, 78, 66, 50, 82, 88, 72, 90, 75, 95, 80, 68, 85, 92, 70, 96, 84, 76, 90, 98, 82, 91, 100, 86, 97, 88, 94
+]
 
-    items.push({
-      time: timeStr,
-      price: cur,
-      avg_price: avg,
-      volume: vol,
-      change: chg,
-      pct_chg: pct,
-      is_up: delta >= 0,
-      minuteIndex: i
-    })
+function handleManualRetry() {
+  isOfflineEmpty.value = false
+  if (currentPeriod.value === 'timeline') {
+    loadTimelineData()
+  } else {
+    loadKlineData()
   }
-
-  return { prev_close: prev, items }
 }
 
 async function loadTimelineData() {
   if (!props.stockCode) return
+  timelineLoading.value = true
   try {
     const res = await (stocksApi as any).getTimeline(props.stockCode)
     const d = (res as any)?.data || res
@@ -907,12 +994,19 @@ async function loadTimelineData() {
           }
         })
       }
+      isOfflineEmpty.value = false
       return
     }
   } catch (err) {
-    // 降级使用高保真分时走势
+    // 后端未连通
+  } finally {
+    timelineLoading.value = false
   }
-  timelineRaw.value = generateSimulatedTimeline(props.currentPrice || 86.40)
+
+  // 彻底废除虚假分时数据：未连接后端且无实时数据时，激活专业骨架扫光模式
+  if (!timelineRaw.value || !timelineRaw.value.items || timelineRaw.value.items.length === 0) {
+    isOfflineEmpty.value = true
+  }
 }
 
 // ================= K 线数据与指标 =================
@@ -943,62 +1037,6 @@ function calculateIndicators(data: KlineItem[]) {
     data[i].rsi6 = +(50 + Math.sin(i * 0.5) * 25 + Math.random() * 6).toFixed(1)
     data[i].rsi12 = +(52 + Math.sin(i * 0.3) * 18).toFixed(1)
   }
-}
-
-function generateSimulatedKlineData(basePx: number): KlineItem[] {
-  const data: KlineItem[] = []
-  const initialPrice = basePx > 0 ? basePx * 0.94 : 82.50
-  let price = initialPrice
-  const baseDate = new Date('2026-06-01')
-  
-  for (let i = 0; i < 90; i++) {
-    const curDate = new Date(baseDate.getTime() + i * 24 * 3600 * 1000)
-    const dayOfWeek = curDate.getDay()
-    if (dayOfWeek === 0 || dayOfWeek === 6) continue
-
-    const dateStr = curDate.toISOString().slice(5, 10)
-    const stepRatio = Math.max(0.2, price * 0.015)
-    const change = (Math.sin(i * 0.4) * stepRatio) + ((Math.random() - 0.48) * stepRatio * 1.5)
-    const open = +(price + (Math.random() - 0.5) * stepRatio * 0.3).toFixed(2)
-    const close = Math.max(0.1, +(open + change).toFixed(2))
-    const high = +(Math.max(open, close) + Math.random() * stepRatio * 0.7).toFixed(2)
-    const low = Math.max(0.05, +(Math.min(open, close) - Math.random() * stepRatio * 0.5).toFixed(2))
-    const vol = Math.floor(80000 + Math.random() * 160000 + (change > 0 ? 40000 : 0))
-    const turnover = +(1.2 + Math.random() * 2.5).toFixed(2)
-    const changePct = +(((close - open) / (open || 1)) * 100).toFixed(2)
-
-    price = close
-
-    data.push({
-      date: dateStr,
-      open,
-      high,
-      low,
-      close,
-      vol,
-      turnover,
-      ma5: 0,
-      ma20: 0,
-      ma60: 0,
-      dif: 0,
-      dea: 0,
-      macd: 0,
-      rsi6: 0,
-      rsi12: 0,
-      changePct
-    })
-  }
-
-  if (data.length > 0 && basePx > 0) {
-    const last = data[data.length - 1]
-    last.close = +(basePx).toFixed(2)
-    last.high = Math.max(last.high, last.close)
-    last.low = Math.min(last.low, last.close)
-    last.changePct = +(((last.close - last.open) / (last.open || 1)) * 100).toFixed(2)
-  }
-
-  calculateIndicators(data)
-  return data
 }
 
 async function loadKlineData() {
@@ -1052,19 +1090,20 @@ async function loadKlineData() {
       rawData.value = mapped
       visibleCount.value = Math.min(50, mapped.length)
       startIndex.value = Math.max(0, mapped.length - visibleCount.value)
+      isOfflineEmpty.value = false
       loading.value = false
       return
     }
   } catch (err) {
-    // 静默降级
+    // 后端未连通
   } finally {
     loading.value = false
   }
 
-  const sim = generateSimulatedKlineData(props.currentPrice || 86.40)
-  rawData.value = sim
-  visibleCount.value = Math.min(50, sim.length)
-  startIndex.value = Math.max(0, sim.length - visibleCount.value)
+  // 彻底废弃 8.27 虚假数据：未连接后端且无实时数据时，激活专业骨架扫光模式
+  if (rawData.value.length === 0) {
+    isOfflineEmpty.value = true
+  }
 }
 
 watch(
@@ -1081,11 +1120,14 @@ watch(
 
 // 当前视口内展示的 K 线切片
 const chartData = computed(() => {
-  if (currentPeriod.value === 'timeline') return []
+  if (currentPeriod.value === 'timeline' || isOfflineEmpty.value) return []
   return rawData.value.slice(startIndex.value, startIndex.value + visibleCount.value)
 })
 
-const latestItem = computed(() => chartData.value[chartData.value.length - 1] || rawData.value[rawData.value.length - 1])
+const latestItem = computed(() => {
+  if (isOfflineEmpty.value || rawData.value.length === 0) return null
+  return chartData.value[chartData.value.length - 1] || rawData.value[rawData.value.length - 1] || null
+})
 
 // ================= 坐标与价格比例映射 =================
 const minPrice = computed(() => {
@@ -1692,7 +1734,35 @@ function handleMouseLeave() {
       &.up { color: #d92d20; }
       &.down { color: #039855; }
     }
+
+    &.offline-pill {
+      background-color: #fffaeb;
+      color: #b54708;
+      border: 1px solid #fedf89;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+
+      &::before {
+        content: '';
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: #f79009;
+        animation: offline-dot-pulse 1.5s infinite;
+      }
+    }
   }
+}
+
+@keyframes offline-dot-pulse {
+  0% { transform: scale(0.9); opacity: 0.5; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.5; }
 }
 
 .toolbar-center {
@@ -1798,6 +1868,232 @@ function handleMouseLeave() {
   &.trendline, &.horizontal, &.rect, &.price_tag {
     cursor: crosshair;
   }
+}
+
+// 🔥 骨架流光扫光层样式
+.kline-skeleton-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #fafbfc;
+  z-index: 15;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  .skeleton-chart-canvas {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    bottom: 20px;
+    opacity: 0.55;
+    display: flex;
+    flex-direction: column;
+    pointer-events: none;
+
+    .skeleton-grid-lines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 75px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+
+      .sk-grid-row {
+        width: 100%;
+        height: 1px;
+        background-image: linear-gradient(to right, #eaecf0 40%, rgba(255, 255, 255, 0) 0%);
+        background-position: top;
+        background-size: 8px 1px;
+        background-repeat: repeat-x;
+      }
+    }
+
+    .skeleton-candles-flow {
+      flex: 1;
+      display: flex;
+      align-items: flex-end;
+      gap: 1.5%;
+      padding-bottom: 20px;
+      padding-left: 20px;
+      padding-right: 20px;
+
+      .sk-candle-item {
+        flex: 1;
+        min-width: 4px;
+        max-width: 16px;
+        position: relative;
+        display: flex;
+        justify-content: center;
+
+        .sk-candle-wick {
+          position: absolute;
+          width: 1px;
+          background-color: #d0d5dd;
+        }
+
+        .sk-candle-body {
+          width: 100%;
+          height: 100%;
+          background-color: #eaecf0;
+          border-radius: 2px;
+          border: 1px solid #d0d5dd;
+        }
+      }
+    }
+
+    .skeleton-volume-flow {
+      height: 55px;
+      display: flex;
+      align-items: flex-end;
+      gap: 1.5%;
+      padding-left: 20px;
+      padding-right: 20px;
+      border-top: 1px solid #eaecf0;
+      padding-top: 8px;
+
+      .sk-vol-bar {
+        flex: 1;
+        min-width: 4px;
+        max-width: 16px;
+        background-color: #eaecf0;
+        border-radius: 1px 1px 0 0;
+      }
+    }
+  }
+
+  // 核心：平滑高科技扫光光幕
+  .skeleton-shimmer-sweep {
+    position: absolute;
+    top: 0;
+    left: -150%;
+    width: 150%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.65) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    animation: skeleton-sweep-anim 2.4s infinite ease-in-out;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  // 居中科技质感状态浮层
+  .skeleton-status-card {
+    position: relative;
+    z-index: 3;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid #d0d5dd;
+    box-shadow: 0 10px 25px -5px rgba(16, 24, 40, 0.08), 0 8px 10px -6px rgba(16, 24, 40, 0.03);
+    border-radius: 12px;
+    padding: 22px 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    max-width: 420px;
+
+    .status-pulse-ring {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background-color: #eff8ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+
+      .beacon-core {
+        font-size: 18px;
+        color: #175cd3;
+        z-index: 1;
+      }
+
+      .pulse-beacon {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        background-color: #2e90fa;
+        opacity: 0.35;
+        animation: pulse-ring-anim 2s infinite ease-out;
+      }
+    }
+
+    .status-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #101828;
+      margin-bottom: 6px;
+    }
+
+    .status-subtitle {
+      font-size: 12px;
+      color: #667085;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .status-action-row {
+      display: flex;
+      gap: 10px;
+
+      .sk-retry-btn {
+        background-color: #175cd3;
+        color: #ffffff;
+        border: none;
+        padding: 8px 18px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.15s ease;
+
+        &:hover:not(:disabled) {
+          background-color: #154294;
+          box-shadow: 0 4px 8px rgba(23, 92, 211, 0.25);
+        }
+
+        &:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+
+        .btn-spin {
+          display: inline-block;
+          animation: spin 1s infinite linear;
+        }
+      }
+    }
+  }
+}
+
+@keyframes skeleton-sweep-anim {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes pulse-ring-anim {
+  0% { transform: scale(0.9); opacity: 0.5; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
 }
 
 // 悬浮可拖拽画线工具箱样式 (支持在整个个股与指数研究界面全局移动)
