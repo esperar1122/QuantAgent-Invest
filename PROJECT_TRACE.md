@@ -107,6 +107,14 @@ npm run build
   - 根除“在亮色模式下，顶部状态栏自己变为暗色”的严重视觉分裂；
   - 根因分析：此前 `app.ts` 主题默认设为 `'auto'`，导致 Windows 暗色系统偏好自动激活了 `<html class="dark">`，触发了 `dark-theme.scss` 将顶部状态栏硬编码涂黑；而页面主体为浅白底色；
   - 解决方案：主题默认值固定为 `'light'`，`isDarkTheme` 解绑操作系统自动深色判断，并补充了回测中心在真正暗色模式下的自适应样式规则，实现全站风格纯净一体。
+- **页面跳转频繁报“服务器内部错误，请稍后重试”根因排除与修复**：
+  - **根因剖析**：
+    1. **后端崩溃点**：`app/services/paper_trading/paper_account_service.py` 中使用了 `if col:` 进行条件判断。PyMongo 的 `Collection` 对象出于安全机制显式禁用了布尔值测试，直接抛出 `NotImplementedError: Collection objects do not implement truth value testing or bool(). Please compare with None instead: collection is not None`，导致 `GET /api/paper-trading/account` 接口必崩并返回 HTTP 500；
+    2. **前端传导链**：顶部状态栏 `TopTickerBar.vue` 与 `PaperTradingModal.vue` 在每次加载挂载时均会发起模拟账户总览同步请求；而 `frontend/src/api/request.ts` 中的 Axios 响应拦截器在 `case 500:` 时未校验 `skipErrorHandler`，直接弹出全局全局红标提示“服务器内部错误，请稍后重试”；
+  - **根治措施**：
+    1. 后端将 `paper_account_service.py` 中的 `if col:` 严格纠正为 `if col is not None:`，并强化 `db is not None` 空值判定；
+    2. 前端 `request.ts` 为 404、429、500、502~504 错误统一增加 `if (!config?.skipErrorHandler)` 拦截控制；
+    3. `quantApi.getPaperAccount(skipErrorHandler = true)` 支持静默容错，杜绝偶发网络抖动对用户换页浏览造成弹窗打扰。
 - **虚拟模拟盘交易终端 (`frontend/src/components/Terminal/PaperTradingModal.vue`)**：
   - 全局入口：顶栏右侧新增 `[🎮 虚拟模拟盘 | ¥100,000]` 实时净值胶囊，任意页面点击即开；个股研报决策横幅新增 `[🎮 模拟买入]` 按钮；
   - 账户总览：10 万元虚拟初始本金、可用资金、持仓市值、累计收益与浮动盈亏；

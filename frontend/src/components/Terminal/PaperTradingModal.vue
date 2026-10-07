@@ -334,7 +334,7 @@ function onSymbolBlur() {
 async function fetchAccount() {
   loading.value = true
   try {
-    const res = await quantApi.getPaperAccount()
+    const res = await quantApi.getPaperAccount(true)
     account.value = ((res as any)?.data || res) as PaperAccount
   } catch (err: any) {
     console.error('获取模拟账户失败:', err)

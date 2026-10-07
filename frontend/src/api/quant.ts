@@ -172,8 +172,8 @@ export const quantApi = {
   },
 
   // 虚拟模拟盘
-  getPaperAccount() {
-    return ApiClient.get<PaperAccount>('/api/paper-trading/account')
+  getPaperAccount(skipErrorHandler = false) {
+    return ApiClient.get<PaperAccount>('/api/paper-trading/account', undefined, { skipErrorHandler })
   },
   submitPaperOrder(params: PaperOrderRequest) {
     return ApiClient.post<PaperOrderResponse>('/api/paper-trading/order', params)

@@ -148,7 +148,7 @@ const paperAccount = ref<PaperAccount | null>(null)
 
 async function fetchPaperAccountSummary() {
   try {
-    const res = await quantApi.getPaperAccount()
+    const res = await quantApi.getPaperAccount(true)
     paperAccount.value = ((res as any)?.data || res) as PaperAccount
   } catch {}
 }

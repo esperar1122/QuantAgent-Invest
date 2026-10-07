@@ -25,14 +25,16 @@ class PaperAccountService:
         try:
             from app.core.database import get_database
             db = get_database()
-            return db.paper_accounts
+            if db is not None:
+                return db.paper_accounts
+            return None
         except Exception:
             return None
 
     async def get_or_create_account(self, account_id: str = "default", initial_cash: float = 100000.0) -> Dict[str, Any]:
         """获取或创建模拟账户"""
         col = self._get_collection()
-        if col:
+        if col is not None:
             try:
                 acc = await col.find_one({"account_id": account_id})
                 if acc:
@@ -64,7 +66,7 @@ class PaperAccountService:
             "updated_at": datetime.now().isoformat()
         }
 
-        if col:
+        if col is not None:
             try:
                 await col.insert_one(new_acc.copy())
             except Exception as e:
@@ -222,7 +224,7 @@ class PaperAccountService:
         # 4. 持久化并返回最新账户概览
         acc["updated_at"] = datetime.now().isoformat()
         col = self._get_collection()
-        if col:
+        if col is not None:
             try:
                 await col.update_one(
                     {"account_id": account_id},

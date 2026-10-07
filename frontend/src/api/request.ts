@@ -284,21 +284,29 @@ const createAxiosInstance = (): AxiosInstance => {
             break
 
           case 404:
-            showErrorMessage('请求的资源不存在')
+            if (!config?.skipErrorHandler) {
+              showErrorMessage('请求的资源不存在')
+            }
             break
 
           case 429:
-            showErrorMessage('请求过于频繁，请稍后重试')
+            if (!config?.skipErrorHandler) {
+              showErrorMessage('请求过于频繁，请稍后重试')
+            }
             break
 
           case 500:
-            showErrorMessage('服务器内部错误，请稍后重试')
+            if (!config?.skipErrorHandler) {
+              showErrorMessage('服务器内部错误，请稍后重试')
+            }
             break
 
           case 502:
           case 503:
           case 504:
-            showErrorMessage('服务暂时不可用，请稍后重试')
+            if (!config?.skipErrorHandler) {
+              showErrorMessage('服务暂时不可用，请稍后重试')
+            }
             break
 
           default:
