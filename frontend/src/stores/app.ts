@@ -50,7 +50,7 @@ export const useAppStore = defineStore('app', {
   state: (): AppState => ({
     loading: false,
     loadingProgress: 0,
-    theme: (useStorage('app-theme', 'auto').value || 'auto') as 'light' | 'dark' | 'auto',
+    theme: (useStorage('app-theme', 'light').value || 'light') as 'light' | 'dark' | 'auto',
     language: (useStorage('app-language', 'zh-CN').value || 'zh-CN') as 'zh-CN' | 'en-US',
 
     isOnline: navigator.onLine,
@@ -70,11 +70,8 @@ export const useAppStore = defineStore('app', {
   }),
 
   getters: {
-    // 是否为暗色主题
+    // 是否为暗色主题（默认金融终端明亮清爽白底主题，仅当明确选dark时激活深色）
     isDarkTheme(): boolean {
-      if (this.theme === 'auto') {
-        return window.matchMedia('(prefers-color-scheme: dark)').matches
-      }
       return this.theme === 'dark'
     },
     

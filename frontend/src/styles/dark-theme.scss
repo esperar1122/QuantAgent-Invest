@@ -211,6 +211,17 @@ html.dark {
       }
     }
 
+    .paper-trading-capsule-btn {
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%) !important;
+      border-color: #4338ca !important;
+      .paper-name { color: #a5b4fc !important; }
+      .paper-nav { color: #c7d2fe !important; }
+      &:hover {
+        background: linear-gradient(135deg, #312e81 0%, #3730a3 100%) !important;
+        border-color: #6366f1 !important;
+      }
+    }
+
     .market-status-pill {
       background-color: #182234 !important;
       border-color: #243147 !important;
@@ -684,6 +695,58 @@ html.dark {
         }
       }
       .feed-text { color: #94a3b8 !important; }
+    }
+  }
+
+  // 12. 回测中心暗色适配
+  .backtest-center-view {
+    .control-card,
+    .chart-card,
+    .table-card,
+    .empty-backtest-card {
+      background-color: #141c2c !important;
+      border-color: #243147 !important;
+    }
+
+    .card-section-title,
+    .ch-title,
+    .th-title {
+      color: #f1f5f9 !important;
+    }
+
+    .strategy-desc-box {
+      background-color: #182234 !important;
+      color: #94a3b8 !important;
+    }
+
+    .factor-block {
+      background-color: #182234 !important;
+      border-color: #243147 !important;
+      .factor-title {
+        color: #e2e8f0 !important;
+      }
+      .sub-label {
+        color: #94a3b8 !important;
+      }
+    }
+
+    .friction-rules-box {
+      background-color: rgba(245, 158, 11, 0.1) !important;
+      border-color: rgba(245, 158, 11, 0.25) !important;
+      .fr-title {
+        color: #fbbf24 !important;
+      }
+      .fr-list {
+        color: #fcd34d !important;
+      }
+    }
+
+    .kpi-card {
+      background-color: #141c2c !important;
+      border-color: #243147 !important;
+      .kpi-lbl {
+        color: #94a3b8 !important;
+      }
     }
   }
 }

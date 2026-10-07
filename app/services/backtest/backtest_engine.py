@@ -77,6 +77,13 @@ class BacktestEngine:
         is_chinext_or_star = symbol.startswith(("300", "301", "688"))
         limit_threshold = 0.198 if is_chinext_or_star else 0.098
 
+        # 提取风控参数 (适用于所有预设与自定义策略)
+        stop_loss_pct = float(strategy_params.get("stop_loss_pct", 0.0)) if strategy_params else 0.0
+        take_profit_pct = float(strategy_params.get("take_profit_pct", 0.0)) if strategy_params else 0.0
+        max_holding_days = int(strategy_params.get("max_holding_days", 0)) if strategy_params else 0
+
+        # 持仓天数追踪
+        holding_days_counter = 0
         prev_close = None
 
         # 3. 逐日事件驱动仿真
@@ -99,30 +106,85 @@ class BacktestEngine:
                 elif pct_chg <= -limit_threshold:
                     is_limit_down = True
 
-            # 撮合买卖信号 (使用当日收盘价撮合)
-            if signal == 1:  # 买入信号
-                # 计算目标购买股数
-                alloc_cash = sim.cash * self.position_ratio
-                if alloc_cash > 2000 and close_px > 0:
-                    raw_shares = int(alloc_cash / close_px)
-                    target_shares = (raw_shares // 100) * 100
-                    if target_shares >= 100:
-                        sim.buy(
+            pos = sim.positions.get(symbol)
+            has_position = pos is not None and pos.get("shares", 0) > 0
+            if has_position:
+                holding_days_counter += 1
+            else:
+                holding_days_counter = 0
+
+            # 优先执行风控规则检测 (止损 / 止盈 / 最大持仓天数)
+            risk_exit_triggered = False
+            if has_position and pos.get("avail_shares", 0) > 0:
+                avg_cost = pos.get("avg_cost", close_px)
+                if avg_cost > 0:
+                    current_gain_pct = (close_px - avg_cost) / avg_cost
+                    # 1. 严格止损检测 (例如设定 0.05 即 -5% 止损)
+                    if stop_loss_pct > 0 and current_gain_pct <= -stop_loss_pct:
+                        sim.sell(
                             date_str=date_str,
                             symbol=symbol,
                             price=close_px,
-                            target_shares=target_shares,
-                            is_limit_up=is_limit_up
+                            target_shares=None,
+                            is_limit_down=is_limit_down,
+                            reason=f"止损触发 ({round(current_gain_pct * 100, 1)}%)"
                         )
-            elif signal == -1:  # 卖出信号
-                # 全仓清仓
-                sim.sell(
-                    date_str=date_str,
-                    symbol=symbol,
-                    price=close_px,
-                    target_shares=None,
-                    is_limit_down=is_limit_down
-                )
+                        risk_exit_triggered = True
+                        holding_days_counter = 0
+                    # 2. 动态止盈检测 (例如设定 0.15 即 +15% 止盈)
+                    elif take_profit_pct > 0 and current_gain_pct >= take_profit_pct:
+                        sim.sell(
+                            date_str=date_str,
+                            symbol=symbol,
+                            price=close_px,
+                            target_shares=None,
+                            is_limit_down=is_limit_down,
+                            reason=f"止盈达成 (+{round(current_gain_pct * 100, 1)}%)"
+                        )
+                        risk_exit_triggered = True
+                        holding_days_counter = 0
+                    # 3. 最大持仓交易日周期到期平仓
+                    elif max_holding_days > 0 and holding_days_counter >= max_holding_days:
+                        sim.sell(
+                            date_str=date_str,
+                            symbol=symbol,
+                            price=close_px,
+                            target_shares=None,
+                            is_limit_down=is_limit_down,
+                            reason=f"持仓周期到期 ({holding_days_counter}天)"
+                        )
+                        risk_exit_triggered = True
+                        holding_days_counter = 0
+
+            # 撮合买卖信号 (使用当日收盘价撮合)
+            if not risk_exit_triggered:
+                if signal == 1 and not has_position:  # 买入信号（空仓时买入）
+                    # 计算目标购买股数
+                    alloc_cash = sim.cash * self.position_ratio
+                    if alloc_cash > 2000 and close_px > 0:
+                        raw_shares = int(alloc_cash / close_px)
+                        target_shares = (raw_shares // 100) * 100
+                        if target_shares >= 100:
+                            sim.buy(
+                                date_str=date_str,
+                                symbol=symbol,
+                                price=close_px,
+                                target_shares=target_shares,
+                                is_limit_up=is_limit_up,
+                                reason="策略买入信号"
+                            )
+                            holding_days_counter = 0
+                elif signal == -1 and has_position:  # 卖出信号
+                    # 全仓清仓
+                    sim.sell(
+                        date_str=date_str,
+                        symbol=symbol,
+                        price=close_px,
+                        target_shares=None,
+                        is_limit_down=is_limit_down,
+                        reason="指标死叉平仓"
+                    )
+                    holding_days_counter = 0
 
             # 记录当日收盘后的账户总资产
             cur_prices = {symbol: close_px}

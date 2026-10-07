@@ -44,7 +44,8 @@ class TradeSimulator:
         symbol: str,
         price: float,
         target_shares: int,
-        is_limit_up: bool = False
+        is_limit_up: bool = False,
+        reason: str = "策略买入"
     ) -> Optional[Dict[str, Any]]:
         """
         执行买入撮合
@@ -54,6 +55,7 @@ class TradeSimulator:
             price: 当日参考基准价（如开盘价或收盘价）
             target_shares: 拟买入股数
             is_limit_up: 当日是否封涨停（封涨停则买单无法撮合）
+            reason: 买入原因
         """
         if is_limit_up:
             return None  # 涨停无法买入
@@ -114,6 +116,7 @@ class TradeSimulator:
             "cash_after": round(self.cash, 2),
             "pnl": 0.0,
             "return_pct": 0.0,
+            "reason": reason,
         }
         self.trades_history.append(trade_record)
         return trade_record
@@ -124,7 +127,8 @@ class TradeSimulator:
         symbol: str,
         price: float,
         target_shares: Optional[int] = None,
-        is_limit_down: bool = False
+        is_limit_down: bool = False,
+        reason: str = "策略卖出"
     ) -> Optional[Dict[str, Any]]:
         """
         执行卖出撮合
@@ -134,6 +138,7 @@ class TradeSimulator:
             price: 当日参考基准价
             target_shares: 拟卖出股数，若为 None 则全部清仓
             is_limit_down: 当日是否跌停（跌停则无法撮合成交）
+            reason: 卖出原因
         """
         if is_limit_down:
             return None  # 跌停无法卖出
@@ -186,6 +191,7 @@ class TradeSimulator:
             "cash_after": round(self.cash, 2),
             "pnl": pnl,
             "return_pct": return_pct,
+            "reason": reason,
         }
         self.trades_history.append(trade_record)
         return trade_record

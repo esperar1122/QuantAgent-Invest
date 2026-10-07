@@ -8,6 +8,9 @@
         <span class="bc-subtitle">严格遵循 A 股规则 · T+1 撮合约束 · 涨跌停限制 · 真实交易摩擦成本</span>
       </div>
       <div class="banner-quick-actions">
+        <el-button size="small" type="primary" plain @click="loadPreset('000001', 'custom_rule')">
+          🌟 平安银行 · 自定义多因子
+        </el-button>
         <el-button size="small" type="primary" plain @click="loadPreset('600519', 'dual_ma')">
           茅台 · 双均线回测
         </el-button>
@@ -22,11 +25,12 @@
 
     <!-- 主工作区：左侧参数配置 + 右侧绩效曲线与明细 -->
     <div class="bc-workspace-grid">
-      <!-- 左栏：回测控制台 (360px) -->
+      <!-- 左栏：回测控制台 (380px) -->
       <aside class="bc-control-col">
         <el-card shadow="never" class="control-card">
           <div class="card-section-title">1. 选择回测策略</div>
           <el-select v-model="form.strategy_name" class="full-width" @change="onStrategyChange">
+            <el-option label="🌟 自定义多指标组合策略 (Custom Rule)" value="custom_rule" />
             <el-option label="📈 双均线金叉死叉策略 (Dual MA)" value="dual_ma" />
             <el-option label="🌊 MACD 动量趋势策略 (MACD)" value="macd" />
             <el-option label="🎯 布林带均值回归策略 (Bollinger)" value="bollinger" />
@@ -71,8 +75,92 @@
 
           <div class="card-section-title" style="margin-top: 10px;">3. 策略专用参数</div>
           <el-form label-position="top" size="small">
+            <!-- 自定义多指标组合策略参数 -->
+            <template v-if="form.strategy_name === 'custom_rule'">
+              <div class="custom-rule-container">
+                <el-form-item label="多条件协同逻辑">
+                  <el-radio-group v-model="strategyParams.condition_mode" size="small" class="full-width">
+                    <el-radio-button value="and" style="width: 50%;">全部满足 (AND)</el-radio-button>
+                    <el-radio-button value="or" style="width: 50%;">任一满足 (OR)</el-radio-button>
+                  </el-radio-group>
+                </el-form-item>
+
+                <!-- 均线形态因子 -->
+                <div class="factor-block">
+                  <div class="factor-title">① 均线形态过滤</div>
+                  <el-select v-model="strategyParams.ma_mode" class="full-width" size="small">
+                    <el-option label="✕ 关闭均线过滤" value="none" />
+                    <el-option label="✓ 均线金叉 (快线上穿慢线)" value="cross" />
+                    <el-option label="✓ 均线多头排列 (快线 > 慢线)" value="bull" />
+                    <el-option label="✓ 站上长期均线 (收盘价 > 慢线)" value="above_long" />
+                  </el-select>
+                  <el-row :gutter="8" v-if="strategyParams.ma_mode !== 'none'" style="margin-top: 6px;">
+                    <el-col :span="12">
+                      <div class="sub-label">快线 (日)</div>
+                      <el-input-number v-model="strategyParams.ma_fast" :min="2" :max="60" size="small" class="full-width" />
+                    </el-col>
+                    <el-col :span="12">
+                      <div class="sub-label">慢线 (日)</div>
+                      <el-input-number v-model="strategyParams.ma_slow" :min="5" :max="250" size="small" class="full-width" />
+                    </el-col>
+                  </el-row>
+                </div>
+
+                <!-- 成交量能因子 -->
+                <div class="factor-block">
+                  <div class="factor-title">② 量能异动过滤</div>
+                  <el-select v-model="strategyParams.volume_filter" class="full-width" size="small">
+                    <el-option label="✕ 关闭量能过滤" value="none" />
+                    <el-option label="✓ 放量异动 (当日量 > 5日均量 × 倍数)" value="vol_surge" />
+                    <el-option label="✓ 连续温和放量 (连续2日放量)" value="vol_expand" />
+                  </el-select>
+                  <div v-if="strategyParams.volume_filter === 'vol_surge'" style="margin-top: 6px;">
+                    <div class="sub-label">放量倍数阈值</div>
+                    <el-input-number v-model="strategyParams.vol_ratio" :min="1.1" :max="5.0" :step="0.1" size="small" class="full-width" />
+                  </div>
+                </div>
+
+                <!-- RSI 震荡因子 -->
+                <div class="factor-block">
+                  <div class="factor-title">③ RSI 动量震荡过滤</div>
+                  <el-select v-model="strategyParams.rsi_filter" class="full-width" size="small">
+                    <el-option label="✕ 关闭 RSI 过滤" value="none" />
+                    <el-option label="✓ 超跌区间入场 (RSI < 阈值)" value="oversold" />
+                    <el-option label="✓ 超跌反弹修复 (自超跌拐头向上)" value="rebound" />
+                  </el-select>
+                  <div v-if="strategyParams.rsi_filter !== 'none'" style="margin-top: 6px;">
+                    <div class="sub-label">RSI 超跌阈值</div>
+                    <el-input-number v-model="strategyParams.rsi_threshold" :min="15" :max="45" size="small" class="full-width" />
+                  </div>
+                </div>
+
+                <!-- KDJ 动量因子 -->
+                <div class="factor-block">
+                  <div class="factor-title">④ KDJ 随机指标过滤</div>
+                  <el-select v-model="strategyParams.kdj_filter" class="full-width" size="small">
+                    <el-option label="✕ 关闭 KDJ 过滤" value="none" />
+                    <el-option label="✓ 低位金叉 (K上穿D且D<40)" value="golden_cross" />
+                    <el-option label="✓ J值极度超卖触底 (J < 10)" value="low_j" />
+                  </el-select>
+                </div>
+
+                <!-- 通道突破因子 -->
+                <div class="factor-block">
+                  <div class="factor-title">⑤ 通道突破过滤</div>
+                  <el-select v-model="strategyParams.breakout_filter" class="full-width" size="small">
+                    <el-option label="✕ 关闭突破过滤" value="none" />
+                    <el-option label="✓ 阶段新高突破" value="new_high" />
+                  </el-select>
+                  <div v-if="strategyParams.breakout_filter === 'new_high'" style="margin-top: 6px;">
+                    <div class="sub-label">新高周期 (天)</div>
+                    <el-input-number v-model="strategyParams.breakout_days" :min="5" :max="120" size="small" class="full-width" />
+                  </div>
+                </div>
+              </div>
+            </template>
+
             <!-- 双均线参数 -->
-            <template v-if="form.strategy_name === 'dual_ma'">
+            <template v-else-if="form.strategy_name === 'dual_ma'">
               <el-row :gutter="10">
                 <el-col :span="12">
                   <el-form-item label="快线周期 (日)">
@@ -123,6 +211,62 @@
                 </el-col>
               </el-row>
             </template>
+          </el-form>
+
+          <!-- 4. 仓位与风控规则 -->
+          <div class="card-section-title" style="margin-top: 14px;">4. 仓位与止盈止损风控</div>
+          <el-form label-position="top" size="small">
+            <el-row :gutter="10">
+              <el-col :span="12">
+                <el-form-item label="硬止损比例 (%)">
+                  <el-input-number
+                    v-model="riskParams.stop_loss_pct"
+                    :min="0"
+                    :max="30"
+                    :step="1"
+                    placeholder="0不设置"
+                    class="full-width"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="动态止盈比例 (%)">
+                  <el-input-number
+                    v-model="riskParams.take_profit_pct"
+                    :min="0"
+                    :max="100"
+                    :step="5"
+                    placeholder="0不设置"
+                    class="full-width"
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="10">
+              <el-col :span="12">
+                <el-form-item label="最长持股 (日)">
+                  <el-input-number
+                    v-model="riskParams.max_holding_days"
+                    :min="0"
+                    :max="365"
+                    :step="5"
+                    placeholder="0不限制"
+                    class="full-width"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="单次仓位比例 (%)">
+                  <el-input-number
+                    v-model="riskParams.position_ratio"
+                    :min="10"
+                    :max="100"
+                    :step="5"
+                    class="full-width"
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
           </el-form>
 
           <!-- A股交易摩擦硬性约束说明 -->
@@ -253,6 +397,17 @@
                   </el-tag>
                 </template>
               </el-table-column>
+              <el-table-column prop="reason" label="触发动因" min-width="140">
+                <template #default="{ row }">
+                  <el-tag
+                    size="small"
+                    :type="row.reason?.includes('止损') ? 'danger' : row.reason?.includes('止盈') ? 'success' : row.reason?.includes('超时') ? 'warning' : 'info'"
+                    effect="plain"
+                  >
+                    {{ row.reason || (row.action === 'BUY' ? '策略买入' : '策略卖出') }}
+                  </el-tag>
+                </template>
+              </el-table-column>
               <el-table-column prop="price" label="成交价" width="90" align="right">
                 <template #default="{ row }">
                   <span class="font-mono">¥{{ row.price?.toFixed(2) }}</span>
@@ -319,18 +474,42 @@ const form = ref({
   initial_capital: 100000
 })
 
+const riskParams = ref({
+  stop_loss_pct: 8, // 8% 硬止损
+  take_profit_pct: 20, // 20% 动态止盈
+  max_holding_days: 0, // 0 不限制
+  position_ratio: 95 // 95% 仓位
+})
+
 const strategyParams = ref<Record<string, any>>({
+  // 双均线
   fast_period: 5,
   slow_period: 20,
+  // MACD
   fast: 12,
   slow: 26,
   signal: 9,
+  // 布林带
   window: 20,
-  num_std: 2.0
+  num_std: 2.0,
+  // 自定义多指标组合
+  condition_mode: 'and',
+  ma_mode: 'cross',
+  ma_fast: 5,
+  ma_slow: 20,
+  volume_filter: 'vol_surge',
+  vol_ratio: 1.5,
+  rsi_filter: 'none',
+  rsi_threshold: 30,
+  kdj_filter: 'none',
+  breakout_filter: 'none',
+  breakout_days: 20
 })
 
 const currentStrategyDesc = computed(() => {
   switch (form.value.strategy_name) {
+    case 'custom_rule':
+      return '自主搭积木式组合策略：自由组合均线形态、成交量倍增、RSI超跌反转、KDJ低位金叉及通道新高突破，支持全满足(AND)或任一满足(OR)多因子入场，配合严格止损止盈风控。'
     case 'dual_ma':
       return '经典趋势跟踪策略：短期快线自下向上穿越慢线（金叉）全仓买入，自上向下穿越慢线（死叉）坚决止损止盈清仓。'
     case 'macd':
@@ -374,13 +553,21 @@ async function runBacktest() {
 
   running.value = true
   try {
+    const combinedParams = {
+      ...strategyParams.value,
+      stop_loss_pct: riskParams.value.stop_loss_pct > 0 ? riskParams.value.stop_loss_pct / 100 : 0,
+      take_profit_pct: riskParams.value.take_profit_pct > 0 ? riskParams.value.take_profit_pct / 100 : 0,
+      max_holding_days: riskParams.value.max_holding_days || 0,
+      position_ratio: (riskParams.value.position_ratio || 95) / 100
+    }
+
     const res = await quantApi.runBacktest({
       symbol: form.value.symbol,
       strategy_name: form.value.strategy_name,
       start_date: dateRange.value[0],
       end_date: dateRange.value[1],
       initial_capital: form.value.initial_capital,
-      strategy_params: strategyParams.value
+      strategy_params: combinedParams
     })
 
     const data = ((res as any)?.data || res) as BacktestResponse
@@ -518,7 +705,7 @@ onMounted(() => {
 
 .bc-workspace-grid {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 380px 1fr;
   gap: 16px;
   align-items: start;
 }
@@ -546,6 +733,33 @@ onMounted(() => {
     font-size: 11px;
     color: #64748b;
     line-height: 1.5;
+  }
+
+  .custom-rule-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .factor-block {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px 10px;
+
+    .factor-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 6px;
+    }
+
+    .sub-label {
+      font-size: 10px;
+      color: #64748b;
+      margin-bottom: 2px;
+    }
   }
 
   .quick-date-chips {

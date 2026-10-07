@@ -19,6 +19,7 @@ export interface BacktestTradeLog {
   fee: number
   realized_pnl: number
   return_pct: number
+  reason?: string
 }
 
 export interface BacktestDailyNAV {

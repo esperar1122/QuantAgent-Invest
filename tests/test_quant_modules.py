@@ -243,11 +243,68 @@ def test_paper_trading_service():
     print("✅ test_paper_trading_service passed")
 
 
+def test_custom_rule_strategy():
+    """测试自定义多指标组合策略与风控回测"""
+    from app.services.backtest.strategies import get_strategy_by_name
+    from app.services.backtest.backtest_engine import BacktestEngine
+
+    # 生成模拟上涨与回撤数据
+    dates = pd.date_range("2024-01-01", periods=60).strftime("%Y-%m-%d").tolist()
+    # 模拟价格先跌后涨再跌，形成真实的金叉与死叉
+    prices = [10.0 - i * 0.2 if i < 15 else (7.0 + (i - 15) * 0.4 if i < 35 else 15.0 - (i - 35) * 0.3) for i in range(60)]
+    vols = [10000 + i * 200 for i in range(60)]
+    vols[20] = 40000  # 金叉当日放量
+    df = pd.DataFrame({
+        "date": dates,
+        "open": prices,
+        "high": [p * 1.02 for p in prices],
+        "low": [p * 0.98 for p in prices],
+        "close": prices,
+        "volume": vols
+    })
+
+    # 1. 验证自定义策略信号生成
+    strat = get_strategy_by_name("custom_rule", {
+        "ma_mode": "cross",
+        "short_window": 5,
+        "long_window": 15,
+        "volume_filter": "vol_surge",
+        "vol_multiplier": 1.1,
+        "rsi_filter": "none"
+    })
+    signals_df = strat.generate_signals(df)
+    assert "signal" in signals_df.columns
+    assert 1 in signals_df["signal"].values
+
+    # 2. 验证结合硬止损 (-5%) 和止盈 (+15%) 的全流程回测
+    engine = BacktestEngine(initial_cash=100000)
+    res = engine.run(
+        symbol="600519",
+        df=df,
+        strategy_name="custom_rule",
+        strategy_params={
+            "ma_mode": "cross",
+            "short_window": 5,
+            "long_window": 15,
+            "stop_loss_pct": 0.05,
+            "take_profit_pct": 0.15,
+            "max_holding_days": 10
+        }
+    )
+    assert "metrics" in res
+    assert "equity_curve" in res
+    assert "trades" in res
+    assert len(res["equity_curve"]) == 60
+
+    print("✅ test_custom_rule_strategy passed")
+
+
 if __name__ == "__main__":
     test_performance_calculator()
     test_trade_simulator_a_share_rules()
     test_strategies_signals()
     test_backtest_engine_run()
+    test_custom_rule_strategy()
     test_position_sizing_models()
     test_portfolio_optimizer()
     test_wechat_notifier_card_formatting()
