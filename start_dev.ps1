@@ -117,6 +117,71 @@ function Stop-ProcessTree([int]$targetPid) {
     }
 }
 
+function Ensure-DockerServices {
+    Write-Host "[0/3] 检查 Docker 与基础数据库服务..." -ForegroundColor Cyan
+    $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
+    if (-not $dockerCmd) {
+        Write-Host "  ⚠️ 未找到 docker 命令，如需使用数据库请确认 Docker Desktop 是否已安装并加入 PATH" -ForegroundColor Yellow
+        return
+    }
+
+    # 测试 Docker 守护进程是否响应
+    $dockerRunning = $false
+    try {
+        $null = docker ps -q 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $dockerRunning = $true
+        }
+    } catch {}
+
+    if (-not $dockerRunning) {
+        Write-Host "  ⚠️ Docker 引擎未运行，正在尝试自动唤起 Docker Desktop..." -ForegroundColor Yellow
+        $desktopPaths = @(
+            "F:\Docker Desktop\Docker Desktop.exe",
+            "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+        )
+        $launched = $false
+        foreach ($p in $desktopPaths) {
+            if (Test-Path $p) {
+                Start-Process -FilePath $p
+                $launched = $true
+                break
+            }
+        }
+        if ($launched) {
+            Write-Host "  ⏳ 等待 Docker Desktop 引擎启动就绪 (最多等待 30 秒)..." -ForegroundColor Yellow
+            $retries = 0
+            while ($retries -lt 15) {
+                Start-Sleep -Seconds 2
+                $retries++
+                $null = docker ps -q 2>$null
+                if ($LASTEXITCODE -eq 0) {
+                    $dockerRunning = $true
+                    Write-Host "  ✅ Docker 引擎已就绪！" -ForegroundColor Green
+                    break
+                }
+            }
+        }
+    }
+
+    if ($dockerRunning) {
+        # 检查 mongo 与 redis 容器
+        try {
+            $containers = docker ps --format "{{.Names}}" 2>$null
+            if ($containers -notmatch "quantagent-mongo" -or $containers -notmatch "quantagent-redis") {
+                Write-Host "  🔄 正在通过 docker compose 启动 MongoDB 6.0 和 Redis 7.0 容器..." -ForegroundColor Cyan
+                docker compose -f (Join-Path $root "docker-compose.yml") up -d
+            } else {
+                Write-Host "  ✅ MongoDB 和 Redis 容器运行正常" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "  ⚠️ 容器自启检查异常: $_" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "  ⚠️ Docker 引擎未能连接，系统将降级使用本地文件缓存与降级机制运行" -ForegroundColor Yellow
+    }
+}
+
 # 3. 仅启动前端分支
 if ($FrontendOnly) {
     Stop-PortProcess $FrontendPort "前端 Vite"
@@ -170,6 +235,9 @@ if ($BackendOnly) {
 }
 
 # 6. 【默认核心模式】：一键同时启动 前端 (Vite) + 后端 API (FastAPI)
+# 0. 自动检测并拉起 Docker 与数据库
+Ensure-DockerServices
+
 Stop-PortProcess $Port "后端 API"
 Stop-PortProcess $FrontendPort "前端 Vite"
 if ($WithWorker) { Stop-PortProcess $WorkerPort "Worker" }
@@ -206,10 +274,34 @@ Register-ObjectEvent -InputObject $backendProc -EventName "ErrorDataReceived" -A
 $backendProc.Start() | Out-Null
 $backendProc.BeginOutputReadLine()
 $backendProc.BeginErrorReadLine()
-Write-Host "[1/2] 后端 API 服务已就绪 (PID: $($backendProc.Id))" -ForegroundColor Green
+Write-Host "[1/2] 后端 API 服务进程已唤起 (PID: $($backendProc.Id))" -ForegroundColor Cyan
+Write-Host "  ⏳ 正在等待后端完成初始化（加载量化数据源、数据库索引与缓存）..." -ForegroundColor Yellow
 
-# 稍等后端完成基础网络监听初始化
-Start-Sleep -Milliseconds 1500
+# 智能探测后端是否真正进入监听状态 (Listen)，避免前端提前发起请求报 ECONNREFUSED
+$backendReady = $false
+$pollSeconds = 0
+$maxWait = 30
+while ($pollSeconds -lt $maxWait) {
+    Start-Sleep -Seconds 1
+    $pollSeconds++
+    try {
+        $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+        if ($conn) {
+            $backendReady = $true
+            break
+        }
+    } catch {}
+    if ($backendProc.HasExited) {
+        Write-Host "  ❌ 后端 API 进程异常退出 (退出代码: $($backendProc.ExitCode))" -ForegroundColor Red
+        break
+    }
+}
+
+if ($backendReady) {
+    Write-Host "  ✅ 后端 API 服务已就绪！监听于 http://127.0.0.1:$Port (耗时 ${pollSeconds}s)" -ForegroundColor Green
+} else {
+    Write-Host "  ⚠️ 后端 API 仍在后台初始化中，继续拉起前端..." -ForegroundColor Yellow
+}
 
 # 启动前端 Vite 进程
 $frontendInfo = New-Object System.Diagnostics.ProcessStartInfo
