@@ -69,6 +69,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '我的自选股', requiresAuth: true }
       },
       {
+        path: 'backtest',
+        name: 'TerminalBacktest',
+        component: () => import('@/views/Terminal/BacktestCenter/index.vue'),
+        meta: { title: '策略历史回测中心', requiresAuth: false }
+      },
+      {
         path: 'stocks/:code',
         name: 'TerminalStockDetail',
         component: () => import('@/views/Stocks/Detail.vue'),

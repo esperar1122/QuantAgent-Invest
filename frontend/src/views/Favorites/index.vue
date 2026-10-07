@@ -110,13 +110,19 @@
         <el-table-column type="selection" width="55" />
         <el-table-column prop="stock_code" label="股票代码" width="120">
           <template #default="{ row }">
-            <el-link type="primary" @click="viewStockDetail(row)">
+            <el-link type="primary" @click="viewStockDetail(row)" title="点击直达个股与指数深度全景研判">
               {{ row.stock_code }}
             </el-link>
           </template>
         </el-table-column>
 
-        <el-table-column prop="stock_name" label="股票名称" width="150" />
+        <el-table-column prop="stock_name" label="股票名称" width="150">
+          <template #default="{ row }">
+            <el-link @click="viewStockDetail(row)" :underline="false" style="font-weight: 600;" title="点击直达个股与指数深度全景研判">
+              {{ row.stock_name }}
+            </el-link>
+          </template>
+        </el-table-column>
         <el-table-column prop="market" label="市场" width="80">
           <template #default="{ row }">
             {{ row.market || 'A股' }}
@@ -173,8 +179,16 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="310" fixed="right">
           <template #default="{ row }">
+            <el-button
+              type="text"
+              size="small"
+              @click="viewStockDetail(row)"
+              style="color: #67c23a; font-weight: 600;"
+            >
+              深度研判
+            </el-button>
             <el-button
               type="text"
               size="small"
@@ -973,8 +987,10 @@ const removeFavorite = async (row: any) => {
 }
 
 const viewStockDetail = (row: any) => {
+  const code = String(row.stock_code || row.symbol || '').toLowerCase()
   router.push({
-    path: `/terminal/stocks/${String(row.stock_code || '').toUpperCase()}`
+    path: '/terminal/stock',
+    query: { code }
   })
 }
 

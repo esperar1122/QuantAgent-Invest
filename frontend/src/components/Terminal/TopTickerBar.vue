@@ -40,6 +40,13 @@
 
     <!-- 右侧交易状态、主题切换与返回工作台 -->
     <div class="status-section">
+      <!-- 虚拟模拟盘入口胶囊 -->
+      <button class="paper-trading-capsule-btn" @click="openPaperTradingModal" title="点击打开虚拟模拟盘交易终端 (10万本金 · T+1实盘撮合仿真)">
+        <span class="game-emoji">🎮</span>
+        <span class="paper-name">虚拟模拟盘</span>
+        <span class="paper-nav font-mono tabular-nums">¥{{ formatPaperEquity }}</span>
+      </button>
+
       <div class="market-status-pill">
         <span class="pulse-dot" :class="marketStatusClass"></span>
         <span class="status-text">{{ marketStatusText }}</span>
@@ -107,6 +114,9 @@
       </div>
     </el-scrollbar>
   </el-drawer>
+
+  <!-- 虚拟模拟盘交易终端弹窗 -->
+  <PaperTradingModal v-model="paperModalVisible" />
 </template>
 
 <script setup lang="ts">
@@ -118,6 +128,8 @@ import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
 import { stocksApi } from '@/api/stocks'
+import { quantApi, type PaperAccount } from '@/api/quant'
+import PaperTradingModal from '@/components/Terminal/PaperTradingModal.vue'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -129,6 +141,26 @@ const drawerVisible = ref(false)
 const filter = ref<'all' | 'unread'>('all')
 let timerCount: any = null
 let timerList: any = null
+
+// 虚拟模拟盘控制器
+const paperModalVisible = ref(false)
+const paperAccount = ref<PaperAccount | null>(null)
+
+async function fetchPaperAccountSummary() {
+  try {
+    const res = await quantApi.getPaperAccount()
+    paperAccount.value = ((res as any)?.data || res) as PaperAccount
+  } catch {}
+}
+
+const formatPaperEquity = computed(() => {
+  const eq = paperAccount.value?.total_equity ?? 100000
+  return Number(eq).toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+})
+
+function openPaperTradingModal() {
+  paperModalVisible.value = true
+}
 
 const isDark = computed(() => appStore.isDarkTheme)
 
@@ -300,6 +332,9 @@ onMounted(() => {
   notifStore.refreshUnreadCount()
   notifStore.connect()
   timerCount = setInterval(() => notifStore.refreshUnreadCount(), 30000)
+
+  // 虚拟模拟盘账户同步
+  fetchPaperAccountSummary()
 
   watch(
     drawerVisible,
@@ -504,6 +539,39 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+
+  .paper-trading-capsule-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
+    border: 1px solid #c7d2fe;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-right: 10px;
+    transition: all 0.2s ease;
+
+    .game-emoji {
+      font-size: 13px;
+    }
+    .paper-name {
+      font-weight: 700;
+      color: #3730a3;
+    }
+    .paper-nav {
+      font-weight: 800;
+      color: #4f46e5;
+    }
+
+    &:hover {
+      background: linear-gradient(135deg, #dbeafe 0%, #c7d2fe 100%);
+      border-color: #818cf8;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(79, 70, 229, 0.15);
+    }
+  }
 
   .market-status-pill {
     display: flex;

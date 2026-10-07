@@ -67,6 +67,14 @@
           </router-link>
         </el-tooltip>
 
+        <el-tooltip content="策略历史回测" placement="right" :disabled="!isCollapsed" :show-after="150">
+          <router-link to="/terminal/backtest" class="nav-item" active-class="active">
+            <el-icon class="nav-icon"><Odometer /></el-icon>
+            <span v-if="!isCollapsed" class="nav-label">策略历史回测</span>
+            <span v-if="!isCollapsed" class="badge-hot">回测</span>
+          </router-link>
+        </el-tooltip>
+
         <el-tooltip content="我的自选股" placement="right" :disabled="!isCollapsed" :show-after="150">
           <router-link to="/terminal/favorites" class="nav-item" active-class="active">
             <el-icon class="nav-icon"><Star /></el-icon>
