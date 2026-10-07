@@ -222,6 +222,13 @@ async def init_database_views_and_indexes():
         # 2. 创建必要的索引
         await create_database_indexes(db)
 
+        # 3. 确保默认管理员用户存在
+        try:
+            from app.services.user_service import user_service
+            await user_service.create_admin_user("admin", "admin123", "admin@tradingagents.cn")
+        except Exception as admin_err:
+            logger.warning(f"⚠️ 检查/创建默认管理员账号失败: {admin_err}")
+
         logger.info("✅ 数据库视图和索引初始化完成")
 
     except Exception as e:

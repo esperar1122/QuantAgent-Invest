@@ -713,6 +713,17 @@ app.include_router(multi_period_sync.router, tags=["multi-period-sync"])
 app.include_router(financial_data.router, tags=["financial-data"])
 app.include_router(news_data.router, tags=["news-data"])
 
+# 🔥 个人量化系统闭环核心模块（回测引擎、仓位组合优化、实时行情推流、虚拟模拟盘）
+from app.routers import backtest as backtest_router
+from app.routers import portfolio as portfolio_router
+from app.routers import realtime_quotes as realtime_quotes_router
+from app.routers import paper_trading as paper_trading_router
+
+app.include_router(backtest_router.router)
+app.include_router(portfolio_router.router)
+app.include_router(realtime_quotes_router.router)
+app.include_router(paper_trading_router.router)
+
 
 @app.get("/")
 async def root():
