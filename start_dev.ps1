@@ -117,15 +117,49 @@ function Stop-ProcessTree([int]$targetPid) {
     }
 }
 
-function Ensure-DockerServices {
-    Write-Host "[0/3] 检查 Docker 与基础数据库服务..." -ForegroundColor Cyan
-    $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
-    if (-not $dockerCmd) {
-        Write-Host "  ⚠️ 未找到 docker 命令，如需使用数据库请确认 Docker Desktop 是否已安装并加入 PATH" -ForegroundColor Yellow
+function Test-PortOpen([string]$ip, [int]$port, [int]$timeoutMs = 400) {
+    try {
+        $c = New-Object System.Net.Sockets.TcpClient
+        $iar = $c.BeginConnect($ip, $port, $null, $null)
+        $success = $iar.AsyncWaitHandle.WaitOne($timeoutMs, $false)
+        if ($success -and $c.Connected) {
+            $c.EndConnect($iar)
+            $c.Close()
+            return $true
+        }
+        $c.Close()
+        return $false
+    } catch {
+        return $false
+    }
+}
+
+function Ensure-DatabaseServices {
+    Write-Host "[0/3] 检查底层数据库与缓存服务..." -ForegroundColor Cyan
+
+    # 1. 优先检测原生 MongoDB (27017) 与 Redis (6379) 端口是否已就绪（适配无 Docker 机器）
+    $mongoUp = Test-PortOpen "127.0.0.1" 27017
+    $redisUp = Test-PortOpen "127.0.0.1" 6379
+
+    if ($mongoUp -and $redisUp) {
+        Write-Host "  ✅ 本地 MongoDB (27017) 与 Redis (6379) 已在运行中（原生服务或独立进程），无需 Docker" -ForegroundColor Green
         return
     }
 
-    # 测试 Docker 守护进程是否响应
+    if ($mongoUp -and -not $redisUp) {
+        Write-Host "  ℹ️ 检测到本地 MongoDB (27017) 已运行，Redis (6379) 未运行" -ForegroundColor Yellow
+    } elseif (-not $mongoUp -and $redisUp) {
+        Write-Host "  ℹ️ 检测到本地 Redis (6379) 已运行，MongoDB (27017) 未运行" -ForegroundColor Yellow
+    }
+
+    # 2. 若缺少数据库服务，检测本机是否安装了 Docker
+    $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
+    if (-not $dockerCmd) {
+        Write-Host "  ℹ️ 本机未安装 Docker 环境。若为轻量开发，系统将降级使用内存与本地文件缓存运行" -ForegroundColor Yellow
+        return
+    }
+
+    # 3. 针对安装了 Docker 的设备（如主力机），测试 Docker 守护进程并自动拉起
     $dockerRunning = $false
     try {
         $null = docker ps -q 2>$null
@@ -135,7 +169,7 @@ function Ensure-DockerServices {
     } catch {}
 
     if (-not $dockerRunning) {
-        Write-Host "  ⚠️ Docker 引擎未运行，正在尝试自动唤起 Docker Desktop..." -ForegroundColor Yellow
+        Write-Host "  ⚠️ 数据库端口未就绪且 Docker 未运行，正在尝试自动唤起 Docker Desktop..." -ForegroundColor Yellow
         $desktopPaths = @(
             "F:\Docker Desktop\Docker Desktop.exe",
             "C:\Program Files\Docker\Docker\Docker Desktop.exe"
@@ -219,6 +253,7 @@ if ($WorkerOnly) {
 
 # 5. 仅启动后端 API 分支
 if ($BackendOnly) {
+    Ensure-DatabaseServices
     Stop-PortProcess $Port "后端 API"
     Write-Host ""
     Write-Host "========================================================" -ForegroundColor Cyan
@@ -235,8 +270,8 @@ if ($BackendOnly) {
 }
 
 # 6. 【默认核心模式】：一键同时启动 前端 (Vite) + 后端 API (FastAPI)
-# 0. 自动检测并拉起 Docker 与数据库
-Ensure-DockerServices
+# 0. 自动检测并拉起底层数据库
+Ensure-DatabaseServices
 
 Stop-PortProcess $Port "后端 API"
 Stop-PortProcess $FrontendPort "前端 Vite"

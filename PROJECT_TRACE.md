@@ -39,13 +39,15 @@ git clone https://github.com/esperar1122/QuantAgent-Invest.git
 cd QuantAgent-Invest
 ```
 
-### 3. 后端环境与数据库配置
+### 3. 后端环境与数据库配置 (双设备跨端环境自适应)
 ```bash
 # 1. 复制环境变量文件
 cp .env.example .env
 
-# 2. 启动数据库容器 (MongoDB 6.0 + Redis 7.0)
-docker compose up -d
+# 2. 数据库服务模式（脚本已全自动智能识别，无需手动干预）：
+#   - 设备 A (带 Docker): start_dev.bat 自动唤起 Docker Desktop 并拉起容器
+#   - 设备 B (无 Docker / 原生服务): 本机开启原生 MongoDB (27017) 和 Redis (6379) 即可，脚本自动侦测并跳过 Docker
+#   - 纯轻量模式: 两者均无时系统自动降级为本地文件/内存缓存
 
 # 3. 创建并激活虚拟环境 (推荐 uv 或标准 python)
 uv venv venv --python 3.11   # 或 python -m venv venv
@@ -54,10 +56,8 @@ uv venv venv --python 3.11   # 或 python -m venv venv
 # 4. 安装依赖
 uv pip install -e .         # 或 pip install -r requirements.txt
 
-# 5. 启动后端 API 服务 (端口 8000)
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-# 或者在 Windows 下直接运行一键脚本：
-# .\start_dev.ps1
+# 5. 启动前后端全栈服务 (端口 8000 + 3000)
+.\start_dev.bat             # 或 powershell .\start_dev.ps1
 ```
 - 默认管理员账号：`admin` / `admin123`（服务首次启动已在 `app/core/database.py` 中内置保底自动创建）
 - 后端 Swagger 接口文档：`http://127.0.0.1:8000/docs`
