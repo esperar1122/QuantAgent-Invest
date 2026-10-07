@@ -1965,8 +1965,8 @@ async def get_stock_pool(
     direction = 1 if c_sort_order.lower() == "asc" else -1
     skip = (c_page - 1) * c_page_size
 
-    if c_sort_field in ["close", "pct_chg", "amount", "volume", "turnover_rate", "volume_ratio"]:
-        # 基于行情数据的全市场排序
+    if c_sort_field in ["close", "pct_chg", "amount", "volume", "turnover_rate", "volume_ratio", "pe", "pb", "total_mv", "circ_mv"]:
+        # 基于行情与估值数据的全市场排序
         mq_query = {"code": {"$in": quote_codes}} if quote_codes is not None else {}
         cursor = db["market_quotes"].find(mq_query, {"code": 1, c_sort_field: 1}).sort(c_sort_field, direction)
         sorted_quote_codes = [doc["code"] async for doc in cursor]
@@ -2009,7 +2009,15 @@ async def get_stock_pool(
         turnover_rate = q.get("turnover_rate") if q.get("turnover_rate") is not None else item.get("turnover_rate")
         volume_ratio = q.get("volume_ratio") if q.get("volume_ratio") is not None else item.get("volume_ratio")
         circ_mv = q.get("circ_mv") if q.get("circ_mv") is not None else item.get("circ_mv")
-        total_mv = item.get("total_mv") if item.get("total_mv") is not None else q.get("total_mv")
+        total_mv = q.get("total_mv") if q.get("total_mv") is not None else item.get("total_mv")
+
+        pe = q.get("pe") if q.get("pe") is not None else item.get("pe")
+        pb = q.get("pb") if q.get("pb") is not None else item.get("pb")
+        ps = q.get("ps") if q.get("ps") is not None else item.get("ps")
+        roe = item.get("roe") if item.get("roe") is not None else q.get("roe")
+        net_profit_growth = item.get("net_profit_growth") if item.get("net_profit_growth") is not None else q.get("net_profit_growth")
+        revenue_growth = item.get("revenue_growth") if item.get("revenue_growth") is not None else q.get("revenue_growth")
+        gross_margin = item.get("gross_margin") if item.get("gross_margin") is not None else q.get("gross_margin")
 
         enriched_items.append({
             "code": code,
@@ -2024,21 +2032,24 @@ async def get_stock_pool(
             "volume": q.get("volume"),
             "turnover_rate": turnover_rate,
             "volume_ratio": volume_ratio,
-            "pe": item.get("pe"),
-            "pb": item.get("pb"),
-            "ps": item.get("ps"),
+            "pe": pe,
+            "pb": pb,
+            "ps": ps,
             "circ_mv": circ_mv,
             "total_mv": total_mv,
-            "roe": item.get("roe"),
-            "net_profit_growth": item.get("net_profit_growth"),
-            "revenue_growth": item.get("revenue_growth"),
-            "gross_margin": item.get("gross_margin"),
+            "roe": roe,
+            "net_profit_growth": net_profit_growth,
+            "revenue_growth": revenue_growth,
+            "gross_margin": gross_margin,
             "trade_date": q.get("trade_date") or item.get("trade_date", ""),
             "updated_at": updated_at
         })
 
-    # 若根据行情字段排序，在当前批次内按需求排定
-    if sort_field in ["close", "pct_chg", "amount", "volume", "turnover_rate", "volume_ratio"]:
+    # 若根据行情或估值字段排序，在当前批次内按需求排定
+    if sort_field in [
+        "close", "pct_chg", "amount", "volume", "turnover_rate", "volume_ratio",
+        "pe", "pb", "ps", "circ_mv", "total_mv", "roe", "net_profit_growth", "revenue_growth", "gross_margin"
+    ]:
         reverse = (sort_order.lower() == "desc")
         enriched_items.sort(
             key=lambda x: (x.get(sort_field) is not None, x.get(sort_field) or 0),
