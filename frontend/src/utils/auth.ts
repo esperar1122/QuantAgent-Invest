@@ -47,6 +47,8 @@ export const isAuthError = (error: any): boolean => {
 export const handleAuthError = (error?: any, showMessage = true): void => {
   console.log('🔒 处理认证错误:', error)
 
+  clearTokenRefreshTimer()
+
   const authStore = useAuthStore()
 
   // 清除认证信息
@@ -174,15 +176,34 @@ export const autoRefreshToken = async (): Promise<boolean> => {
   return true
 }
 
+let refreshTimerId: ReturnType<typeof setInterval> | null = null
+
 /**
- * 设置定时刷新 token
+ * 设置定时刷新 token（单例管理，防止重复创建导致泄漏）
  */
 export const setupTokenRefreshTimer = (): void => {
+  if (refreshTimerId !== null) {
+    clearInterval(refreshTimerId)
+    refreshTimerId = null
+  }
+
   // 每分钟检查一次
-  setInterval(() => {
+  refreshTimerId = setInterval(() => {
     autoRefreshToken()
   }, 60000)
 
   console.log('✅ Token 自动刷新定时器已启动')
 }
+
+/**
+ * 清除定时刷新 token
+ */
+export const clearTokenRefreshTimer = (): void => {
+  if (refreshTimerId !== null) {
+    clearInterval(refreshTimerId)
+    refreshTimerId = null
+    console.log('🛑 Token 自动刷新定时器已清除')
+  }
+}
+
 

@@ -2099,7 +2099,7 @@ function handleMouseLeave() {
 // 悬浮可拖拽画线工具箱样式 (支持在整个个股与指数研究界面全局移动)
 .floating-draw-panel {
   position: fixed;
-  z-index: 9999;
+  z-index: 1500;
   width: 210px;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px);

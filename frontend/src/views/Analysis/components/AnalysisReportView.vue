@@ -214,7 +214,7 @@ import {
   QuestionFilled,
   ArrowDown
 } from '@element-plus/icons-vue'
-import { marked } from 'marked'
+import { renderMarkdown as safeRenderMarkdown } from '@/utils/markdown'
 
 const props = defineProps<{
   results: any
@@ -317,11 +317,7 @@ const renderMarkdown = (content: any): string => {
     stringContent = String(content)
   }
 
-  try {
-    return marked.parse(stringContent) as string
-  } catch {
-    return `<pre style="white-space: pre-wrap;">${stringContent}</pre>`
-  }
+  return safeRenderMarkdown(stringContent)
 }
 </script>
 

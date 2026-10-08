@@ -153,6 +153,11 @@ export const useAuthStore = defineStore('auth', {
       localStorage.removeItem('auth-token')
       localStorage.removeItem('refresh-token')
       localStorage.removeItem('user-info')
+
+      // 停止自动刷新定时器
+      import('@/utils/auth').then(({ clearTokenRefreshTimer }) => {
+        clearTokenRefreshTimer()
+      }).catch(() => {})
     },
 
     // 跳转到登录页

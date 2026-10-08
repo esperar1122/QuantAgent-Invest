@@ -999,14 +999,6 @@ const getFileExtension = (format: string): string => {
   return extensions[format] || 'txt'
 }
 
-// 组件销毁时清理定时器
-onUnmounted(() => {
-  if (pollingTimer.value) {
-    clearInterval(pollingTimer.value)
-    pollingTimer.value = null
-  }
-})
-
 // 页面可见性变化时的处理
 const handleVisibilityChange = () => {
   if (document.hidden) {
@@ -1034,6 +1026,15 @@ const handleVisibilityChange = () => {
 
 // 监听页面可见性变化
 document.addEventListener('visibilitychange', handleVisibilityChange)
+
+// 组件销毁时清理定时器与事件监听
+onUnmounted(() => {
+  if (pollingTimer.value) {
+    clearInterval(pollingTimer.value)
+    pollingTimer.value = null
+  }
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+})
 
 // 获取深度描述
 const getDepthDescription = (depth: number) => {

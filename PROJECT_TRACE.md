@@ -422,6 +422,20 @@ AI 将自动基于该文档在几秒内无缝接续全部上下文！
 - ✅ **个股研报下置实时资讯与舆情流**：在买卖五档盘口正下方嵌入 `.stock-news-card`，支持分类标签、舆情多空色彩与无网自适应兜底。
 - ✅ **个人秒级实时行情管道**：腾讯/新浪极速数据通道，批量快照 100~200ms，支持 SSE 推流，破除券商 50 万门槛。
 - ✅ **双设备跨端环境自适应启动**：`start_dev.bat` 20ms 端口快速检测，有 Docker 唤起容器，无 Docker（原生 MongoDB/Redis）自适应秒跳过；Vite 代理锁定 `127.0.0.1:8000` 消除 IPv6 报错。
+- ✅ **前端架构安全性、内存泄漏与 CSS 布局规范全面自检与加固（全栈交付）**：
+  - **P0 级 XSS 安全加固**：集成 `dompurify`，建立统一防御工具库 `frontend/src/utils/markdown.ts`，彻底过滤全站 5 处 Markdown / AI 研报 `v-html` 渲染中的恶意标签与属性注入；
+  - **P0 级内存泄漏治理**：
+    - 在 `BacktestCenter/index.vue` 中绑定具名 `handleChartResize` 监听，并在 `onBeforeUnmount` 销毁 ECharts 实例 (`chartInstance.dispose()`) 与解绑事件，避免单页切换堆内存暴涨；
+    - 在 `SingleAnalysis.vue` 的 `onUnmounted` 中彻底解绑 `document.visibilitychange` 全局监听；
+    - 在 `frontend/src/utils/auth.ts` 中将 Token 自动刷新定时器改为单例管理，并在登录失效/登出 `clearAuthInfo()` 时同步调用 `clearTokenRefreshTimer()`，杜绝多次登录导致的定时器累积泄漏；
+  - **P1 级 CSS 样式隔离与层叠上下文修正**：
+    - 清理 `BatchAnalysis.vue` 末尾未加 `scoped` 的全局样式污染（此前暴力污染了全站 `.action-section` 类名），收归至局部作用域；
+    - 降低 K 线悬浮画线工具箱 `.floating-draw-panel` 的 `z-index`（从 9999 降至 1500），解决穿透 Element Plus 模态弹窗与操作遮罩的显示 Bug；
+  - **P2 级响应式布局与弱网构建优化**：
+    - 剔除 `index.html` 中的 Google Fonts 外链，彻底消除国内网络环境下 5~10 秒字体加载超时阻塞 (FOIT)；
+    - 重构 `TerminalLayout.vue`，用现代 `100dvh` 与 `flex: 1; min-height: 0;` 替换硬编码的 `calc(100vh - 66px)`；
+    - 优化 `vite.config.ts`：将 `dompurify` 打包入独立 `markdown` 分块，静默 Sass 2.0 `legacy-js-api` 废弃警告；
+    - 经 `vue-tsc` 与 Vite 严格构建检验，0 Error、0 Warning 100% 编译通过。
 
 ### 2. 跨设备数据同步运维与极速数据源指南 (Data Pipeline & Operations Guide for Antigravity)
 

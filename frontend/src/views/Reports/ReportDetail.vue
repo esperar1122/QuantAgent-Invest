@@ -275,7 +275,7 @@ import {
   ArrowDown
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import { marked } from 'marked'
+import { renderMarkdown } from '@/utils/markdown'
 
 type ReportModuleContent = string | Record<string, unknown>
 
@@ -301,9 +301,6 @@ type ReportDetailData = {
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-
-// 配置 marked 以获得更完整的 Markdown 支持
-marked.setOptions({ breaks: true, gfm: true })
 
 // 响应式数据
 const loading = ref(true)
@@ -553,15 +550,6 @@ const getModuleDisplayName = (moduleName: string) => {
   }
   // 未匹配到时，做一个友好的回退：下划线转空格
   return nameMap[moduleName] || moduleName.replace(/_/g, ' ')
-}
-
-const renderMarkdown = (content: string) => {
-  if (!content) return ''
-  try {
-    return String(marked.parse(content))
-  } catch (e) {
-    return `<pre style="white-space: pre-wrap; font-family: inherit;">${content}</pre>`
-  }
 }
 
 // 置信度评分相关函数

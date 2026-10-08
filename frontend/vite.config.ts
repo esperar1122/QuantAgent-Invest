@@ -79,7 +79,7 @@ export default defineConfig({
             if (id.includes('mermaid')) {
               return 'mermaid'
             }
-            if (id.includes('marked') || id.includes('markdown-it')) {
+            if (id.includes('marked') || id.includes('markdown-it') || id.includes('dompurify')) {
               return 'markdown'
             }
             return 'vendor'
@@ -91,7 +91,8 @@ export default defineConfig({
   css: {
     preprocessorOptions: {
       scss: {
-        additionalData: `@use "@/styles/variables.scss" as *;`
+        additionalData: `@use "@/styles/variables.scss" as *;`,
+        silenceDeprecations: ['legacy-js-api']
       }
     }
   }

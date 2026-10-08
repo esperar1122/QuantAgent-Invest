@@ -834,7 +834,8 @@ const submitBatchAnalysis = async () => {
       width: 100% !important;
       text-align: center !important;
 
-      .submit-btn.el-button {
+      .submit-btn.el-button,
+      .large-batch-btn.el-button {
         width: 320px !important;
         height: 56px !important;
         font-size: 18px !important;
@@ -871,52 +872,5 @@ const submitBatchAnalysis = async () => {
       }
     }
   }
-}
-</style>
-
-<style>
-/* 全局样式确保按钮样式生效 */
-.action-section {
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-  width: 100% !important;
-  text-align: center !important;
-}
-
-.large-batch-btn.el-button {
-  width: 320px !important;
-  height: 56px !important;
-  font-size: 18px !important;
-  font-weight: 700 !important;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-  border: none !important;
-  border-radius: 16px !important;
-  transition: all 0.3s ease !important;
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2) !important;
-  min-width: 320px !important;
-  max-width: 320px !important;
-}
-
-.large-batch-btn.el-button:hover {
-  transform: translateY(-3px) !important;
-  box-shadow: 0 12px 30px rgba(59, 130, 246, 0.4) !important;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-}
-
-.large-batch-btn.el-button:disabled {
-  opacity: 0.6 !important;
-  transform: none !important;
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.1) !important;
-}
-
-.large-batch-btn.el-button .el-icon {
-  margin-right: 8px !important;
-  font-size: 20px !important;
-}
-
-.large-batch-btn.el-button span {
-  font-size: 18px !important;
-  font-weight: 700 !important;
 }
 </style>

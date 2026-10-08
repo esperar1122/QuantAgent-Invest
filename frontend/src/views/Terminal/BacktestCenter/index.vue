@@ -886,8 +886,17 @@ function clearProgressTimers() {
   elapsedTimer = null
 }
 
+function handleChartResize() {
+  chartInstance?.resize()
+}
+
 onBeforeUnmount(() => {
   clearProgressTimers()
+  window.removeEventListener('resize', handleChartResize)
+  if (chartInstance) {
+    chartInstance.dispose()
+    chartInstance = null
+  }
 })
 
 const dateRange = ref<[string, string]>(['2023-01-01', '2024-01-01'])
@@ -1178,7 +1187,7 @@ function renderChart() {
   if (!chartRef.value || !result.value) return
   if (!chartInstance) {
     chartInstance = echarts.init(chartRef.value)
-    window.addEventListener('resize', () => chartInstance?.resize())
+    window.addEventListener('resize', handleChartResize)
   }
 
   const navList = result.value.daily_nav || (result.value as any).equity_curve || []

@@ -383,7 +383,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { TrendCharts, Star, Refresh, Link, Document, Clock, Reading, Delete } from '@element-plus/icons-vue'
-import { marked } from 'marked'
+import { renderMarkdown } from '@/utils/markdown'
 import { stocksApi } from '@/api/stocks'
 import { analysisApi } from '@/api/analysis'
 import { ApiClient } from '@/api/request'
@@ -1418,17 +1418,6 @@ function formatReportName(key: string): string {
     'risk_debate_state': '⚖️ 风险管理团队（旧）'
   }
   return nameMap[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-}
-
-// 渲染Markdown
-function renderMarkdown(content: string): string {
-  if (!content) return '<p>暂无内容</p>'
-  try {
-    return String(marked.parse(content))
-  } catch (e) {
-    console.error('Markdown渲染失败:', e)
-    return `<pre>${content}</pre>`
-  }
 }
 
 const reportKeys = computed<string[]>(() => {

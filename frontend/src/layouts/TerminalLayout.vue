@@ -26,8 +26,8 @@ import TerminalSidebar from '@/components/Terminal/TerminalSidebar.vue'
 
 <style scoped lang="scss">
 .terminal-layout {
-  min-height: 100vh;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   background-color: #f4f6f8;
@@ -37,7 +37,7 @@ import TerminalSidebar from '@/components/Terminal/TerminalSidebar.vue'
 .terminal-body {
   display: flex;
   flex: 1;
-  height: calc(100vh - 66px);
+  min-height: 0;
   overflow: hidden;
 }
 
