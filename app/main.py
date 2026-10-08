@@ -246,6 +246,13 @@ async def lifespan(app: FastAPI):
 
     logger.info("TradingAgents FastAPI backend started")
 
+    # 🌟 自适应冷启动静默初始化守护 (Cold-Start Silent Database & Stock Pool Bootstrap)
+    try:
+        from app.services.cold_start_service import cold_start_service
+        await cold_start_service.bootstrap_if_needed()
+    except Exception as e:
+        logger.warning(f"⚠️ 自适应冷启动初始化异常(忽略): {e}")
+
     # 启动期：若需要在休市时补充上一交易日收盘快照
     if settings.QUOTES_BACKFILL_ON_STARTUP:
         try:
