@@ -1782,22 +1782,71 @@ DEFAULT_SYSTEM_STRATEGIES = [
             "max_pe": 50.0,
             "volume_level": "medium"
         }
+    },
+    {
+        "id": "preset_small_cap_breakout",
+        "name": "小资金·放量起爆",
+        "description": "短线高爆发脱离成本区：量比>=1.8，换手率3%~12%，日涨幅2%~6.5%，高换手突破主升",
+        "icon": "🚀",
+        "tag_type": "danger",
+        "is_system": True,
+        "cannot_delete": False,
+        "params": {
+            "min_volume_ratio": 1.8,
+            "min_turnover_rate": 3.0,
+            "max_turnover_rate": 12.0,
+            "min_pct_chg": 2.0,
+            "max_pct_chg": 6.5,
+            "volume_level": "high"
+        }
+    },
+    {
+        "id": "preset_small_cap_pullback",
+        "name": "小资金·缩量企稳回踩",
+        "description": "拒绝追高被套：缩量(量比<=1.2)回踩支撑企稳，换手1.5%~4.5%，振幅收敛，极小止损试错成本",
+        "icon": "🛡️",
+        "tag_type": "success",
+        "is_system": True,
+        "cannot_delete": False,
+        "params": {
+            "max_volume_ratio": 1.2,
+            "min_turnover_rate": 1.5,
+            "max_turnover_rate": 4.5,
+            "min_pct_chg": -1.5,
+            "max_pct_chg": 2.0,
+            "volume_level": "low"
+        }
+    },
+    {
+        "id": "preset_small_cap_high_rr",
+        "name": "小资金·高盈亏比波段",
+        "description": "小本金复利利器：市值50亿~300亿弹性中小盘，换手2%~8%，严格测算盈亏比>=2.5:1",
+        "icon": "⚖️",
+        "tag_type": "warning",
+        "is_system": True,
+        "cannot_delete": False,
+        "params": {
+            "min_risk_reward_ratio": 2.5,
+            "market_cap_range": "medium",
+            "min_turnover_rate": 2.0,
+            "max_turnover_rate": 8.0,
+            "min_pe": 0.01,
+            "max_pe": 45.0
+        }
     }
 ]
 
 
 async def ensure_seed_strategies(db):
     """确保系统预设策略种子数据存在于 MongoDB"""
-    candidate = await db["user_quant_strategies"].find_one({"id": "preset_quant_candidate"})
-    if not candidate:
-        now_iso = datetime.datetime.now().isoformat()
-        for s in DEFAULT_SYSTEM_STRATEGIES:
-            existing = await db["user_quant_strategies"].find_one({"id": s["id"]})
-            if not existing:
-                doc = dict(s)
-                doc["created_at"] = now_iso
-                doc["updated_at"] = now_iso
-                await db["user_quant_strategies"].insert_one(doc)
+    now_iso = datetime.datetime.now().isoformat()
+    for s in DEFAULT_SYSTEM_STRATEGIES:
+        existing = await db["user_quant_strategies"].find_one({"id": s["id"]})
+        if not existing:
+            doc = dict(s)
+            doc["created_at"] = now_iso
+            doc["updated_at"] = now_iso
+            await db["user_quant_strategies"].insert_one(doc)
 
 
 async def get_quant_candidate_strategy(db) -> dict:

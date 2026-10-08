@@ -313,6 +313,207 @@
           <div class="card-desc">{{ tradeDecision.stopLossPoint.reason }}</div>
         </div>
       </div>
+
+      <!-- 5. 小资金交易画像与一票否决红线审查 (Veto Checklist & Horizon Profile) -->
+      <div class="discipline-veto-strip" :class="{ 'has-veto': hasAnyVeto }">
+        <div class="veto-banner" v-if="hasAnyVeto">
+          <div class="veto-banner-header">
+            <span class="v-icon">🚫</span>
+            <span class="v-title">一票否决·严禁盲目开仓 / 追高</span>
+            <el-tag size="small" type="danger" effect="dark">触发小资金风控红线</el-tag>
+          </div>
+          <div class="veto-banner-desc">
+            小资金抗风险容错率为零，当前标的命中 <strong>{{ vetoTriggeredCount }}</strong> 项交易负面清单红线，纪律高于预测，宁可踏空绝不违规买入！
+          </div>
+        </div>
+
+        <div class="discipline-grid">
+          <!-- 4 盏负面清单红绿灯 -->
+          <div class="veto-items-box">
+            <div class="box-title">
+              <span>🚦 小资金交易一票否决审查清单</span>
+              <span class="box-subtitle">（任一红灯即全票否决）</span>
+            </div>
+            <div class="veto-items-list">
+              <div
+                v-for="item in vetoItems"
+                :key="item.id"
+                class="veto-item-row"
+                :class="item.vetoed ? 'is-red' : 'is-green'"
+              >
+                <div class="vi-status-badge">
+                  <span class="vi-dot"></span>
+                  <span class="vi-status-text">{{ item.vetoed ? '一票否决' : '合规通过' }}</span>
+                </div>
+                <div class="vi-content">
+                  <div class="vi-label">{{ item.label }}</div>
+                  <div class="vi-detail">{{ item.detail }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 交易风格与时效画像 -->
+          <div class="trade-profile-box">
+            <div class="box-title">
+              <span>⏱️ 交易时效与纪律画像</span>
+              <el-tag size="small" :type="hasAnyVeto ? 'danger' : 'primary'" effect="plain">小资金实战纪律</el-tag>
+            </div>
+            <div class="profile-meta-grid">
+              <div class="pm-row">
+                <span class="pm-k">建议持仓周期:</span>
+                <span class="pm-v font-bold" :class="hasAnyVeto ? 'color-down' : 'text-primary'">{{ tradeTimeHorizon }}</span>
+              </div>
+              <div class="pm-row">
+                <span class="pm-k">实战策略定性:</span>
+                <span class="pm-v font-mono">{{ tradeStrategyCategory }}</span>
+              </div>
+              <div class="pm-row">
+                <span class="pm-k">强制撤退红线:</span>
+                <span class="pm-v color-down font-bold">{{ tradeDisciplineLine }}</span>
+              </div>
+              <div class="pm-row">
+                <span class="pm-k">单笔最大亏损预算:</span>
+                <span class="pm-v font-mono tabular-nums">不超过本金 {{ retailCalc.maxRiskPct }}% (¥{{ maxRiskDollars.toFixed(0) }})</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. 小资金单笔风险与整手仓位精确试算器 (R:R & Position Size Calculator) -->
+      <div class="small-capital-calculator-card">
+        <div class="calc-header">
+          <div class="calc-title-group">
+            <span class="calc-badge">小资金实战</span>
+            <span class="calc-title">⚖️ 单笔风险预算与 A 股整手仓位试算器</span>
+          </div>
+          <div class="calc-actions">
+            <el-button size="small" text @click="syncCalcPricesWithDecision">
+              🔄 同步最新建议点位
+            </el-button>
+            <el-button
+              size="small"
+              type="primary"
+              :disabled="hasAnyVeto || calcShares < 100"
+              @click="applyCalculatorToPaper"
+              title="将计算出的精准股数与价格一键带入模拟盘下单窗口"
+            >
+              🎮 一键带入模拟盘 ({{ calcShares }}股)
+            </el-button>
+          </div>
+        </div>
+
+        <div class="calc-body-grid">
+          <!-- 左侧：参数输入调节 -->
+          <div class="calc-inputs-section">
+            <div class="calc-sub-title">1. 本金与风险容忍度输入</div>
+            <div class="inputs-row">
+              <div class="input-item">
+                <span class="input-lbl">账户总资金 (元)</span>
+                <el-input-number
+                  v-model="retailCalc.totalCapital"
+                  :min="10000"
+                  :max="10000000"
+                  :step="10000"
+                  size="small"
+                  class="full-width"
+                />
+              </div>
+              <div class="input-item">
+                <span class="input-lbl">单笔最大容忍亏损 (%)</span>
+                <el-input-number
+                  v-model="retailCalc.maxRiskPct"
+                  :min="0.5"
+                  :max="10"
+                  :step="0.5"
+                  :precision="1"
+                  size="small"
+                  class="full-width"
+                />
+              </div>
+            </div>
+
+            <div class="calc-sub-title" style="margin-top: 10px;">2. 交易点位预设 (可微调)</div>
+            <div class="inputs-row inputs-three">
+              <div class="input-item">
+                <span class="input-lbl">计划买入价 (元)</span>
+                <el-input-number
+                  v-model="retailCalc.entryPrice"
+                  :min="0.01"
+                  :step="0.01"
+                  :precision="isCurrentETF ? 3 : 2"
+                  size="small"
+                  class="full-width"
+                />
+              </div>
+              <div class="input-item">
+                <span class="input-lbl">目标止盈价 (元)</span>
+                <el-input-number
+                  v-model="retailCalc.targetPrice"
+                  :min="0.01"
+                  :step="0.01"
+                  :precision="isCurrentETF ? 3 : 2"
+                  size="small"
+                  class="full-width"
+                />
+              </div>
+              <div class="input-item">
+                <span class="input-lbl">坚决止损价 (元)</span>
+                <el-input-number
+                  v-model="retailCalc.stopLossPrice"
+                  :min="0.01"
+                  :step="0.01"
+                  :precision="isCurrentETF ? 3 : 2"
+                  size="small"
+                  class="full-width"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- 右侧：精确实战核算输出看板 -->
+          <div class="calc-results-section">
+            <div class="calc-kpi-grid">
+              <div class="calc-kpi-item primary-kpi">
+                <span class="ck-lbl">建议建仓股数 (整手)</span>
+                <div class="ck-val-row">
+                  <span class="ck-val font-mono tabular-nums text-primary">{{ calcShares }}</span>
+                  <span class="ck-unit">股 ({{ calcLots }}手)</span>
+                </div>
+                <span class="ck-sub">占用市值 ¥{{ calcPositionValue.toLocaleString() }} (仓位 {{ calcPositionRatio }}%)</span>
+              </div>
+
+              <div class="calc-kpi-item" :class="calcRealRR >= 2.0 ? 'rr-good' : (calcRealRR >= 1.5 ? 'rr-medium' : 'rr-bad')">
+                <span class="ck-lbl">扣费真实净盈亏比 (R:R)</span>
+                <div class="ck-val-row">
+                  <span class="ck-val font-mono tabular-nums">{{ calcRealRR }}:1</span>
+                  <el-tag size="small" :type="calcRealRR >= 2.0 ? 'success' : (calcRealRR >= 1.5 ? 'warning' : 'danger')" effect="dark">
+                    {{ calcRealRR >= 2.5 ? '极佳' : (calcRealRR >= 2.0 ? '优良' : (calcRealRR >= 1.5 ? '及格' : '不划算')) }}
+                  </el-tag>
+                </div>
+                <span class="ck-sub">含万2.5佣金+5元起+0.05%印花税</span>
+              </div>
+
+              <div class="calc-kpi-item loss-kpi">
+                <span class="ck-lbl">止损触发净亏损 (防守)</span>
+                <div class="ck-val-row">
+                  <span class="ck-val font-mono tabular-nums color-down">-¥{{ calcNetLoss.toLocaleString() }}</span>
+                </div>
+                <span class="ck-sub">单笔预算上限: ¥{{ maxRiskDollars.toFixed(0) }} (未超标)</span>
+              </div>
+
+              <div class="calc-kpi-item gain-kpi">
+                <span class="ck-lbl">达标止盈净利润 (进攻)</span>
+                <div class="ck-val-row">
+                  <span class="ck-val font-mono tabular-nums color-up">+¥{{ calcNetGain.toLocaleString() }}</span>
+                </div>
+                <span class="ck-sub">预期净收益率: +{{ calcGainPct }}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 3. 三栏金融工作台主体 -->
@@ -1213,6 +1414,213 @@ const tradeDecision = computed(() => {
     stopLossPoint,
     riskRewardRatio
   }
+})
+
+// =========================================================================
+// 小资金单笔风险预算与整手仓位试算器 & 一票否决负面清单审查
+// =========================================================================
+const retailCalc = ref({
+  totalCapital: 100000,
+  maxRiskPct: 2.0,
+  entryPrice: 0,
+  targetPrice: 0,
+  stopLossPrice: 0,
+  commissionRateWan: 2.5,
+  stampDutyPct: 0.05,
+  minCommission: 5.0
+})
+
+function syncCalcPricesWithDecision() {
+  const px = currentStock.value.price || 10.0
+  const prec = isCurrentETF.value ? 3 : 2
+  retailCalc.value.entryPrice = +px.toFixed(prec)
+  if (tradeDecision.value) {
+    retailCalc.value.targetPrice = +tradeDecision.value.sellPoint.price.toFixed(prec)
+    retailCalc.value.stopLossPrice = +tradeDecision.value.stopLossPoint.price.toFixed(prec)
+  } else {
+    retailCalc.value.targetPrice = +(px * 1.10).toFixed(prec)
+    retailCalc.value.stopLossPrice = +(px * 0.95).toFixed(prec)
+  }
+}
+
+watch(
+  () => [currentStock.value.code, currentStock.value.price],
+  () => {
+    syncCalcPricesWithDecision()
+  },
+  { immediate: true }
+)
+
+const calcEntryPx = computed(() => {
+  return retailCalc.value.entryPrice > 0 ? retailCalc.value.entryPrice : (currentStock.value.price || 10.0)
+})
+
+const calcTargetPx = computed(() => {
+  if (retailCalc.value.targetPrice > 0) return retailCalc.value.targetPrice
+  return tradeDecision.value ? tradeDecision.value.sellPoint.price : +(calcEntryPx.value * 1.10).toFixed(2)
+})
+
+const calcStopPx = computed(() => {
+  if (retailCalc.value.stopLossPrice > 0) return retailCalc.value.stopLossPrice
+  return tradeDecision.value ? tradeDecision.value.stopLossPoint.price : +(calcEntryPx.value * 0.95).toFixed(2)
+})
+
+const maxRiskDollars = computed(() => {
+  return (retailCalc.value.totalCapital * retailCalc.value.maxRiskPct) / 100
+})
+
+const calcShares = computed(() => {
+  const ep = calcEntryPx.value
+  const sp = calcStopPx.value
+  if (ep <= 0 || sp >= ep) return 0
+  const perShareRisk = Math.max(0.01, ep - sp)
+  const maxSharesByRisk = Math.floor(maxRiskDollars.value / perShareRisk / 100) * 100
+  const maxSharesByCash = Math.floor(retailCalc.value.totalCapital / ep / 100) * 100
+  return Math.max(0, Math.min(maxSharesByRisk, maxSharesByCash))
+})
+
+const calcLots = computed(() => Math.floor(calcShares.value / 100))
+
+const calcPositionValue = computed(() => +(calcShares.value * calcEntryPx.value).toFixed(2))
+
+const calcPositionRatio = computed(() => {
+  if (!retailCalc.value.totalCapital || retailCalc.value.totalCapital <= 0) return 0
+  return +((calcPositionValue.value / retailCalc.value.totalCapital) * 100).toFixed(1)
+})
+
+const calcNetLoss = computed(() => {
+  const shares = calcShares.value
+  if (shares <= 0) return 0
+  const ep = calcEntryPx.value
+  const sp = calcStopPx.value
+  const buyVal = shares * ep
+  const stopVal = shares * sp
+  const buyComm = Math.max(retailCalc.value.minCommission, (buyVal * retailCalc.value.commissionRateWan) / 10000)
+  const stopComm = Math.max(retailCalc.value.minCommission, (stopVal * retailCalc.value.commissionRateWan) / 10000)
+  const stopStamp = (stopVal * retailCalc.value.stampDutyPct) / 100
+  return +((buyVal - stopVal) + buyComm + stopComm + stopStamp).toFixed(2)
+})
+
+const calcNetGain = computed(() => {
+  const shares = calcShares.value
+  if (shares <= 0) return 0
+  const ep = calcEntryPx.value
+  const tp = calcTargetPx.value
+  const buyVal = shares * ep
+  const targetVal = shares * tp
+  const buyComm = Math.max(retailCalc.value.minCommission, (buyVal * retailCalc.value.commissionRateWan) / 10000)
+  const targetComm = Math.max(retailCalc.value.minCommission, (targetVal * retailCalc.value.commissionRateWan) / 10000)
+  const targetStamp = (targetVal * retailCalc.value.stampDutyPct) / 100
+  return +((targetVal - buyVal) - buyComm - targetComm - targetStamp).toFixed(2)
+})
+
+const calcGainPct = computed(() => {
+  if (calcPositionValue.value <= 0) return '0.0'
+  return +((calcNetGain.value / calcPositionValue.value) * 100).toFixed(2)
+})
+
+const calcRealRR = computed(() => {
+  if (calcNetLoss.value <= 0) return 0
+  return +(calcNetGain.value / calcNetLoss.value).toFixed(2)
+})
+
+function applyCalculatorToPaper() {
+  if (calcShares.value < 100) {
+    ElMessage.warning('试算股数不足 1 手 (100股)，无法进行A股撮合下单')
+    return
+  }
+  presetPaperOrder.value = {
+    symbol: currentStock.value.code,
+    name: currentStock.value.name,
+    price: calcEntryPx.value,
+    action: 'BUY',
+    shares: calcShares.value
+  }
+  paperModalVisible.value = true
+  ElMessage.success(`已将试算整手仓位 ${calcShares.value} 股带入模拟盘下单窗口`)
+}
+
+// 一票否决审查清单
+const vetoItems = computed(() => {
+  const px = currentStock.value.price || 10.0
+  const high = currentStock.value.high || px
+  const low = currentStock.value.low || px
+  const open = currentStock.value.open || px
+  const chg = currentStock.value.change || 0.0
+  const chips = currentChips.value
+  const ind = currentIndicators.value
+
+  // 1. 日内冲高回落长上影线
+  const upperShadow = high - Math.max(open, px)
+  const candleRange = high - low
+  const hasUpperShadow = candleRange > 0 && upperShadow > candleRange * 0.45 && (high - px) / px >= 0.025
+  const shadowVeto = {
+    id: 'upper_shadow',
+    label: '日内冲高回落长上影线',
+    vetoed: Boolean(hasUpperShadow),
+    detail: hasUpperShadow
+      ? `今日盘中高见 ¥${high.toFixed(2)} 后大幅跳水回落，上影线承压超过全天振幅 45%，主力冲高派发嫌疑极大`
+      : '日内价格运行平稳，实体饱满，无恶性冲高跳水回落上影线'
+  }
+
+  // 2. 跌破生命线单边下行
+  const ma20 = ind?.ma?.ma20
+  const ma5 = ind?.ma?.ma5
+  const isBelowMa20 = Boolean(ma20 && px < ma20 && (ma5 ? ma5 < ma20 : true))
+  const trendVeto = {
+    id: 'ma20_break',
+    label: '跌破 MA20 趋势生命线',
+    vetoed: isBelowMa20,
+    detail: isBelowMa20
+      ? `现价 (¥${px.toFixed(2)}) 处于 MA20 (¥${(ma20 || 0).toFixed(2)}) 之下且均线死叉下行，处于单边弱势空头通道`
+      : `站稳 MA20 趋势生命线 (¥${(ma20 || px).toFixed(2)}) 之上，均线多头排列或回踩企稳`
+  }
+
+  // 3. 上方套牢盘严重压制
+  const trappedRatio = chips?.trapped_ratio ?? (chg < 0 ? 70.0 : 30.0)
+  const isHeavyTrapped = trappedRatio >= 68.0
+  const trappedVeto = {
+    id: 'heavy_trapped',
+    label: '高位沉重套牢盘压制 (>68%)',
+    vetoed: isHeavyTrapped,
+    detail: isHeavyTrapped
+      ? `上方套牢盘高达 ${trappedRatio.toFixed(1)}%，全员深套，每一次脉冲式反弹均面临巨大保本割肉解套抛压`
+      : `获利盘充足，上方套牢盘仅 ${trappedRatio.toFixed(1)}%，筹码结构健康，阻力较轻`
+  }
+
+  // 4. 净盈亏比低于实战红线
+  const isBadRR = calcRealRR.value < 1.5
+  const rrVeto = {
+    id: 'bad_rr',
+    label: '净盈亏比低于实战及格线 (1.5:1)',
+    vetoed: isBadRR,
+    detail: isBadRR
+      ? `扣费实测净盈亏比仅 ${calcRealRR.value}:1，博弈空间狭窄，潜在盈利无法覆盖试错止损成本与交易磨损`
+      : `净盈亏比达到 ${calcRealRR.value}:1，符合小资金赔率优先、高盈亏比波段交易原则`
+  }
+
+  return [shadowVeto, trendVeto, trappedVeto, rrVeto]
+})
+
+const hasAnyVeto = computed(() => vetoItems.value.some(v => v.vetoed))
+const vetoTriggeredCount = computed(() => vetoItems.value.filter(v => v.vetoed).length)
+
+// 交易时效与操作风格画像
+const tradeTimeHorizon = computed(() => {
+  if (hasAnyVeto.value) return '⛔ 观望空仓防守 (0天，禁止盲目开仓)'
+  if (calcRealRR.value >= 2.5) return '🚀 攻击型主升波段 (建议持有 3~5 个交易日)'
+  return '🛡️ 防守型回踩低吸 (建议持有 5~8 个交易日)'
+})
+
+const tradeStrategyCategory = computed(() => {
+  if (hasAnyVeto.value) return '一票否决·严守回撤风控'
+  if (tradeDecision.value?.signalType === 'breakout_buy') return '突破追强·顺势动量主升'
+  if (tradeDecision.value?.signalType === 'buy') return '支撑低吸·缩量企稳伏击'
+  return '波段博弈·网格逢低布局'
+})
+
+const tradeDisciplineLine = computed(() => {
+  return `破位 ¥${calcStopPx.value.toFixed(isCurrentETF.value ? 3 : 2)} 坚决离场 (单笔亏损严控 ¥${calcNetLoss.value.toFixed(0)})`
 })
 
 // 核心池胶囊高亮判断
@@ -4064,6 +4472,376 @@ onUnmounted(() => {
         -webkit-line-clamp: 4;
         -webkit-box-orient: vertical;
         overflow: hidden;
+      }
+    }
+  }
+
+  .discipline-veto-strip {
+    background: #ffffff;
+    border: 1px solid #e4e7ec;
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: all 0.2s ease;
+
+    &.has-veto {
+      border: 1px solid #fca5a5;
+      background: linear-gradient(180deg, #fef2f2 0%, #ffffff 100%);
+    }
+
+    .veto-banner {
+      background: #fee2e2;
+      border: 1px solid #f87171;
+      border-radius: 6px;
+      padding: 8px 12px;
+
+      .veto-banner-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        .v-icon {
+          font-size: 16px;
+        }
+
+        .v-title {
+          font-size: 13px;
+          font-weight: 800;
+          color: #991b1b;
+        }
+      }
+
+      .veto-banner-desc {
+        font-size: 12px;
+        color: #7f1d1d;
+        margin-top: 4px;
+        line-height: 1.4;
+
+        strong {
+          color: #b91c1c;
+          font-size: 13px;
+        }
+      }
+    }
+
+    .discipline-grid {
+      display: grid;
+      grid-template-columns: 1.25fr 0.75fr;
+      gap: 12px;
+
+      @media (max-width: 960px) {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .veto-items-box,
+    .trade-profile-box {
+      background: #fafbfc;
+      border: 1px solid #eaecf0;
+      border-radius: 6px;
+      padding: 10px 12px;
+
+      .box-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+        font-weight: 700;
+        color: #344054;
+        margin-bottom: 8px;
+
+        .box-subtitle {
+          font-size: 11px;
+          font-weight: normal;
+          color: #667085;
+        }
+      }
+    }
+
+    .veto-items-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+
+      .veto-item-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid transparent;
+
+        &.is-red {
+          background: rgba(239, 68, 68, 0.06);
+          border-color: rgba(239, 68, 68, 0.25);
+
+          .vi-dot {
+            background: #ef4444;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+          }
+          .vi-status-text {
+            color: #dc2626;
+          }
+          .vi-label {
+            color: #b91c1c;
+          }
+        }
+
+        &.is-green {
+          background: rgba(16, 185, 129, 0.05);
+          border-color: rgba(16, 185, 129, 0.2);
+
+          .vi-dot {
+            background: #10b981;
+          }
+          .vi-status-text {
+            color: #059669;
+          }
+          .vi-label {
+            color: #15803d;
+          }
+        }
+
+        .vi-status-badge {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          flex-shrink: 0;
+          margin-top: 2px;
+
+          .vi-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+          }
+
+          .vi-status-text {
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+          }
+        }
+
+        .vi-content {
+          flex: 1;
+
+          .vi-label {
+            font-size: 12px;
+            font-weight: 700;
+          }
+
+          .vi-detail {
+            font-size: 11px;
+            color: #475467;
+            line-height: 1.4;
+            margin-top: 2px;
+          }
+        }
+      }
+    }
+
+    .profile-meta-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+
+      .pm-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 5px 8px;
+        background: #ffffff;
+        border: 1px solid #f2f4f7;
+        border-radius: 4px;
+        font-size: 11.5px;
+
+        .pm-k {
+          color: #667085;
+          font-weight: 500;
+        }
+
+        .pm-v {
+          color: #101828;
+          text-align: right;
+        }
+      }
+    }
+  }
+
+  .small-capital-calculator-card {
+    background: #ffffff;
+    border: 1px solid #e4e7ec;
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    .calc-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #f2f4f7;
+
+      .calc-title-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        .calc-badge {
+          font-size: 10.5px;
+          font-weight: 700;
+          background: #eef2ff;
+          color: #4f46e5;
+          padding: 2px 6px;
+          border-radius: 4px;
+          border: 1px solid #c7d2fe;
+        }
+
+        .calc-title {
+          font-size: 13px;
+          font-weight: 700;
+          color: #1e293b;
+        }
+      }
+
+      .calc-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+    }
+
+    .calc-body-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+
+      @media (max-width: 960px) {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .calc-inputs-section {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 10px 12px;
+
+      .calc-sub-title {
+        font-size: 11.5px;
+        font-weight: 700;
+        color: #475569;
+        margin-bottom: 6px;
+      }
+
+      .inputs-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+
+        &.inputs-three {
+          grid-template-columns: 1fr 1fr 1fr;
+
+          @media (max-width: 580px) {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        .input-item {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+
+          .input-lbl {
+            font-size: 11px;
+            color: #64748b;
+            font-weight: 500;
+          }
+        }
+      }
+    }
+
+    .calc-results-section {
+      .calc-kpi-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        height: 100%;
+
+        @media (max-width: 480px) {
+          grid-template-columns: 1fr;
+        }
+
+        .calc-kpi-item {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          padding: 8px 10px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          gap: 2px;
+
+          &.primary-kpi {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, #ffffff 100%);
+            border-left: 3px solid #3b82f6;
+          }
+
+          &.rr-good {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, #ffffff 100%);
+            border-left: 3px solid #10b981;
+          }
+
+          &.rr-medium {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.06) 0%, #ffffff 100%);
+            border-left: 3px solid #f59e0b;
+          }
+
+          &.rr-bad {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.06) 0%, #ffffff 100%);
+            border-left: 3px solid #ef4444;
+          }
+
+          &.loss-kpi {
+            border-left: 3px solid #10b981;
+          }
+
+          &.gain-kpi {
+            border-left: 3px solid #ef4444;
+          }
+
+          .ck-lbl {
+            font-size: 11px;
+            color: #64748b;
+          }
+
+          .ck-val-row {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+
+            .ck-val {
+              font-size: 17px;
+              font-weight: 800;
+            }
+
+            .ck-unit {
+              font-size: 11px;
+              color: #64748b;
+            }
+          }
+
+          .ck-sub {
+            font-size: 10px;
+            color: #94a3b8;
+          }
+        }
       }
     }
   }

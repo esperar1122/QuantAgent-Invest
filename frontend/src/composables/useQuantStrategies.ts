@@ -142,12 +142,76 @@ const DEFAULT_TEMPLATES: CustomQuantStrategy[] = [
       min_pct_chg: 0,
       market_cap_range: 'small'
     }
+  },
+  {
+    id: 'preset_small_cap_breakout',
+    name: '小资金·放量起爆',
+    description: '短线高爆发脱离成本区：量比>=1.8，换手率3%~12%，日涨幅2%~6.5%，高换手突破主升',
+    icon: '🚀',
+    tag_type: 'danger',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    is_system: true,
+    cannot_delete: false,
+    params: {
+      min_volume_ratio: 1.8,
+      min_turnover_rate: 3.0,
+      max_turnover_rate: 12.0,
+      min_pct_chg: 2.0,
+      max_pct_chg: 6.5,
+      volume_level: 'high'
+    }
+  },
+  {
+    id: 'preset_small_cap_pullback',
+    name: '小资金·缩量企稳回踩',
+    description: '拒绝追高被套：缩量(量比<=1.2)回踩支撑企稳，换手1.5%~4.5%，振幅收敛，极小止损试错成本',
+    icon: '🛡️',
+    tag_type: 'success',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    is_system: true,
+    cannot_delete: false,
+    params: {
+      max_volume_ratio: 1.2,
+      min_turnover_rate: 1.5,
+      max_turnover_rate: 4.5,
+      min_pct_chg: -1.5,
+      max_pct_chg: 2.0,
+      volume_level: 'low'
+    }
+  },
+  {
+    id: 'preset_small_cap_high_rr',
+    name: '小资金·高盈亏比波段',
+    description: '小本金复利利器：市值50亿~300亿弹性中小盘，换手2%~8%，严格测算盈亏比>=2.5:1',
+    icon: '⚖️',
+    tag_type: 'warning',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    is_system: true,
+    cannot_delete: false,
+    params: {
+      min_risk_reward_ratio: 2.5,
+      market_cap_range: 'medium',
+      min_turnover_rate: 2.0,
+      max_turnover_rate: 8.0,
+      min_pe: 0.01,
+      max_pe: 45.0
+    }
   }
 ]
 
 export function useQuantStrategies() {
   const customStrategies = ref<CustomQuantStrategy[]>([])
   const loading = ref(false)
+
+  // 辅助合并：保证系统内置模板始终可用
+  const mergeWithDefaults = (list: CustomQuantStrategy[]): CustomQuantStrategy[] => {
+    const existingIds = new Set(list.map(s => s.id))
+    const missing = DEFAULT_TEMPLATES.filter(d => !existingIds.has(d.id))
+    return [...list, ...missing]
+  }
 
   // 1. 从 LocalStorage 快速读取本地策略
   const loadLocalStrategies = (): CustomQuantStrategy[] => {
@@ -156,7 +220,7 @@ export function useQuantStrategies() {
       if (raw) {
         const parsed = JSON.parse(raw)
         if (Array.isArray(parsed)) {
-          return parsed
+          return mergeWithDefaults(parsed)
         }
       }
     } catch {
@@ -181,8 +245,9 @@ export function useQuantStrategies() {
       const res = await stocksApi.getCustomStrategies()
       const data = (res as any)?.data || (res as any)
       if (Array.isArray(data) && data.length > 0) {
-        customStrategies.value = data
-        saveLocalStrategies(data)
+        const merged = mergeWithDefaults(data)
+        customStrategies.value = merged
+        saveLocalStrategies(merged)
         return
       }
       // 后端为空时，检查本地

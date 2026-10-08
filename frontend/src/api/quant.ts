@@ -42,7 +42,15 @@ export interface BacktestMetrics {
   sortino_ratio: number
   calmar_ratio: number
   win_rate: number
+  win_rate_pct?: number
   profit_factor: number
+  avg_win?: number
+  avg_loss?: number
+  max_consecutive_losses?: number
+  max_consecutive_wins?: number
+  max_single_loss?: number
+  max_single_win?: number
+  expectancy_per_trade?: number
   total_trades: number
   profitable_trades: number
   losing_trades: number
@@ -78,6 +86,8 @@ export interface BacktestRequest {
   slippage?: number
   slippage_type?: string
   position_ratio?: number
+  trailing_stop_pct?: number
+  breakeven_trigger_pct?: number
   strategy_params?: Record<string, any>
   benchmark?: string
 }

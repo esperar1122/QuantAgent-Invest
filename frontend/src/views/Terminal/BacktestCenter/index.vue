@@ -375,6 +375,32 @@
                 </el-form-item>
               </el-col>
             </el-row>
+            <el-row :gutter="10">
+              <el-col :span="12">
+                <el-form-item label="移动跟踪止盈 (%)">
+                  <el-input-number
+                    v-model="riskParams.trailing_stop_pct"
+                    :min="0"
+                    :max="30"
+                    :step="1"
+                    placeholder="0关闭"
+                    class="full-width"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="保本止损激活线 (%)">
+                  <el-input-number
+                    v-model="riskParams.breakeven_trigger_pct"
+                    :min="0"
+                    :max="30"
+                    :step="1"
+                    placeholder="0关闭"
+                    class="full-width"
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
           </el-form>
 
           <!-- 5. 交易摩擦与滑点深度自定义 -->
@@ -632,7 +658,7 @@
             <div class="kpi-card">
               <span class="kpi-lbl">策略胜率 (Win Rate)</span>
               <span class="kpi-val font-mono tabular-nums">
-                {{ result.metrics.win_rate.toFixed(1) }}%
+                {{ (result.metrics.win_rate_pct !== undefined ? result.metrics.win_rate_pct : (result.metrics.win_rate * (result.metrics.win_rate <= 1 ? 100 : 1))).toFixed(1) }}%
               </span>
               <span class="kpi-sub">盈利 {{ result.metrics.profitable_trades }} 笔 / 亏损 {{ result.metrics.losing_trades }} 笔</span>
             </div>
@@ -642,7 +668,23 @@
               <span class="kpi-val font-mono tabular-nums">
                 {{ result.metrics.profit_factor.toFixed(2) }}
               </span>
-              <span class="kpi-sub">总交易次数: {{ result.metrics.total_trades }} 笔</span>
+              <span class="kpi-sub">均赢 ¥{{ result.metrics.avg_win?.toFixed(0) || 0 }} / 均亏 ¥{{ result.metrics.avg_loss?.toFixed(0) || 0 }}</span>
+            </div>
+
+            <div class="kpi-card" :class="(result.metrics.expectancy_per_trade || 0) >= 0 ? 'color-up-bg' : 'color-down-bg'">
+              <span class="kpi-lbl">单笔期望收益 (Expectancy)</span>
+              <span class="kpi-val font-mono tabular-nums" :class="(result.metrics.expectancy_per_trade || 0) >= 0 ? 'color-up' : 'color-down'">
+                {{ (result.metrics.expectancy_per_trade || 0) >= 0 ? '+' : '' }}¥{{ (result.metrics.expectancy_per_trade || 0).toFixed(0) }}
+              </span>
+              <span class="kpi-sub">单笔期望: ¥{{ (result.metrics.expectancy_per_trade || 0).toFixed(1) }} (数学期望)</span>
+            </div>
+
+            <div class="kpi-card" :class="(result.metrics.max_consecutive_losses || 0) >= 4 ? 'danger-card' : ''">
+              <span class="kpi-lbl">连续亏损风控 (Max Consec Loss)</span>
+              <span class="kpi-val font-mono tabular-nums" :class="(result.metrics.max_consecutive_losses || 0) >= 4 ? 'color-down' : ''">
+                {{ result.metrics.max_consecutive_losses || 0 }} <span style="font-size: 13px; font-weight: normal; color: #64748b;">连败</span>
+              </span>
+              <span class="kpi-sub">最长连胜: {{ result.metrics.max_consecutive_wins || 0 }} 笔 | 最大单亏: ¥{{ result.metrics.max_single_loss?.toFixed(0) || 0 }}</span>
             </div>
           </div>
 
@@ -994,6 +1036,8 @@ const portfolioCount = computed(() => {
 const riskParams = ref({
   stop_loss_pct: 8, // 8% 硬止损
   take_profit_pct: 20, // 20% 动态止盈
+  trailing_stop_pct: 4, // 浮盈峰值回撤4%跟踪止盈 (0为关闭)
+  breakeven_trigger_pct: 5, // 浮盈达5%后回踩成本线保本止损 (0为关闭)
   max_holding_days: 0, // 0 不限制
   position_ratio: 95 // 95% 仓位
 })
@@ -1214,6 +1258,8 @@ async function runBacktest() {
       ...strategyParams.value,
       stop_loss_pct: riskParams.value.stop_loss_pct > 0 ? riskParams.value.stop_loss_pct / 100 : 0,
       take_profit_pct: riskParams.value.take_profit_pct > 0 ? riskParams.value.take_profit_pct / 100 : 0,
+      trailing_stop_pct: riskParams.value.trailing_stop_pct > 0 ? riskParams.value.trailing_stop_pct / 100 : 0,
+      breakeven_trigger_pct: riskParams.value.breakeven_trigger_pct > 0 ? riskParams.value.breakeven_trigger_pct / 100 : 0,
       max_holding_days: riskParams.value.max_holding_days || 0,
       position_ratio: (riskParams.value.position_ratio || 95) / 100
     }
@@ -1236,6 +1282,8 @@ async function runBacktest() {
       slippage: slippageReal,
       slippage_type: frictionParams.value.slippage_type,
       position_ratio: (riskParams.value.position_ratio || 95) / 100,
+      trailing_stop_pct: riskParams.value.trailing_stop_pct > 0 ? riskParams.value.trailing_stop_pct / 100 : 0,
+      breakeven_trigger_pct: riskParams.value.breakeven_trigger_pct > 0 ? riskParams.value.breakeven_trigger_pct / 100 : 0,
       strategy_params: combinedParams
     }
 
@@ -1749,10 +1797,14 @@ onMounted(() => {
 
 .kpi-cards-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 
-  @media (max-width: 900px) {
+  @media (max-width: 1180px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  @media (max-width: 860px) {
     grid-template-columns: repeat(2, 1fr);
   }
 

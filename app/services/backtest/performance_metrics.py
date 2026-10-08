@@ -120,6 +120,37 @@ class PerformanceCalculator:
         avg_loss = float(abs(np.mean([t["pnl"] for t in losing_trades]))) if losing_trades else 0.0
         profit_loss_ratio = (avg_win / avg_loss) if avg_loss > 1e-5 else (999.0 if avg_win > 0 else 0.0)
 
+        # 小资金实战风控指标：最大连续亏损与期望收益
+        max_consecutive_losses = 0
+        current_consecutive_losses = 0
+        max_consecutive_wins = 0
+        current_consecutive_wins = 0
+        max_single_loss = 0.0
+        max_single_win = 0.0
+
+        for t in trades:
+            pnl = float(t.get("pnl", 0.0))
+            if pnl < 0:
+                current_consecutive_losses += 1
+                current_consecutive_wins = 0
+                if current_consecutive_losses > max_consecutive_losses:
+                    max_consecutive_losses = current_consecutive_losses
+                if abs(pnl) > max_single_loss:
+                    max_single_loss = abs(pnl)
+            elif pnl > 0:
+                current_consecutive_wins += 1
+                current_consecutive_losses = 0
+                if current_consecutive_wins > max_consecutive_wins:
+                    max_consecutive_wins = current_consecutive_wins
+                if pnl > max_single_win:
+                    max_single_win = pnl
+            else:
+                current_consecutive_losses = 0
+                current_consecutive_wins = 0
+
+        # 单笔数学期望收益 E = win_rate * avg_win - (1 - win_rate) * avg_loss
+        expectancy_per_trade = round((win_rate * avg_win) - ((1.0 - win_rate) * avg_loss), 2)
+
         # 基准对比 (Alpha / Beta)
         alpha = 0.0
         beta = 1.0
@@ -168,6 +199,13 @@ class PerformanceCalculator:
             "win_rate_pct": round(win_rate * 100, 2),
             "profit_factor": round(profit_loss_ratio, 2),
             "profit_loss_ratio": round(profit_loss_ratio, 2),
+            "avg_win": round(avg_win, 2),
+            "avg_loss": round(avg_loss, 2),
+            "max_consecutive_losses": int(max_consecutive_losses),
+            "max_consecutive_wins": int(max_consecutive_wins),
+            "max_single_loss": round(max_single_loss, 2),
+            "max_single_win": round(max_single_win, 2),
+            "expectancy_per_trade": expectancy_per_trade,
             "benchmark_return_pct": round(benchmark_total_return * 100, 2),
             "benchmark_total_return": round(benchmark_total_return * 100, 2),
             "alpha": round(alpha, 4),

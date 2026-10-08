@@ -90,6 +90,8 @@ class BacktestEngine:
         stop_loss_pct = float(strategy_params.get("stop_loss_pct", 0.0)) if strategy_params else 0.0
         take_profit_pct = float(strategy_params.get("take_profit_pct", 0.0)) if strategy_params else 0.0
         max_holding_days = int(strategy_params.get("max_holding_days", 0)) if strategy_params else 0
+        trailing_stop_pct = float(strategy_params.get("trailing_stop_pct", 0.0)) if strategy_params else 0.0
+        breakeven_trigger_pct = float(strategy_params.get("breakeven_trigger_pct", 0.0)) if strategy_params else 0.0
 
         # 持仓天数追踪
         holding_days_counter = 0
@@ -120,16 +122,23 @@ class BacktestEngine:
             has_position = pos is not None and pos.get("shares", 0) > 0
             if has_position:
                 holding_days_counter += 1
+                highest_px = pos.get("highest_px", close_px)
+                if close_px > highest_px:
+                    highest_px = close_px
+                    pos["highest_px"] = highest_px
             else:
                 holding_days_counter = 0
 
-            # 优先执行风控规则检测 (止损 / 止盈 / 最大持仓天数)
+            # 优先执行风控规则检测 (止损 / 止盈 / 保本 / 移动跟踪 / 最大持仓天数)
             risk_exit_triggered = False
             if has_position and pos.get("avail_shares", 0) > 0:
                 avg_cost = pos.get("avg_cost", close_px)
                 if avg_cost > 0:
                     current_gain_pct = (close_px - avg_cost) / avg_cost
-                    # 1. 严格止损检测 (例如设定 0.05 即 -5% 止损)
+                    highest_px = pos.get("highest_px", close_px)
+                    highest_gain_pct = (highest_px - avg_cost) / avg_cost if avg_cost > 0 else 0.0
+
+                    # 1. 严格硬止损检测 (例如设定 0.05 即 -5% 止损)
                     if stop_loss_pct > 0 and current_gain_pct <= -stop_loss_pct:
                         sim.sell(
                             date_str=date_str,
@@ -142,7 +151,34 @@ class BacktestEngine:
                         )
                         risk_exit_triggered = True
                         holding_days_counter = 0
-                    # 2. 动态止盈检测 (例如设定 0.15 即 +15% 止盈)
+                    # 2. 保本止损检测 (浮盈曾达到阈值后回落至保本线即平仓)
+                    elif breakeven_trigger_pct > 0 and highest_gain_pct >= breakeven_trigger_pct and current_gain_pct <= 0.002:
+                        sim.sell(
+                            date_str=date_str,
+                            symbol=symbol,
+                            price=close_px,
+                            target_shares=None,
+                            is_limit_down=is_limit_down,
+                            day_volume=volume,
+                            reason=f"保本止损触发 (曾达+{round(highest_gain_pct * 100, 1)}%, 保本离场)"
+                        )
+                        risk_exit_triggered = True
+                        holding_days_counter = 0
+                    # 3. 移动跟踪止盈检测 (浮盈峰值回撤超过指定阈值时锁定利润)
+                    elif trailing_stop_pct > 0 and highest_gain_pct >= 0.04 and ((highest_px - close_px) / highest_px) >= trailing_stop_pct:
+                        pullback = (highest_px - close_px) / highest_px
+                        sim.sell(
+                            date_str=date_str,
+                            symbol=symbol,
+                            price=close_px,
+                            target_shares=None,
+                            is_limit_down=is_limit_down,
+                            day_volume=volume,
+                            reason=f"跟踪止盈触发 (峰值+{round(highest_gain_pct * 100, 1)}%, 回撤-{round(pullback * 100, 1)}%)"
+                        )
+                        risk_exit_triggered = True
+                        holding_days_counter = 0
+                    # 4. 动态目标止盈检测 (例如设定 0.15 即 +15% 止盈)
                     elif take_profit_pct > 0 and current_gain_pct >= take_profit_pct:
                         sim.sell(
                             date_str=date_str,
@@ -155,7 +191,7 @@ class BacktestEngine:
                         )
                         risk_exit_triggered = True
                         holding_days_counter = 0
-                    # 3. 最大持仓交易日周期到期平仓
+                    # 5. 最大持仓交易日周期到期平仓
                     elif max_holding_days > 0 and holding_days_counter >= max_holding_days:
                         sim.sell(
                             date_str=date_str,
@@ -339,6 +375,8 @@ class BacktestEngine:
         stop_loss_pct = float(strategy_params.get("stop_loss_pct", 0.0)) if strategy_params else 0.0
         take_profit_pct = float(strategy_params.get("take_profit_pct", 0.0)) if strategy_params else 0.0
         max_holding_days = int(strategy_params.get("max_holding_days", 0)) if strategy_params else 0
+        trailing_stop_pct = float(strategy_params.get("trailing_stop_pct", 0.0)) if strategy_params else 0.0
+        breakeven_trigger_pct = float(strategy_params.get("breakeven_trigger_pct", 0.0)) if strategy_params else 0.0
 
         holding_days = {s: 0 for s in valid_symbols}
         prev_closes = {s: None for s in valid_symbols}
@@ -395,24 +433,36 @@ class BacktestEngine:
             for sym in valid_symbols:
                 pos = sim.positions.get(sym)
                 has_pos = pos is not None and pos.get("shares", 0) > 0
+                c_px = day_prices.get(sym, 0.0)
                 if has_pos:
                     holding_days[sym] += 1
+                    if c_px > 0:
+                        highest_px = pos.get("highest_px", c_px)
+                        if c_px > highest_px:
+                            highest_px = c_px
+                            pos["highest_px"] = highest_px
                 else:
                     holding_days[sym] = 0
 
                 if not has_pos or pos.get("avail_shares", 0) <= 0:
                     continue
 
-                c_px = day_prices.get(sym, 0.0)
                 if c_px <= 0:
                     continue
 
                 avg_cost = pos.get("avg_cost", c_px)
                 gain_pct = (c_px - avg_cost) / avg_cost if avg_cost > 0 else 0.0
+                highest_px = pos.get("highest_px", c_px)
+                highest_gain_pct = (highest_px - avg_cost) / avg_cost if avg_cost > 0 else 0.0
 
                 exit_reason = None
                 if stop_loss_pct > 0 and gain_pct <= -stop_loss_pct:
                     exit_reason = f"止损触发 ({round(gain_pct * 100, 1)}%)"
+                elif breakeven_trigger_pct > 0 and highest_gain_pct >= breakeven_trigger_pct and gain_pct <= 0.002:
+                    exit_reason = f"保本止损触发 (曾达+{round(highest_gain_pct * 100, 1)}%, 保本离场)"
+                elif trailing_stop_pct > 0 and highest_gain_pct >= 0.04 and ((highest_px - c_px) / highest_px) >= trailing_stop_pct:
+                    pullback = (highest_px - c_px) / highest_px
+                    exit_reason = f"跟踪止盈触发 (峰值+{round(highest_gain_pct * 100, 1)}%, 回撤-{round(pullback * 100, 1)}%)"
                 elif take_profit_pct > 0 and gain_pct >= take_profit_pct:
                     exit_reason = f"止盈达成 (+{round(gain_pct * 100, 1)}%)"
                 elif max_holding_days > 0 and holding_days[sym] >= max_holding_days:

@@ -146,6 +146,27 @@ export function useStockPool() {
         type: 'success' as const,
         cannot_delete: false,
         params: { min_risk_reward_ratio: 2.5, min_pe: 0, max_pe: 50, volume_level: 'medium' }
+      },
+      {
+        id: 'preset_small_cap_breakout',
+        name: '🚀 小资金·放量起爆',
+        type: 'danger' as const,
+        cannot_delete: false,
+        params: { min_volume_ratio: 1.8, min_turnover_rate: 3.0, max_turnover_rate: 12.0, min_pct_chg: 2.0, max_pct_chg: 6.5, volume_level: 'high' }
+      },
+      {
+        id: 'preset_small_cap_pullback',
+        name: '🛡️ 小资金·缩量企稳回踩',
+        type: 'success' as const,
+        cannot_delete: false,
+        params: { max_volume_ratio: 1.2, min_turnover_rate: 1.5, max_turnover_rate: 4.5, min_pct_chg: -1.5, max_pct_chg: 2.0, volume_level: 'low' }
+      },
+      {
+        id: 'preset_small_cap_high_rr',
+        name: '⚖️ 小资金·高盈亏比波段',
+        type: 'warning' as const,
+        cannot_delete: false,
+        params: { min_risk_reward_ratio: 2.5, market_cap_range: 'medium', min_turnover_rate: 2.0, max_turnover_rate: 8.0, min_pe: 0.01, max_pe: 45.0 }
       }
     ]
   })
