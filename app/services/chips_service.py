@@ -33,7 +33,9 @@ def calculate_chips_distribution(
     capital_events: Optional[List[Dict[str, Any]]] = None,
     total_shares: Optional[float] = None,
     is_etf: Optional[bool] = None,
-    precision: Optional[int] = None
+    precision: Optional[int] = None,
+    realtime_quote: Optional[Dict[str, Any]] = None,
+    compensate_ex_dividend: bool = True
 ) -> Optional[Dict[str, Any]]:
     """
     根据历史K线序列计算筹码分布数据（全面升级：行为金融学非对称衰减 + GMM + ATR自适应 + 6大硬核修正规则）
@@ -150,6 +152,7 @@ def calculate_chips_distribution(
         prev_close = None
         limit_board_count = 0
         suspension_count = 0
+        ex_dividend_count = 0
 
         for _, row in df.iterrows():
             l = float(row["low"])
@@ -157,6 +160,19 @@ def calculate_chips_distribution(
             c = float(row["close"])
             o = float(row.get("open", c))
             curr_date = row.get("parsed_date")
+
+            # ---------------------------------------------------------
+            # 规则 0: 除权除息/股票拆分断层自适应修正 (Ex-rights Split Compensation)
+            # 检测单日开盘跳空 < 0.78 (跌幅超22%) 或 > 1.35 (除权送股/大比例配股)
+            # ---------------------------------------------------------
+            if compensate_ex_dividend and prev_close is not None and prev_close > 0:
+                jump_ratio = o / prev_close
+                if jump_ratio < 0.78 or jump_ratio > 1.35:
+                    # 发生大比例除权送转（如10送10），原持仓成本等比缩放至当前基准
+                    scaled_prices = prices * jump_ratio
+                    chips = np.interp(prices, scaled_prices, chips, left=0.0, right=0.0)
+                    ex_dividend_count += 1
+                    logger.info(f"⚡ 检测到除权跳空 (比例: {jump_ratio:.3f})，已对齐历史筹码分布成本峰")
 
             # ---------------------------------------------------------
             # 规则 2: 停牌复牌筹码衰减重置
@@ -306,6 +322,52 @@ def calculate_chips_distribution(
                             "strength": "strong",
                             "desc": f"上方 ¥{bt_price:.2f} 大宗交易锁定期满解禁抛压峰 (折价接盘待出逃)"
                         })
+
+        # -------------------------------------------------------------
+        # 规则 11: 盘中日内高频动态增量推演 (Intraday Real-time CYQ Evolution)
+        # -------------------------------------------------------------
+        is_intraday_dynamic = False
+        intraday_turnover_pct = 0.0
+        if realtime_quote and isinstance(realtime_quote, dict):
+            rt_p = float(realtime_quote.get("price") or current_price)
+            rt_h = float(realtime_quote.get("high") or rt_p)
+            rt_l = float(realtime_quote.get("low") or rt_p)
+            rt_vol = float(realtime_quote.get("volume") or 0.0)
+            rt_amt = float(realtime_quote.get("amount") or 0.0)
+            rt_to = float(realtime_quote.get("turnover_rate") or 0.0)
+
+            if rt_vol > 0 and rt_p > 0:
+                is_intraday_dynamic = True
+                intraday_turnover_pct = rt_to
+                # 当日日内均价 VWAP
+                if rt_amt > 0 and rt_l * 0.9 <= (rt_amt / rt_vol) <= rt_h * 1.1:
+                    rt_vwap = rt_amt / rt_vol
+                else:
+                    rt_vwap = (rt_p + rt_h + rt_l) / 3.0
+
+                # 日内换手率衰减
+                raw_t_intra = min(max(rt_to / 100.0, 0.0001), 0.50)
+                alpha_intra = min(raw_t_intra * decay_factor, 0.60)
+                chips = chips * (1.0 - alpha_intra)
+
+                # 注入日内成交量三角分布
+                idx_low = max(0, int((rt_l - p_min) / step))
+                idx_high = min(bins_count - 1, int((rt_h - p_min) / step))
+                if idx_low >= idx_high:
+                    chips[idx_low] += alpha_intra
+                else:
+                    day_prices = prices[idx_low : idx_high + 1]
+                    w = np.where(
+                        day_prices <= rt_vwap,
+                        (day_prices - rt_l) / (rt_vwap - rt_l + 1e-6),
+                        (rt_h - day_prices) / (rt_h - rt_vwap + 1e-6)
+                    )
+                    w = np.maximum(0.0, w)
+                    s_w = w.sum()
+                    if s_w > 0:
+                        chips[idx_low : idx_high + 1] += (w / s_w) * alpha_intra
+                    else:
+                        chips[idx_low : idx_high + 1] += alpha_intra / (idx_high - idx_low + 1)
 
         total_chips = chips.sum()
         if total_chips <= 0:
@@ -567,6 +629,10 @@ def calculate_chips_distribution(
             applied_rules.append(f"大宗交易锁定期满抛压注入({len(block_trades)}笔)")
         if capital_events and len(capital_events) > 0:
             applied_rules.append(f"股本变动事件修正生效({len(capital_events)}项)")
+        if ex_dividend_count > 0:
+            applied_rules.append(f"除权除息断层自适应平滑生效({ex_dividend_count}次跳空对齐)")
+        if is_intraday_dynamic:
+            applied_rules.append(f"盘中日内高频动态增量推演生效(日内换手率 {intraday_turnover_pct:.2f}%)")
 
         return {
             "current_price": round(current_price, precision),
@@ -582,6 +648,9 @@ def calculate_chips_distribution(
             "peak_pattern": peak_pattern,
             "pattern_desc": pattern_desc,
             "pattern_type": pattern_type,
+            "is_intraday_dynamic": is_intraday_dynamic,
+            "intraday_turnover_pct": round(intraday_turnover_pct, 2),
+            "is_ex_dividend_compensated": (ex_dividend_count > 0),
             "support_levels": support_levels[:3],
             "resistance_levels": resistance_levels[:3],
             "vacuum_zones": vacuum_zones[:2],

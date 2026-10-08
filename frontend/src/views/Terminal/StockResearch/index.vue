@@ -343,9 +343,17 @@
         <div class="panel-box chips-research-panel" v-if="!isCurrentIndex">
           <div class="panel-header">
             <span class="panel-title">🎯 CYQ 筹码分布透视</span>
-            <el-tag size="small" :type="currentChips?.pattern_type === 'bullish' ? 'danger' : 'info'" effect="dark">
-              {{ currentChips?.peak_pattern || '筹码分析' }}
-            </el-tag>
+            <div class="cyq-header-badges">
+              <el-tag v-if="currentChips?.is_intraday_dynamic" size="small" type="danger" effect="plain" class="cyq-live-badge">
+                🔥 盘中动态
+              </el-tag>
+              <el-tag v-if="currentChips?.is_ex_dividend_compensated" size="small" type="warning" effect="plain" class="cyq-live-badge">
+                ⚖️ 除权平滑
+              </el-tag>
+              <el-tag size="small" :type="currentChips?.pattern_type === 'bullish' ? 'danger' : 'info'" effect="dark">
+                {{ currentChips?.peak_pattern || '筹码分析' }}
+              </el-tag>
+            </div>
           </div>
 
           <div class="chips-quick-stats">
@@ -2514,6 +2522,19 @@ onUnmounted(() => {
 }
 
 .chips-research-panel {
+  .cyq-header-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .cyq-live-badge {
+    font-weight: 600;
+    font-size: 11px;
+    padding: 0 6px;
+    height: 20px;
+    line-height: 18px;
+  }
+
   .chips-quick-stats {
     padding: 12px 14px;
     display: flex;

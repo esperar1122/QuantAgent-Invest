@@ -583,6 +583,9 @@ export interface ChipsDistribution {
   peak_pattern: string
   pattern_desc: string
   pattern_type: 'bullish' | 'bearish' | 'neutral'
+  is_intraday_dynamic?: boolean
+  intraday_turnover_pct?: number
+  is_ex_dividend_compensated?: boolean
   support_levels?: ChipsSupportResistanceLevel[]
   resistance_levels?: ChipsSupportResistanceLevel[]
   vacuum_zones?: ChipsVacuumZone[]

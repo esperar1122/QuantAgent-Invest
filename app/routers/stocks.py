@@ -1291,7 +1291,7 @@ async def get_technical_indicators(
                 v = float(it.get("volume") or 0.0)
                 it["turnover_rate"] = round((v / total_shares) * 100.0, 3)
 
-    chips_data = calculate_chips_distribution(items, close_val, total_shares=total_shares)
+    chips_data = calculate_chips_distribution(items, close_val, total_shares=total_shares, realtime_quote=rt_q)
     snapshot_data["chips"] = chips_data
 
     return ok({
@@ -1366,7 +1366,8 @@ async def get_stock_chips(
         current_px,
         total_shares=total_shares,
         is_etf=is_etf,
-        precision=px_prec
+        precision=px_prec,
+        realtime_quote=rt_q
     )
     if not chips:
         raise HTTPException(status_code=500, detail="筹码分布计算失败")
