@@ -43,7 +43,12 @@ def main():
         test_quant_modules = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(test_quant_modules)
 
+        def test_app_main_and_routers():
+            import app.main
+            assert app.main.app is not None
+
         tests = [
+            ("FastAPI 后端应用与全量路由装配 (App & Routers Assembly)", test_app_main_and_routers),
             ("性能指标核算引擎 (Performance Calculator)", test_quant_modules.test_performance_calculator),
             ("A股T+1与整手买卖模拟器 (Trade Simulator A-Share Rules)", test_quant_modules.test_trade_simulator_a_share_rules),
             ("滑点模型与摩擦损耗核算 (Slippage & Friction Models)", test_quant_modules.test_trade_simulator_slippage_and_friction_models),
