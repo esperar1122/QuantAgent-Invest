@@ -19,6 +19,17 @@
           批量智能研判 {{ selectedStocks.length > 0 ? `(${selectedStocks.length})` : '' }}
         </el-button>
 
+        <!-- 导入组合回测与消融实验 -->
+        <el-button
+          type="warning"
+          plain
+          :disabled="selectedStocks.length === 0"
+          @click="$emit('batch-backtest')"
+        >
+          <el-icon><DataLine /></el-icon>
+          导入组合回测 {{ selectedStocks.length > 0 ? `(${selectedStocks.length})` : '' }}
+        </el-button>
+
         <!-- 导出筛选结果 -->
         <el-button type="success" plain @click="$emit('export-csv')">
           <el-icon><Download /></el-icon>
@@ -306,7 +317,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { TrendCharts, Download, Refresh, Cpu, Star } from '@element-plus/icons-vue'
+import { TrendCharts, Download, Refresh, Cpu, Star, DataLine } from '@element-plus/icons-vue'
 import type { StockPoolItem } from '@/api/stocks'
 import TechnicalAnalysisModal from '@/components/TechnicalIndicators/TechnicalAnalysisModal.vue'
 
@@ -324,6 +335,7 @@ defineEmits<{
   (e: 'selection-change', selection: StockPoolItem[]): void
   (e: 'sort-change', sort: { prop: string; order: string | null }): void
   (e: 'batch-analyze'): void
+  (e: 'batch-backtest'): void
   (e: 'export-csv'): void
   (e: 'refresh'): void
   (e: 'analyze', row: StockPoolItem): void

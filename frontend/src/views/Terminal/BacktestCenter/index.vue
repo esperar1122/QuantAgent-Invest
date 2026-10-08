@@ -52,6 +52,7 @@
             </div>
           </div>
           <el-select v-model="form.strategy_name" class="full-width" @change="onStrategyChange">
+            <el-option label="🤖 多智能体协同与消融实验 (Multi-Agent Ablation)" value="multi_agent" />
             <el-option label="🌟 自定义多指标组合策略 (Custom Rule)" value="custom_rule" />
             <el-option label="📈 双均线金叉死叉策略 (Dual MA)" value="dual_ma" />
             <el-option label="🌊 MACD 动量趋势策略 (MACD)" value="macd" />
@@ -247,6 +248,76 @@
                   </el-form-item>
                 </el-col>
               </el-row>
+            </template>
+
+            <!-- 多智能体协同与消融实验参数 (Multi-Agent Ablation) -->
+            <template v-else-if="form.strategy_name === 'multi_agent'">
+              <div class="ablation-panel">
+                <div class="ablation-banner">
+                  <div class="banner-title">🔬 多智能体决策与消融实验控制台 (Ablation Study)</div>
+                  <div class="banner-subtitle">
+                    自由开关参与研判的智能体子模块，直接回测对比各智能体在组合收益、夏普比率与最大回撤中的边际贡献度。
+                  </div>
+                </div>
+
+                <div class="ablation-agents-grid">
+                  <!-- 宏观环境 Agent -->
+                  <div class="agent-switch-card" :class="{ active: strategyParams.enable_macro }">
+                    <div class="agent-switch-header">
+                      <span class="agent-icon">🌐</span>
+                      <div class="agent-switch-info">
+                        <span class="agent-switch-name">宏观环境智能体</span>
+                        <span class="agent-switch-desc">MA60中长线趋势过滤，熊市破位禁止盲目开仓</span>
+                      </div>
+                      <el-switch v-model="strategyParams.enable_macro" inline-prompt active-text="启用" inactive-text="消融" />
+                    </div>
+                  </div>
+
+                  <!-- 基本面 Agent -->
+                  <div class="agent-switch-card" :class="{ active: strategyParams.enable_fundamental }">
+                    <div class="agent-switch-header">
+                      <span class="agent-icon">📊</span>
+                      <div class="agent-switch-info">
+                        <span class="agent-switch-name">基本面估值智能体</span>
+                        <span class="agent-switch-desc">过滤估值严重泡沫与狂热 (RSI超买阈值约束)</span>
+                      </div>
+                      <el-switch v-model="strategyParams.enable_fundamental" inline-prompt active-text="启用" inactive-text="消融" />
+                    </div>
+                  </div>
+
+                  <!-- 技术形态 Agent -->
+                  <div class="agent-switch-card" :class="{ active: strategyParams.enable_technical }">
+                    <div class="agent-switch-header">
+                      <span class="agent-icon">📈</span>
+                      <div class="agent-switch-info">
+                        <span class="agent-switch-name">技术形态智能体</span>
+                        <span class="agent-switch-desc">短周期均线金叉与 MACD 动量反转突破捕捉</span>
+                      </div>
+                      <el-switch v-model="strategyParams.enable_technical" inline-prompt active-text="启用" inactive-text="消融" />
+                    </div>
+                  </div>
+
+                  <!-- 风控审查 Agent -->
+                  <div class="agent-switch-card" :class="{ active: strategyParams.enable_risk_review }">
+                    <div class="agent-switch-header">
+                      <span class="agent-icon">🛡️</span>
+                      <div class="agent-switch-info">
+                        <span class="agent-switch-name">风控审查智能体</span>
+                        <span class="agent-switch-desc">拥有独立一票否决权，破位跌破MA20直接强制平仓</span>
+                      </div>
+                      <el-switch v-model="strategyParams.enable_risk_review" inline-prompt active-text="启用" inactive-text="消融" />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="arbitration-block">
+                  <div class="factor-title">⚖️ 智能体决策仲裁融合机制</div>
+                  <el-select v-model="strategyParams.arbitration_mode" class="full-width" size="small">
+                    <el-option label="🤝 一致共识仲裁 (Consensus) - 激活智能体全票赞同才开仓" value="consensus" />
+                    <el-option label="🗳️ 多数表决仲裁 (Majority) - 过半数激活智能体赞同即开仓" value="majority" />
+                  </el-select>
+                </div>
+              </div>
             </template>
           </el-form>
 
@@ -822,6 +893,7 @@ const progressColors = [
 
 const currentStrategyName = computed(() => {
   switch (form.value.strategy_name) {
+    case 'multi_agent': return '多智能体协同与消融实验策略'
     case 'custom_rule': return '自定义多指标组合策略'
     case 'dual_ma': return '双均线趋势策略'
     case 'macd': return 'MACD动量策略'
@@ -966,6 +1038,12 @@ function onSlippageTypeChange() {
 }
 
 const strategyParams = ref<Record<string, any>>({
+  // 多智能体协同与消融实验 (Multi-Agent Ablation)
+  enable_macro: true,
+  enable_fundamental: true,
+  enable_technical: true,
+  enable_risk_review: true,
+  arbitration_mode: 'consensus',
   // 双均线
   fast_period: 5,
   slow_period: 20,
@@ -992,6 +1070,8 @@ const strategyParams = ref<Record<string, any>>({
 
 const currentStrategyDesc = computed(() => {
   switch (form.value.strategy_name) {
+    case 'multi_agent':
+      return '学术与投研核心：多智能体协同研判与消融对比策略 (Ablation Study)。集成宏观政策、基本面估值、技术形态与风控审查 4 大专业 Agent 协同决策。支持消融开关，直观量化各 Agent 对投资组合夏普比率与超额收益的边际贡献。'
     case 'custom_rule':
       return '自主搭积木式组合策略：自由组合均线形态、成交量倍增、RSI超跌反转、KDJ低位金叉及通道新高突破，支持全满足(AND)或任一满足(OR)多因子入场，配合严格止损止盈风控。'
     case 'dual_ma':
@@ -1250,9 +1330,12 @@ function renderChart() {
 
 onMounted(() => {
   setQuickDateRange(1)
-  const codeFromQuery = (route.query.code as string) || (route.query.symbol as string)
+  const codeFromQuery = (route.query.code as string) || (route.query.symbol as string) || (route.query.symbols as string)
   if (codeFromQuery) {
     form.value.symbol = codeFromQuery
+  }
+  if (route.query.strategy) {
+    form.value.strategy_name = route.query.strategy as string
   }
 })
 </script>
@@ -1355,6 +1438,73 @@ onMounted(() => {
   }
 }
 
+:global(html.dark) .control-card {
+  background: #1e293b;
+  border-color: #334155;
+
+  .card-section-title {
+    color: #f1f5f9;
+  }
+
+  .strategy-desc-box {
+    background: #0f172a;
+    color: #94a3b8;
+  }
+
+  .ablation-panel {
+    .ablation-banner {
+      background: rgba(59, 130, 246, 0.12);
+      border-color: rgba(59, 130, 246, 0.3);
+      .banner-title {
+        color: #60a5fa;
+      }
+      .banner-subtitle {
+        color: #94a3b8;
+      }
+    }
+
+    .agent-switch-card {
+      background: #0f172a;
+      border-color: #334155;
+
+      &.active {
+        background: rgba(16, 185, 129, 0.12);
+        border-color: rgba(16, 185, 129, 0.35);
+      }
+
+      .agent-switch-header {
+        .agent-switch-info {
+          .agent-switch-name {
+            color: #f1f5f9;
+          }
+          .agent-switch-desc {
+            color: #94a3b8;
+          }
+        }
+      }
+    }
+
+    .arbitration-block {
+      background: #0f172a;
+      border-color: #334155;
+      .factor-title {
+        color: #f1f5f9;
+      }
+    }
+  }
+
+  .factor-block {
+    background: #0f172a;
+    border-color: #334155;
+    .factor-title {
+      color: #f1f5f9;
+    }
+    .sub-label {
+      color: #94a3b8;
+    }
+  }
+}
+
 .bc-workspace-grid {
   display: grid;
   grid-template-columns: 380px 1fr;
@@ -1415,6 +1565,96 @@ onMounted(() => {
     flex-direction: column;
     gap: 8px;
     margin-bottom: 8px;
+  }
+
+  .ablation-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+
+    .ablation-banner {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(99, 102, 241, 0.05));
+      border: 1px solid rgba(59, 130, 246, 0.22);
+      border-radius: 8px;
+      padding: 10px 12px;
+
+      .banner-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #2563eb;
+        margin-bottom: 4px;
+      }
+      .banner-subtitle {
+        font-size: 11px;
+        color: #64748b;
+        line-height: 1.5;
+      }
+    }
+
+    .ablation-agents-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .agent-switch-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      transition: all 0.2s ease;
+
+      &.active {
+        background: #f0fdf4;
+        border-color: #86efac;
+      }
+
+      .agent-switch-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+
+        .agent-icon {
+          font-size: 18px;
+          flex-shrink: 0;
+        }
+
+        .agent-switch-info {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 0;
+
+          .agent-switch-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: #1e293b;
+          }
+
+          .agent-switch-desc {
+            font-size: 11px;
+            color: #64748b;
+            line-height: 1.35;
+          }
+        }
+      }
+    }
+
+    .arbitration-block {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 12px;
+
+      .factor-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 6px;
+      }
+    }
   }
 
   .factor-block {

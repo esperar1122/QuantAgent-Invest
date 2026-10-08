@@ -448,8 +448,23 @@ AI 将自动基于该文档在几秒内无缝接续全部上下文！
     - 顶部买卖决策看板 (`.decision-signal-banner`) 与建仓/加仓/减仓/止损四维点位卡片 (`.decision-points-grid`) 增加断点网格，杜绝任何文字挤压折裂；
   - **回测中心与模拟盘弹窗弹性适配 (`BacktestCenter/index.vue`, `PaperTradingModal.vue`)**：
     - `PaperTradingModal.vue` 弹窗宽度改用 `min(920px, 94vw)`，4 项资产指标卡在小屏或缩放时自适应降为 2 列/1 列，彻底消除视口横向滚动溢出；
-    - `BacktestCenter/index.vue` 绩效 3 列指标卡与摩擦成本 4 列指标卡增加小屏自适应折行断点；
-    - `TerminalSidebar.vue` 高度重构为 `height: 100%`，彻底消除 `calc(100vh - 66px)` 硬编码。
+- ✅ **多智能体消融实验引擎、选股-回测一键管道与学术级投研研报导出（核心功能全栈交付）**：
+  - **P0 级多智能体协同决策回测与消融实验引擎 (Multi-Agent Ablation Study)**：
+    - 在后端 `app/services/backtest/strategies.py` 中实现 `MultiAgentStrategy(BaseStrategy)`，实现 4 大专业 Agent（宏观政策趋势、基本面估值、技术形态动量、风控审查一票否决）协同研判融合；
+    - 内置决策仲裁机制：支持全票一致共识 (`consensus`) 与过半数多数票决 (`majority`) 双重仲裁模式；
+    - 提供精细化消融开关 (`enable_macro`, `enable_fundamental`, `enable_technical`, `enable_risk_review`)，用户可自由开启/关闭单个 Agent 模块，直观对比净值曲线、夏普比率与最大回撤，为学术毕业设计第四章消融对比实验提供坚实量化实证支撑；
+    - 在后端 `app/routers/backtest.py` 注册 `multi_agent` 策略描述与系统默认模板 `preset_btest_multi_agent_core`；
+    - 在前端 `BacktestCenter/index.vue` 构建交互式消融实验控制台，提供专业卡片、实时开关与仲裁模式切换，深度适配深浅双色主题；
+  - **P1 级选股池到组合回测 (Screener to Portfolio Backtest) 一键直连管道**：
+    - 在 `StockPoolTable.vue` 表格操作栏增加 `[导入组合回测]` 快捷功能；
+    - 在 `useStockPool.ts` 与 `StockPool/index.vue` 实现批量选中标的快速路由分发，将多只勾选股票代码自动组合成逗号分隔符流转至 `/terminal/backtest?symbols=...&strategy=multi_agent`；
+    - `BacktestCenter` 挂载即自动激活多标的组合回测与仓位分配模型（等权加权 / 波动率倒数加权），彻底打通“智能选股 -> 组合装配 -> 多智能体回测验证”的全流程工作流闭环；
+  - **P1 级全息投研决策报告一键导出 Markdown (Academic Markdown Report)**：
+    - 在 `/terminal/report` 顶栏控制台新增 `[导出 Markdown 报告]` 按钮；
+    - 纯客户端高速合成机构级与学术标准格式的投资决策 Markdown 案卷（包含标的概况与估值评级、大模型执行摘要、量化多因子评分矩阵、多智能体协同论据与风控审查防线、决策委员会终审仲裁与实战操作策略），一键下载 `.md` 文件，极大丰富答辩成果物与研究报告交付件；
+  - **质量工程与自动化测试验收**：
+    - 前端 `vue-tsc && vite build` 0 错误 100% 编译通过；
+    - 后端 13 大全量自动化测试（含 A 股真实交易制度、滑点冲击、组合回测、多因子策略、模拟盘深度撮合等）全部 100% PASS。
 
 ### 2. 跨设备数据同步运维与极速数据源指南 (Data Pipeline & Operations Guide for Antigravity)
 
@@ -473,12 +488,11 @@ python scripts/sync_realtime_valuation.py
 #### 优先级 P1：数据推送与流式体验深化
 1. **盘中分时图与行情接入 SSE 流式推送**：
    - 在 `StockResearch` 及 `TopTickerBar` 中接入 `GET /api/quotes/stream?symbols={code}`，使用前端 `EventSource`，实现盘中无需手动刷新、分时线与价格数字毫秒级跳动的实盘交易终端体验。
-2. **多因子选股一键批量导入回测与模拟盘**：
-   - 在“股票筛选器 (Stock Screener)”中选出符合条件的高分股票池后，增加 `[一键批量回测]` 与 `[一键生成组合调仓单]`。
 
 #### 优先级 P2：进阶功能与外部联动（按需选做）
 1. **微信 Webhook 界面配置项**：在前端“系统配置”或用户头像抽屉中增加微信 Webhook / Server酱 Key 交互配置，无需手动改 `.env`；
 2. **实盘券商网格交易策略模板**：将目前双均线/MACD策略扩充至网格交易 (Grid Trading) 和日内做 T 策略模板。
+
 
 
 

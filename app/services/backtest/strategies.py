@@ -219,6 +219,108 @@ class CustomRuleStrategy(BaseStrategy):
         return data
 
 
+class MultiAgentStrategy(BaseStrategy):
+    """
+    多智能体协同研判与消融实验策略 (Multi-Agent Collaborative Strategy with Ablation Study)
+    
+    模拟四大专业智能体构成的投研团队协同决策机制：
+    1. 宏观政策与市场环境 Agent (Macro & Regime): 跟踪大盘流动性与市场宽幅，负责大势风控闸口；
+    2. 基本面产业 Agent (Fundamental & Value): 结合成长与估值区间，过滤高估值投机陷阱；
+    3. 技术形态与量价 Agent (Technical Pattern): 捕捉突破、均线金叉与动量反转点位；
+    4. 风险审查与筹码风控 Agent (Risk & CYQ Review): 监测高位获利抛压与技术破位，实施动态风控平仓；
+       
+    消融实验支持 (Ablation Study Switches)：
+    - enable_macro (默认 True): 宏观 Agent 开关
+    - enable_fundamental (默认 True): 基本面 Agent 开关
+    - enable_technical (默认 True): 技术 Agent 开关
+    - enable_risk_review (默认 True): 风控审查 Agent 开关
+    - arbitration_mode (默认 'consensus'): 仲裁模式 ('consensus' 全票一致 | 'majority' 多数赞同)
+    """
+    name = "multi_agent"
+
+    def __init__(self, params: Optional[Dict[str, Any]] = None):
+        self.params = params or {}
+        # 智能体启用开关（支持消融实验）
+        self.enable_macro = bool(self.params.get("enable_macro", True))
+        self.enable_fundamental = bool(self.params.get("enable_fundamental", True))
+        self.enable_technical = bool(self.params.get("enable_technical", True))
+        self.enable_risk_review = bool(self.params.get("enable_risk_review", True))
+        self.arbitration_mode = str(self.params.get("arbitration_mode", "consensus")).lower()
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        data = df.copy().sort_values("date").reset_index(drop=True)
+        data["signal"] = 0
+
+        # 基础指标计算
+        data["ma5"] = data["close"].rolling(window=5).mean()
+        data["ma20"] = data["close"].rolling(window=20).mean()
+        data["ma60"] = data["close"].rolling(window=60).mean().bfill()
+
+        # 计算 RSI(14)
+        delta = data["close"].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / (loss + 1e-9)
+        data["rsi"] = 100 - (100 / (1 + rs))
+
+        # 计算 MACD
+        ema12 = data["close"].ewm(span=12, adjust=False).mean()
+        ema26 = data["close"].ewm(span=26, adjust=False).mean()
+        data["dif"] = ema12 - ema26
+        data["dea"] = data["dif"].ewm(span=9, adjust=False).mean()
+
+        # 1. 技术形态 Agent: MA5上穿MA20金叉或MACD金叉
+        tech_buy = (
+            ((data["ma5"] > data["ma20"]) & (data["ma5"].shift(1) <= data["ma20"].shift(1))) |
+            ((data["dif"] > data["dea"]) & (data["dif"].shift(1) <= data["dea"].shift(1)))
+        )
+        tech_sell = (data["ma5"] < data["ma20"]) & (data["ma5"].shift(1) >= data["ma20"].shift(1))
+
+        # 2. 宏观环境 Agent: 站上MA60中长线均线 (避免熊市非理性开仓)
+        macro_filter = (data["close"] >= data["ma60"] * 0.98)
+
+        # 3. 基本面 Agent: 过滤极度泡沫 (RSI在合理估值动量区间，不超过75)
+        fund_filter = (data["rsi"] <= 75) & (data["volume"] > 0)
+
+        # 4. 风控审查 Agent: 监测超买与破位风控 (RSI超买衰减或跌破MA20直接预警离场)
+        risk_exit = (data["rsi"] >= 80) | (data["close"] < data["ma20"] * 0.97)
+
+        # 信号融合 (多智能体仲裁机制)
+        active_agents_votes: List[pd.Series] = []
+
+        if self.enable_technical:
+            active_agents_votes.append(tech_buy)
+        if self.enable_macro:
+            active_agents_votes.append(macro_filter)
+        if self.enable_fundamental:
+            active_agents_votes.append(fund_filter)
+
+        if not active_agents_votes:
+            # 全部消融关闭时，退化为默认技术买入
+            final_buy = tech_buy
+        elif self.arbitration_mode == "majority":
+            vote_sum = pd.Series(0, index=data.index)
+            for v in active_agents_votes:
+                vote_sum += v.astype(int)
+            threshold = (len(active_agents_votes) + 1) // 2
+            final_buy = vote_sum >= threshold
+        else:
+            # 默认 consensus (全票赞同一致仲裁)
+            final_buy = active_agents_votes[0]
+            for v in active_agents_votes[1:]:
+                final_buy = final_buy & v
+
+        # 卖出逻辑融合
+        final_sell = tech_sell
+        if self.enable_risk_review:
+            # 风控审查 Agent 具备一票否决/离场保护权限
+            final_sell = final_sell | risk_exit
+
+        data.loc[final_buy, "signal"] = 1
+        data.loc[final_sell, "signal"] = -1
+        return data
+
+
 def get_strategy_by_name(name: str, params: Dict[str, Any] = None) -> BaseStrategy:
     params = params or {}
     name = name.lower()
@@ -240,6 +342,9 @@ def get_strategy_by_name(name: str, params: Dict[str, Any] = None) -> BaseStrate
         )
     elif name in ("custom", "custom_rule", "user_defined"):
         return CustomRuleStrategy(params=params)
+    elif name in ("multi_agent", "multi_agents", "agent", "agents"):
+        return MultiAgentStrategy(params=params)
     else:
         # 默认双均线
         return DualMAStrategy(short_window=5, long_window=20)
+

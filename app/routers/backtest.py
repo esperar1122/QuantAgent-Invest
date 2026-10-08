@@ -50,6 +50,43 @@ class BacktestStrategyUpdatePayload(BaseModel):
 
 DEFAULT_SYSTEM_BACKTEST_STRATEGIES: List[Dict[str, Any]] = [
     {
+        "id": "preset_btest_multi_agent_core",
+        "name": "🤖 多智能体协同 · 消融实验基准",
+        "description": "核心龙头标的启动宏观、基本面、技术形态、风控审查四大Agent共识仲裁与破位保护，作为消融实验的完整基准组。",
+        "icon": "🤖",
+        "tag_type": "primary",
+        "is_system": True,
+        "cannot_delete": False,
+        "config": {
+            "symbol": "600519, 300750",
+            "strategy_name": "multi_agent",
+            "sizing_model": "equal_weight",
+            "initial_capital": 200000.0,
+            "strategy_params": {
+                "enable_macro": True,
+                "enable_fundamental": True,
+                "enable_technical": True,
+                "enable_risk_review": True,
+                "arbitration_mode": "consensus"
+            },
+            "risk_params": {
+                "stop_loss_pct": 8.0,
+                "take_profit_pct": 20.0,
+                "max_holding_days": 0,
+                "position_ratio": 95
+            },
+            "friction_params": {
+                "friction_preset": "a_share",
+                "slippage_type": "percent",
+                "slippage_val": 0.1,
+                "commission_wan": 2.5,
+                "min_commission": 5.0,
+                "stamp_duty_pct": 0.05,
+                "transfer_fee_wan": 0.1
+            }
+        }
+    },
+    {
         "id": "preset_btest_portfolio_core",
         "name": "👑 核心资产组合 · 多标的回测",
         "description": "精选消费、金融、新能源跨行业龙头多标的配置，结合量价与突破多因子协同，分散个股特质风险。",
@@ -380,6 +417,18 @@ async def list_strategies():
                     "stop_loss_pct": {"type": "float", "default": 0.05, "label": "硬止损比例 (如0.05为-5%)"},
                     "take_profit_pct": {"type": "float", "default": 0.15, "label": "止盈目标比例 (如0.15为+15%)"},
                     "max_holding_days": {"type": "int", "default": 15, "label": "最长持仓天数"}
+                }
+            },
+            {
+                "id": "multi_agent",
+                "name": "🤖 多智能体协同与消融实验策略",
+                "description": "集成宏观环境、基本面估值、技术形态与风控审查四大Agent协同决策，支持消融开关(Ablation Study)与仲裁模式对比。",
+                "params": {
+                    "enable_macro": {"type": "bool", "default": True, "label": "宏观环境Agent (趋势过滤)"},
+                    "enable_fundamental": {"type": "bool", "default": True, "label": "基本面Agent (估值防泡沫)"},
+                    "enable_technical": {"type": "bool", "default": True, "label": "技术形态Agent (均线/MACD突破)"},
+                    "enable_risk_review": {"type": "bool", "default": True, "label": "风控审查Agent (破位止损保护与一票否决权)"},
+                    "arbitration_mode": {"type": "str", "default": "consensus", "label": "仲裁机制 (consensus/majority)"}
                 }
             }
         ]

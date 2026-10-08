@@ -12,6 +12,45 @@ const LOCAL_STORAGE_KEY = 'backtest_custom_strategies_v1'
 // 默认 6 套经典回测策略预设种子
 export const DEFAULT_BACKTEST_TEMPLATES: CustomBacktestStrategy[] = [
   {
+    id: 'preset_btest_multi_agent_core',
+    name: '🤖 多智能体协同 · 消融实验基准',
+    description: '核心龙头标的启动宏观、基本面、技术形态、风控审查四大Agent共识仲裁与破位保护，作为消融对比实验的完整基准组。',
+    icon: '🤖',
+    tag_type: 'primary',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    is_system: true,
+    cannot_delete: false,
+    config: {
+      symbol: '600519, 300750',
+      strategy_name: 'multi_agent',
+      sizing_model: 'equal_weight',
+      initial_capital: 200000,
+      strategy_params: {
+        enable_macro: true,
+        enable_fundamental: true,
+        enable_technical: true,
+        enable_risk_review: true,
+        arbitration_mode: 'consensus'
+      },
+      risk_params: {
+        stop_loss_pct: 8.0,
+        take_profit_pct: 20.0,
+        max_holding_days: 0,
+        position_ratio: 95
+      },
+      friction_params: {
+        friction_preset: 'a_share',
+        slippage_type: 'percent',
+        slippage_val: 0.1,
+        commission_wan: 2.5,
+        min_commission: 5.0,
+        stamp_duty_pct: 0.05,
+        transfer_fee_wan: 0.1
+      }
+    }
+  },
+  {
     id: 'preset_btest_portfolio_core',
     name: '👑 核心资产组合 · 多标的回测',
     description: '精选消费、金融、新能源跨行业龙头多标的配置，结合量价与突破多因子协同，分散个股特质风险。',

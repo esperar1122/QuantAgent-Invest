@@ -82,6 +82,7 @@
       @selection-change="handleSelectionChange"
       @sort-change="handleSortChange"
       @batch-analyze="handleBatchAnalyze"
+      @batch-backtest="handleBatchBacktest"
       @export-csv="exportCSV"
       @refresh="loadData"
       @analyze="goToAnalysis"
@@ -155,6 +156,7 @@ const {
   handleReset,
   handleSelectionChange,
   handleBatchAnalyze,
+  handleBatchBacktest,
   exportCSV,
   isFavorited,
   toggleFavorite,

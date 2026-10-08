@@ -440,6 +440,20 @@ export function useStockPool() {
     }
   }
 
+  // 批量导入组合回测与消融实验
+  const handleBatchBacktest = () => {
+    if (selectedStocks.value.length === 0) {
+      ElMessage.warning('请先在表格中勾选要回测的标的')
+      return
+    }
+    const codes = selectedStocks.value.map(s => s.code).join(',')
+    router.push({
+      path: '/terminal/backtest',
+      query: { symbols: codes, strategy: 'multi_agent' }
+    })
+    ElMessage.success(`🎉 已将选中的 ${selectedStocks.value.length} 只标的导入组合回测与消融实验控制台！`)
+  }
+
   // 导出 CSV 文件
   const exportCSV = () => {
     if (stockList.value.length === 0) {
@@ -669,6 +683,7 @@ export function useStockPool() {
     handleReset,
     handleSelectionChange,
     handleBatchAnalyze,
+    handleBatchBacktest,
     exportCSV,
     loadFavorites,
     isFavorited,

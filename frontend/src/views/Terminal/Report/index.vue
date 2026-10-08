@@ -112,6 +112,10 @@
             <el-icon><Connection /></el-icon>
             Agent 工作流
           </el-button>
+          <el-button type="success" size="small" plain @click="handleExportMarkdown">
+            <el-icon><Download /></el-icon>
+            导出 Markdown 报告
+          </el-button>
           <el-button type="primary" size="small" @click="handlePrint">
             <el-icon><Printer /></el-icon>
             导出 / 打印 PDF
@@ -358,7 +362,8 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Connection, Printer, TrendCharts, Star, ArrowDown, VideoPlay, InfoFilled } from '@element-plus/icons-vue'
+import { Connection, Printer, TrendCharts, Star, ArrowDown, VideoPlay, InfoFilled, Download } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { stocksApi } from '@/api/stocks'
 import { reportsApi } from '@/api/reports'
 import { useFavoritesStore } from '@/stores/favorites'
@@ -530,6 +535,111 @@ function goToWorkflow() {
 
 function handlePrint() {
   window.print()
+}
+
+function handleExportMarkdown() {
+  const s = reportStock.value
+  const mdLines: string[] = []
+
+  mdLines.push(`# 【深度投研报告】${s.name} (${s.code}) 投资价值评估与多智能体决策案卷`)
+  mdLines.push('')
+  mdLines.push(`> 报告编号: DOC ID: QA-2026-${s.code} | 发布日期: ${s.publishDate || new Date().toISOString().slice(0, 10)} | 评级机构: QuantAgent 多智能体投研决策平台`)
+  mdLines.push(`> 报告属性: ${s.isOfflineReport ? '多智能体大模型正式案卷' : '实时量化与基本面综合内参'} | 综合置信度得分: ${s.score} / 100`)
+  mdLines.push('')
+  mdLines.push('---')
+  mdLines.push('')
+  mdLines.push('## 一、 标的概况与核心投资评级')
+  mdLines.push('')
+  mdLines.push('| 评估指标 | 关键数据 | 评估指标 | 关键数据 |')
+  mdLines.push('| :--- | :--- | :--- | :--- |')
+  mdLines.push(`| **证券代码** | \`${s.marketSymbol || s.code}\` | **标的名称** | ${s.name} |`)
+  mdLines.push(`| **所属板块** | ${s.board || '--'} | **核心赛道** | ${s.sector || '--'} |`)
+  mdLines.push(`| **当前现价** | ¥ ${Number(s.price).toFixed(2)} | **核心投资评级** | **${s.rating}** |`)
+  mdLines.push(`| **目标价位** | ¥ ${s.targetPrice} | **预期上行空间** | +${s.targetUpside}% |`)
+  mdLines.push(`| **止损纪律位** | ¥ ${s.stopLossPrice} | **52周价格区间** | ¥ ${s.low52} ~ ¥ ${s.high52} |`)
+  mdLines.push(`| **市盈率 (PE)** | ${s.pe} 倍 | **市净率 (PB)** | ${s.pb} 倍 |`)
+  mdLines.push(`| **净资产收益率 (ROE)** | ${s.roe} | **总市值 / 流通市值** | ${s.marketCap} 亿 / ${s.circCap} 亿 |`)
+  mdLines.push('')
+  mdLines.push(`**标的简介**: ${s.desc}`)
+  mdLines.push('')
+  mdLines.push('---')
+  mdLines.push('')
+  mdLines.push('## 二、 多智能体投研执行摘要 (Executive Summary)')
+  mdLines.push('')
+  mdLines.push(`> ${s.summary || '暂无摘要'}`)
+  mdLines.push('')
+  if (s.recommendationDetail) {
+    mdLines.push(`**决策层评定意见**: ${s.recommendationDetail}`)
+    mdLines.push('')
+  }
+  if (s.highlights && s.highlights.length > 0) {
+    mdLines.push('### 核心投资逻辑与要点')
+    s.highlights.forEach((h: any) => {
+      mdLines.push(`- **[${h.tag}] ${h.title}**: ${h.desc}`)
+    })
+    mdLines.push('')
+  }
+  mdLines.push('---')
+  mdLines.push('')
+  mdLines.push('## 三、 量化多因子综合评估矩阵')
+  mdLines.push('')
+  mdLines.push('| 因子维度 | 因子得分 (0-100) | 全市场分位数 | 建议权重 | 因子逻辑特征 |')
+  mdLines.push('| :--- | :--- | :--- | :--- | :--- |')
+  if (s.factors && s.factors.length > 0) {
+    s.factors.forEach((f: any) => {
+      mdLines.push(`| **${f.name}** | \`${f.score}\` | ${f.rank} | ${f.weight} | ${f.desc} |`)
+    })
+  }
+  mdLines.push('')
+  mdLines.push('---')
+  mdLines.push('')
+  mdLines.push('## 四、 多智能体协同论证意见 (Multi-Agent Opinions)')
+  mdLines.push('')
+  mdLines.push('### 4.1 多头支持论据 (Supporting Points)')
+  if (s.supportingPoints && s.supportingPoints.length > 0) {
+    s.supportingPoints.forEach((sp: any) => {
+      mdLines.push(`- **【${sp.agent}】**: ${sp.content}`)
+    })
+  } else {
+    mdLines.push('- 暂无多头特别论据')
+  }
+  mdLines.push('')
+  mdLines.push('### 4.2 风险审查与空头防线 (Risk Points)')
+  if (s.riskPoints && s.riskPoints.length > 0) {
+    s.riskPoints.forEach((rp: any) => {
+      mdLines.push(`- **【${rp.agent}】**: ${rp.content}`)
+    })
+  } else {
+    mdLines.push('- 暂无风险提示')
+  }
+  mdLines.push('')
+  mdLines.push('---')
+  mdLines.push('')
+  mdLines.push('## 五、 投资决策委员会终审仲裁与实战操作策略')
+  mdLines.push('')
+  mdLines.push(`**终审裁决**: ${s.rulingSummary || '维持积极稳健投资建议'}`)
+  mdLines.push('')
+  mdLines.push(`- 🎯 **建仓策略**: ${s.buyStrategy || '--'}`)
+  mdLines.push(`- ⚖️ **仓位配置**: ${s.positionAdvice || '--'}`)
+  mdLines.push(`- 🛡️ **止损纪律**: ${s.stopLossStrategy || '--'}`)
+  mdLines.push('')
+  mdLines.push('---')
+  mdLines.push('')
+  mdLines.push('### 免责声明 (Disclaimer)')
+  mdLines.push('*本报告由 QuantAgent-Invest 智能多智能体投研决策平台全自动汇总生成，系统结合多因子量化模型与多智能体（宏观政策、技术形态、基本面财务、风控管理）协作决策架构，仅供学术研究、教学研讨与量化回测参考，不构成直接的投资交易要约。股市有风险，入市需谨慎。*')
+
+  const content = mdLines.join('\n')
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `QuantAgent_Report_${s.code}_${s.publishDate || new Date().toISOString().slice(0, 10)}.md`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+
+  ElMessage.success(`🎉 标的 [${s.name}] 全息投研 Markdown 报告已成功导出！`)
 }
 
 async function loadReportForStock(rawCode: string) {
