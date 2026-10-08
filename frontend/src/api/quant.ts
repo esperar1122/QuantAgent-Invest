@@ -65,6 +65,8 @@ export interface BacktestFrictionSummary {
 
 export interface BacktestRequest {
   symbol: string
+  symbols?: string[]
+  sizing_model?: string
   strategy_name: string
   start_date: string
   end_date: string
@@ -80,8 +82,25 @@ export interface BacktestRequest {
   benchmark?: string
 }
 
+export interface PortfolioAssetAttribution {
+  symbol: string
+  trades_count: number
+  sell_count: number
+  win_count: number
+  loss_count: number
+  win_rate_pct: number
+  realized_pnl: number
+  contribution_pct: number
+  current_shares: number
+  target_weight_pct: number
+}
+
 export interface BacktestResponse {
   symbol: string
+  is_portfolio?: boolean
+  symbols?: string[]
+  sizing_model?: string
+  asset_attribution?: Record<string, PortfolioAssetAttribution>
   strategy_name: string
   start_date: string
   end_date: string

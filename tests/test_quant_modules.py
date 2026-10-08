@@ -173,6 +173,31 @@ def test_backtest_engine_run():
     print("✅ test_backtest_engine_run passed")
 
 
+def test_portfolio_backtest_engine():
+    df1 = create_dummy_kline_df(60)
+    df2 = create_dummy_kline_df(60)
+    dfs = {"600519": df1, "000001": df2}
+    engine = BacktestEngine(initial_cash=200000.0, slippage_type="percent", slippage=0.001)
+    res = engine.run_portfolio(
+        symbols=["600519", "000001"],
+        dfs_dict=dfs,
+        strategy_name="dual_ma",
+        strategy_params={"short_window": 5, "long_window": 15},
+        sizing_model="equal_weight"
+    )
+
+    assert res["is_portfolio"] is True
+    assert len(res["symbols"]) == 2
+    assert "metrics" in res
+    assert "frictions" in res
+    assert "asset_attribution" in res
+    assert "600519" in res["asset_attribution"]
+    assert "000001" in res["asset_attribution"]
+    assert len(res["equity_curve"]) == 60
+    assert "total_return_pct" in res["metrics"]
+    print("✅ test_portfolio_backtest_engine passed")
+
+
 def test_position_sizing_models():
     # 1. 等权重
     eq_res = PositionSizer.equal_weight(["600519", "000001", "002594"], 100000.0, cash_reserve_ratio=0.1)
@@ -346,6 +371,7 @@ if __name__ == "__main__":
     test_trade_simulator_slippage_and_friction_models()
     test_strategies_signals()
     test_backtest_engine_run()
+    test_portfolio_backtest_engine()
     test_custom_rule_strategy()
     test_position_sizing_models()
     test_portfolio_optimizer()

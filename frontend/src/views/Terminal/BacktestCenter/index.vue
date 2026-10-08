@@ -8,6 +8,9 @@
         <span class="bc-subtitle">严格遵循 A 股规则 · T+1 撮合约束 · 涨跌停限制 · 真实交易摩擦成本</span>
       </div>
       <div class="banner-quick-actions">
+        <el-button size="small" type="success" plain @click="loadPreset('600519, 000001, 300750, 002594', 'custom_rule')">
+          👑 核心资产组合 · 多标的回测
+        </el-button>
         <el-button size="small" type="primary" plain @click="loadPreset('000001', 'custom_rule')">
           🌟 平安银行 · 自定义多因子
         </el-button>
@@ -41,8 +44,23 @@
 
           <div class="card-section-title" style="margin-top: 14px;">2. 回测标的与周期</div>
           <el-form label-position="top" size="small">
-            <el-form-item label="股票/ETF代码">
-              <el-input v-model="form.symbol" placeholder="如 600519、300750、510300" />
+            <el-form-item label="股票/ETF标的 (支持单标的或多标的组合)">
+              <el-input
+                v-model="form.symbol"
+                placeholder="单个如 600519，组合如 600519, 000001, 300750"
+                clearable
+              >
+                <template #append v-if="isPortfolioMode">
+                  <span class="portfolio-badge-pill">组合: {{ portfolioCount }}只</span>
+                </template>
+              </el-input>
+            </el-form-item>
+
+            <el-form-item label="组合资金分配模型" v-if="isPortfolioMode">
+              <el-select v-model="form.sizing_model" class="full-width" size="small">
+                <el-option label="⚖️ 等权重分配 (Equal Weight)" value="equal_weight" />
+                <el-option label="📉 波动率倒数加权 (Inverse Volatility)" value="inverse_volatility" />
+              </el-select>
             </el-form-item>
 
             <el-form-item label="初始回测本金 (元)">
@@ -497,6 +515,59 @@
             <div ref="chartRef" class="nav-chart-view"></div>
           </el-card>
 
+          <!-- 2.5 资产组合收益归因面板 (仅组合回测模式呈现) -->
+          <el-card shadow="never" class="table-card" v-if="result.is_portfolio && result.asset_attribution">
+            <div class="table-header">
+              <span class="th-title">📊 多标的资产组合盈亏归因与权重贡献 (Asset Attribution)</span>
+              <span class="th-note">组合内各资产独立盈亏贡献、胜率与交易活跃度</span>
+            </div>
+            <el-table
+              :data="Object.values(result.asset_attribution)"
+              size="small"
+              style="width: 100%"
+            >
+              <el-table-column prop="symbol" label="标的代码" width="110">
+                <template #default="{ row }">
+                  <span class="font-mono font-bold">{{ row.symbol }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="target_weight_pct" label="目标配置权重" width="110" align="right">
+                <template #default="{ row }">
+                  <span class="font-mono">{{ row.target_weight_pct }}%</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="trades_count" label="总交易笔数" width="100" align="right">
+                <template #default="{ row }">
+                  <span class="font-mono">{{ row.trades_count }} 笔</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="win_rate_pct" label="单股胜率" width="100" align="right">
+                <template #default="{ row }">
+                  <span class="font-mono">{{ row.win_rate_pct }}%</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="realized_pnl" label="已实现盈亏" width="130" align="right">
+                <template #default="{ row }">
+                  <span class="font-mono tabular-nums" :class="row.realized_pnl >= 0 ? 'color-up' : 'color-down'">
+                    {{ row.realized_pnl >= 0 ? '+' : '' }}¥{{ row.realized_pnl?.toFixed(2) }}
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="contribution_pct" label="组合总贡献度" min-width="120" align="right">
+                <template #default="{ row }">
+                  <el-tag size="small" :type="row.contribution_pct >= 0 ? 'danger' : 'success'">
+                    {{ row.contribution_pct >= 0 ? '+' : '' }}{{ row.contribution_pct }}%
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="current_shares" label="期末持仓股数" width="120" align="right">
+                <template #default="{ row }">
+                  <span class="font-mono">{{ row.current_shares }} 股</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
+
           <!-- 3. 详细交易明细与记录 -->
           <el-card shadow="never" class="table-card">
             <div class="table-header">
@@ -592,8 +663,20 @@ const dateRange = ref<[string, string]>(['2023-01-01', '2024-01-01'])
 
 const form = ref({
   symbol: '600519',
+  sizing_model: 'equal_weight',
   strategy_name: 'dual_ma',
   initial_capital: 100000
+})
+
+const isPortfolioMode = computed(() => {
+  const raw = form.value.symbol.replace(/，/g, ',').replace(/;/g, ',').replace(/\s+/g, ',')
+  const syms = raw.split(',').filter(Boolean)
+  return syms.length > 1
+})
+
+const portfolioCount = computed(() => {
+  const raw = form.value.symbol.replace(/，/g, ',').replace(/;/g, ',').replace(/\s+/g, ',')
+  return raw.split(',').filter(Boolean).length
 })
 
 const riskParams = ref({
@@ -726,7 +809,8 @@ async function runBacktest() {
       ? frictionParams.value.slippage_val
       : (frictionParams.value.slippage_val / 100)
 
-    const res = await quantApi.runBacktest({
+    const rawSyms = form.value.symbol.replace(/，/g, ',').replace(/;/g, ',').replace(/\s+/g, ',').split(',').map(s => s.trim()).filter(Boolean)
+    const payload: any = {
       symbol: form.value.symbol,
       strategy_name: form.value.strategy_name,
       start_date: dateRange.value[0],
@@ -740,11 +824,18 @@ async function runBacktest() {
       slippage_type: frictionParams.value.slippage_type,
       position_ratio: (riskParams.value.position_ratio || 95) / 100,
       strategy_params: combinedParams
-    })
+    }
+
+    if (rawSyms.length > 1) {
+      payload.symbols = rawSyms
+      payload.sizing_model = form.value.sizing_model
+    }
+
+    const res = await quantApi.runBacktest(payload)
 
     const data = ((res as any)?.data || res) as BacktestResponse
     result.value = data
-    ElMessage.success('A 股规则级历史回测完成！')
+    ElMessage.success(rawSyms.length > 1 ? `🎉 多标的组合 (${rawSyms.length}只) 回测完成！` : 'A 股规则级历史回测完成！')
 
     await nextTick()
     renderChart()
@@ -1185,5 +1276,14 @@ onMounted(() => {
 }
 .text-fee {
   color: #94a3b8;
+}
+
+.portfolio-badge-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: #059669;
+  background: #d1fae5;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 </style>

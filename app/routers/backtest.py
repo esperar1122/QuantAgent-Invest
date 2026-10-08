@@ -16,7 +16,9 @@ router = APIRouter(prefix="/api/backtest", tags=["量化回测"])
 
 
 class BacktestRunRequest(BaseModel):
-    symbol: str = Field(..., description="A股股票代码，例如 600519 或 000001")
+    symbol: str = Field(..., description="A股股票代码，例如 600519，或组合代码如 600519, 000001")
+    symbols: Optional[List[str]] = Field(default=None, description="组合股票代码列表 (若提供则执行组合回测)")
+    sizing_model: str = Field(default="equal_weight", description="组合资金分配模型: equal_weight (等权重), inverse_volatility (波动率倒数)")
     strategy: str = Field(default="dual_ma", description="策略名称: dual_ma, macd, bollinger, custom_rule")
     strategy_name: Optional[str] = Field(default=None, description="策略名称别名")
     params: Optional[Dict[str, Any]] = Field(default=None, description="策略超参数")
@@ -110,15 +112,7 @@ async def run_backtest(req: BacktestRunRequest):
         prms = req.strategy_params if req.strategy_params is not None else (req.params or {})
         init_cash = req.initial_capital if req.initial_capital is not None else req.initial_cash
 
-        logger.info(f"🚀 开始执行回测: {req.symbol}, 策略: {strat}")
-        # 1. 加载历史K线
-        df = load_backtest_data(
-            symbol=req.symbol,
-            start_date=req.start_date,
-            end_date=req.end_date
-        )
-
-        # 2. 实例化引擎并执行
+        # 1. 实例化回测引擎
         engine = BacktestEngine(
             initial_cash=init_cash,
             commission_rate=req.commission_rate,
@@ -130,12 +124,47 @@ async def run_backtest(req: BacktestRunRequest):
             position_ratio=req.position_ratio
         )
 
-        result = engine.run(
-            symbol=req.symbol,
-            df=df,
-            strategy_name=strat,
-            strategy_params=prms
-        )
+        # 2. 解析单标的或多标的组合
+        symbols_list = req.symbols
+        if not symbols_list and req.symbol:
+            raw_syms = [s.strip() for s in req.symbol.replace("，", ",").replace(";", ",").split(",") if s.strip()]
+            if len(raw_syms) > 1:
+                symbols_list = raw_syms
+
+        # 3. 执行单标的或组合回测
+        if symbols_list and len(symbols_list) > 1:
+            logger.info(f"🚀 开始执行多标的组合回测: {symbols_list}, 策略: {strat}, 仓位模型: {req.sizing_model}")
+            dfs_dict = {}
+            for s in symbols_list:
+                try:
+                    dfs_dict[s] = load_backtest_data(symbol=s, start_date=req.start_date, end_date=req.end_date)
+                except Exception as ex:
+                    logger.warning(f"组合标的 {s} 历史数据加载异常: {ex}")
+
+            if not dfs_dict:
+                raise ValueError(f"候选组合中所有标的历史数据均无法加载: {symbols_list}")
+
+            result = engine.run_portfolio(
+                symbols=symbols_list,
+                dfs_dict=dfs_dict,
+                strategy_name=strat,
+                strategy_params=prms,
+                sizing_model=req.sizing_model
+            )
+        else:
+            single_sym = symbols_list[0] if (symbols_list and len(symbols_list) == 1) else req.symbol.strip()
+            logger.info(f"🚀 开始执行单标的回测: {single_sym}, 策略: {strat}")
+            df = load_backtest_data(
+                symbol=single_sym,
+                start_date=req.start_date,
+                end_date=req.end_date
+            )
+            result = engine.run(
+                symbol=single_sym,
+                df=df,
+                strategy_name=strat,
+                strategy_params=prms
+            )
 
         return BacktestResponse(
             success=True,
