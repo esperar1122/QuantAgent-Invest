@@ -51,12 +51,31 @@ export interface BacktestMetrics {
   beta?: number
 }
 
+export interface BacktestFrictionSummary {
+  total_commission: number
+  total_stamp_duty: number
+  total_transfer_fee: number
+  total_slippage_cost: number
+  total_friction: number
+  friction_ratio_pct: number
+  commission_desc: string
+  stamp_duty_desc: string
+  slippage_model_desc: string
+}
+
 export interface BacktestRequest {
   symbol: string
   strategy_name: string
   start_date: string
   end_date: string
   initial_capital?: number
+  commission_rate?: number
+  min_commission?: number
+  stamp_duty_rate?: number
+  transfer_fee_rate?: number
+  slippage?: number
+  slippage_type?: string
+  position_ratio?: number
   strategy_params?: Record<string, any>
   benchmark?: string
 }
@@ -69,9 +88,10 @@ export interface BacktestResponse {
   initial_capital: number
   final_equity: number
   metrics: BacktestMetrics
+  frictions?: BacktestFrictionSummary
   trades: BacktestTradeLog[]
   daily_nav: BacktestDailyNAV[]
-  execution_time_seconds: number
+  execution_time_seconds?: number
 }
 
 // ===== 仓位与组合相关接口 =====

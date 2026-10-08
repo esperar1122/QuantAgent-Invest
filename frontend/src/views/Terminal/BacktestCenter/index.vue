@@ -269,15 +269,102 @@
             </el-row>
           </el-form>
 
+          <!-- 5. 交易摩擦与滑点深度自定义 -->
+          <div class="card-section-title" style="margin-top: 14px;">5. 交易摩擦与滑点深度模型</div>
+          <el-form label-position="top" size="small">
+            <el-form-item label="费率预设方案">
+              <el-radio-group v-model="frictionPreset" size="small" class="full-width" @change="onFrictionPresetChange">
+                <el-radio-button value="a_share" style="width: 33.3%;">标准A股</el-radio-button>
+                <el-radio-button value="etf" style="width: 33.3%;">场内ETF</el-radio-button>
+                <el-radio-button value="custom" style="width: 33.4%;">自定义</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+
+            <el-form-item label="撮合滑点模型">
+              <el-select v-model="frictionParams.slippage_type" class="full-width" size="small" @change="onSlippageTypeChange">
+                <el-option label="📊 百分比滑点 (固定比例基准)" value="percent" />
+                <el-option label="🎯 固定点数价差 (如 ±0.02元)" value="fixed_points" />
+                <el-option label="🌊 成交量冲击成本模型 (平方根动态冲击)" value="volume_impact" />
+                <el-option label="⚡ 理论零滑点 (无损耗)" value="none" />
+              </el-select>
+            </el-form-item>
+
+            <el-row :gutter="10" v-if="frictionParams.slippage_type !== 'none'">
+              <el-col :span="24">
+                <el-form-item :label="frictionParams.slippage_type === 'fixed_points' ? '每股滑点价差 (元)' : '基准滑点比例 (%)'">
+                  <el-input-number
+                    v-model="frictionParams.slippage_val"
+                    :min="0"
+                    :max="frictionParams.slippage_type === 'fixed_points' ? 5 : 5"
+                    :step="frictionParams.slippage_type === 'fixed_points' ? 0.01 : 0.05"
+                    :precision="3"
+                    class="full-width"
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <el-row :gutter="10">
+              <el-col :span="12">
+                <el-form-item label="双边佣金率 (‱万分之)">
+                  <el-input-number
+                    v-model="frictionParams.commission_wan"
+                    :min="0"
+                    :max="30"
+                    :step="0.5"
+                    :precision="2"
+                    class="full-width"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="最低佣金门槛 (元)">
+                  <el-input-number
+                    v-model="frictionParams.min_commission"
+                    :min="0"
+                    :max="50"
+                    :step="1"
+                    class="full-width"
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <el-row :gutter="10">
+              <el-col :span="12">
+                <el-form-item label="卖出印花税率 (%)">
+                  <el-input-number
+                    v-model="frictionParams.stamp_duty_pct"
+                    :min="0"
+                    :max="1"
+                    :step="0.01"
+                    :precision="3"
+                    class="full-width"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="双边过户费率 (‱万分之)">
+                  <el-input-number
+                    v-model="frictionParams.transfer_fee_wan"
+                    :min="0"
+                    :max="1"
+                    :step="0.01"
+                    :precision="3"
+                    class="full-width"
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-form>
+
           <!-- A股交易摩擦硬性约束说明 -->
           <div class="friction-rules-box">
-            <div class="fr-title">⚖️ A 股真实交易摩擦撮合规则:</div>
+            <div class="fr-title">⚖️ A 股真实交易制度硬约束:</div>
             <ul class="fr-list">
               <li>严格 T+1 持仓限制（买入当日不可卖出）</li>
-              <li>涨停板 (10%/20%) 无法买入，跌停板无法卖出</li>
-              <li>卖出单边印花税 0.05% (万5)</li>
-              <li>买卖双边佣金 0.025% (万2.5，最低5元起征)</li>
-              <li>双边执行滑点 0.1%</li>
+              <li>涨跌停板（主板10%/创科20%）封板无法撮合买入/卖出</li>
+              <li>遵循 {{ frictionPreset === 'etf' ? 'ETF 基金' : frictionPreset === 'a_share' ? '标准 A 股' : '自定义' }} 摩擦撮合体系</li>
             </ul>
           </div>
 
@@ -359,6 +446,41 @@
               <span class="kpi-sub">总交易次数: {{ result.metrics.total_trades }} 笔</span>
             </div>
           </div>
+
+          <!-- 1.5 交易摩擦损耗与执行成本审计面板 -->
+          <el-card shadow="never" class="friction-card" v-if="result.frictions">
+            <div class="fc-header">
+              <div class="fc-title-group">
+                <span class="fc-title">💸 交易摩擦成本与滑点损耗审计 (Friction & Slippage Audit)</span>
+                <el-tag size="small" type="danger" effect="plain" class="fc-badge">
+                  总摩擦损耗: ¥{{ result.frictions.total_friction.toFixed(2) }} (占初始本金 {{ result.frictions.friction_ratio_pct }}%)
+                </el-tag>
+              </div>
+              <div class="fc-tags">
+                <el-tag size="small" effect="plain" type="info">佣金: {{ result.frictions.commission_desc }}</el-tag>
+                <el-tag size="small" effect="plain" type="info">印花税: {{ result.frictions.stamp_duty_desc }}</el-tag>
+                <el-tag size="small" effect="plain" type="warning">滑点模型: {{ result.frictions.slippage_model_desc }}</el-tag>
+              </div>
+            </div>
+            <div class="fc-grid">
+              <div class="fc-item">
+                <span class="fc-label">券商佣金累计 (双边)</span>
+                <span class="fc-val font-mono">¥{{ result.frictions.total_commission.toFixed(2) }}</span>
+              </div>
+              <div class="fc-item">
+                <span class="fc-label">证券印花税累计 (单边)</span>
+                <span class="fc-val font-mono">¥{{ result.frictions.total_stamp_duty.toFixed(2) }}</span>
+              </div>
+              <div class="fc-item">
+                <span class="fc-label">证券过户费累计</span>
+                <span class="fc-val font-mono">¥{{ result.frictions.total_transfer_fee.toFixed(2) }}</span>
+              </div>
+              <div class="fc-item highlight-slip">
+                <span class="fc-label">滑点冲击损耗估算</span>
+                <span class="fc-val font-mono text-fee">¥{{ result.frictions.total_slippage_cost.toFixed(2) }}</span>
+              </div>
+            </div>
+          </el-card>
 
           <!-- 2. ECharts 净值曲线图容器 -->
           <el-card shadow="never" class="chart-card">
@@ -481,6 +603,45 @@ const riskParams = ref({
   position_ratio: 95 // 95% 仓位
 })
 
+// 5. 交易摩擦与滑点深度参数
+const frictionPreset = ref<'a_share' | 'etf' | 'custom'>('a_share')
+const frictionParams = ref({
+  slippage_type: 'percent',
+  slippage_val: 0.1, // 0.1% 或 0.02元
+  commission_wan: 2.5, // 万2.5
+  min_commission: 5.0, // 5元起征
+  stamp_duty_pct: 0.05, // 印花税0.05%
+  transfer_fee_wan: 0.1 // 过户费万0.1
+})
+
+function onFrictionPresetChange() {
+  if (frictionPreset.value === 'a_share') {
+    frictionParams.value.slippage_type = 'percent'
+    frictionParams.value.slippage_val = 0.1
+    frictionParams.value.commission_wan = 2.5
+    frictionParams.value.min_commission = 5.0
+    frictionParams.value.stamp_duty_pct = 0.05
+    frictionParams.value.transfer_fee_wan = 0.1
+  } else if (frictionPreset.value === 'etf') {
+    frictionParams.value.slippage_type = 'percent'
+    frictionParams.value.slippage_val = 0.05
+    frictionParams.value.commission_wan = 1.0
+    frictionParams.value.min_commission = 0.0
+    frictionParams.value.stamp_duty_pct = 0.0
+    frictionParams.value.transfer_fee_wan = 0.0
+  }
+}
+
+function onSlippageTypeChange() {
+  if (frictionParams.value.slippage_type === 'fixed_points') {
+    frictionParams.value.slippage_val = 0.02
+  } else if (frictionParams.value.slippage_type === 'none') {
+    frictionParams.value.slippage_val = 0.0
+  } else {
+    frictionParams.value.slippage_val = 0.1
+  }
+}
+
 const strategyParams = ref<Record<string, any>>({
   // 双均线
   fast_period: 5,
@@ -561,12 +722,23 @@ async function runBacktest() {
       position_ratio: (riskParams.value.position_ratio || 95) / 100
     }
 
+    const slippageReal = frictionParams.value.slippage_type === 'fixed_points'
+      ? frictionParams.value.slippage_val
+      : (frictionParams.value.slippage_val / 100)
+
     const res = await quantApi.runBacktest({
       symbol: form.value.symbol,
       strategy_name: form.value.strategy_name,
       start_date: dateRange.value[0],
       end_date: dateRange.value[1],
       initial_capital: form.value.initial_capital,
+      commission_rate: frictionParams.value.commission_wan / 10000,
+      min_commission: frictionParams.value.min_commission,
+      stamp_duty_rate: frictionParams.value.stamp_duty_pct / 100,
+      transfer_fee_rate: frictionParams.value.transfer_fee_wan / 10000,
+      slippage: slippageReal,
+      slippage_type: frictionParams.value.slippage_type,
+      position_ratio: (riskParams.value.position_ratio || 95) / 100,
       strategy_params: combinedParams
     })
 
@@ -591,10 +763,11 @@ function renderChart() {
     window.addEventListener('resize', () => chartInstance?.resize())
   }
 
-  const dates = result.value.daily_nav.map(d => d.date)
-  const navs = result.value.daily_nav.map(d => +d.nav.toFixed(3))
-  const benchmarks = result.value.daily_nav.map(d => +(d.benchmark_nav || 1.0).toFixed(3))
-  const drawdowns = result.value.daily_nav.map(d => -(d.drawdown_pct || 0).toFixed(2))
+  const navList = result.value.daily_nav || (result.value as any).equity_curve || []
+  const dates = navList.map((d: any) => d.date)
+  const navs = navList.map((d: any) => +(d.nav || 1.0).toFixed(3))
+  const benchmarks = navList.map((d: any) => +(d.benchmark_nav || 1.0).toFixed(3))
+  const drawdowns = navList.map((d: any) => -(d.drawdown_pct || 0).toFixed(2))
 
   const option: echarts.EChartsOption = {
     tooltip: {
@@ -870,6 +1043,76 @@ onMounted(() => {
     }
     &.highlight-card {
       border-left: 4px solid #2563eb;
+    }
+  }
+}
+
+.friction-card {
+  background: #ffffff;
+  border: 1px solid #fed7aa;
+  background: linear-gradient(180deg, #fffaf5 0%, #ffffff 100%);
+
+  .fc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+
+    .fc-title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      .fc-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: #9a3412;
+      }
+      .fc-badge {
+        font-weight: 700;
+      }
+    }
+
+    .fc-tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+  }
+
+  .fc-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+
+    .fc-item {
+      background: #ffffff;
+      border: 1px solid #fed7aa;
+      border-radius: 6px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+
+      .fc-label {
+        font-size: 11px;
+        color: #78716c;
+      }
+      .fc-val {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1c1917;
+      }
+
+      &.highlight-slip {
+        border-color: #fca5a5;
+        background: #fef2f2;
+        .fc-val {
+          color: #dc2626;
+        }
+      }
     }
   }
 }

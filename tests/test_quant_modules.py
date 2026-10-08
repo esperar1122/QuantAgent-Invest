@@ -95,6 +95,39 @@ def test_trade_simulator_a_share_rules():
     print("✅ test_trade_simulator_a_share_rules passed")
 
 
+def test_trade_simulator_slippage_and_friction_models():
+    # 1. 百分比滑点
+    sim_pct = TradeSimulator(initial_cash=100000.0, slippage=0.002, slippage_type="percent")
+    b1 = sim_pct.buy("2023-01-01", "600519", 100.0, 100)
+    assert b1 is not None
+    assert b1["price"] > 100.0  # 买入价格滑高
+
+    # 2. 固定点数滑点
+    sim_pts = TradeSimulator(initial_cash=100000.0, slippage=0.05, slippage_type="fixed_points")
+    b2 = sim_pts.buy("2023-01-01", "600519", 10.0, 100)
+    assert b2 is not None
+    assert b2["price"] == 10.05
+
+    # 3. 零滑点
+    sim_none = TradeSimulator(initial_cash=100000.0, slippage_type="none")
+    b3 = sim_none.buy("2023-01-01", "600519", 10.0, 100)
+    assert b3 is not None
+    assert b3["price"] == 10.0
+
+    # 4. 冲击成本模型
+    sim_vol = TradeSimulator(initial_cash=100000.0, slippage=0.001, slippage_type="volume_impact")
+    b4 = sim_vol.buy("2023-01-01", "600519", 100.0, 1000, day_volume=50000)
+    assert b4 is not None
+    assert b4["price"] > 100.1
+
+    # 5. 摩擦成本统计
+    frictions = sim_pct.get_friction_summary()
+    assert "total_commission" in frictions
+    assert "total_slippage_cost" in frictions
+    assert "total_friction" in frictions
+    print("✅ test_trade_simulator_slippage_and_friction_models passed")
+
+
 def test_strategies_signals():
     df = create_dummy_kline_df(60)
 
@@ -120,12 +153,20 @@ def test_strategies_signals():
 
 def test_backtest_engine_run():
     df = create_dummy_kline_df(80)
-    engine = BacktestEngine(initial_cash=100000.0)
+    engine = BacktestEngine(
+        initial_cash=100000.0,
+        slippage_type="percent",
+        slippage=0.001,
+        min_commission=5.0
+    )
     res = engine.run("000001", df, strategy_name="dual_ma", strategy_params={"short_window": 5, "long_window": 15})
 
     assert res["symbol"] == "000001"
     assert "metrics" in res
     assert "equity_curve" in res
+    assert "daily_nav" in res
+    assert "frictions" in res
+    assert res["frictions"]["total_friction"] >= 0
     assert len(res["equity_curve"]) == len(df)
     assert "total_return_pct" in res["metrics"]
     assert "sharpe_ratio" in res["metrics"]
@@ -302,6 +343,7 @@ def test_custom_rule_strategy():
 if __name__ == "__main__":
     test_performance_calculator()
     test_trade_simulator_a_share_rules()
+    test_trade_simulator_slippage_and_friction_models()
     test_strategies_signals()
     test_backtest_engine_run()
     test_custom_rule_strategy()

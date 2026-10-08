@@ -26,8 +26,11 @@ class BacktestRunRequest(BaseModel):
     initial_cash: float = Field(default=100000.0, ge=1000, description="初始资金 (元)")
     initial_capital: Optional[float] = Field(default=None, description="初始资金别名")
     commission_rate: float = Field(default=0.00025, description="佣金费率 (默认万2.5)")
+    min_commission: float = Field(default=5.0, ge=0.0, description="最低佣金 (元，默认5元)")
     stamp_duty_rate: float = Field(default=0.0005, description="印花税率 (默认万5，仅卖出)")
-    slippage: float = Field(default=0.001, description="滑点 (默认0.1%)")
+    transfer_fee_rate: float = Field(default=0.00001, ge=0.0, description="过户费率 (默认十万分之1)")
+    slippage: float = Field(default=0.001, description="滑点参数 (默认0.1%)")
+    slippage_type: str = Field(default="percent", description="滑点模型: percent, fixed_points, volume_impact, none")
     position_ratio: float = Field(default=0.95, ge=0.1, le=1.0, description="单次买入资金占用比例")
 
 
@@ -119,8 +122,11 @@ async def run_backtest(req: BacktestRunRequest):
         engine = BacktestEngine(
             initial_cash=init_cash,
             commission_rate=req.commission_rate,
+            min_commission=req.min_commission,
             stamp_duty_rate=req.stamp_duty_rate,
+            transfer_fee_rate=req.transfer_fee_rate,
             slippage=req.slippage,
+            slippage_type=req.slippage_type,
             position_ratio=req.position_ratio
         )
 

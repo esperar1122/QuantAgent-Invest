@@ -20,14 +20,20 @@ class BacktestEngine:
         self,
         initial_cash: float = 100000.0,
         commission_rate: float = 0.00025,
+        min_commission: float = 5.0,
         stamp_duty_rate: float = 0.0005,
+        transfer_fee_rate: float = 0.00001,
         slippage: float = 0.001,
+        slippage_type: str = "percent",
         position_ratio: float = 0.95,  # 每次买入占用可用资金比例
     ):
         self.initial_cash = initial_cash
         self.commission_rate = commission_rate
+        self.min_commission = min_commission
         self.stamp_duty_rate = stamp_duty_rate
+        self.transfer_fee_rate = transfer_fee_rate
         self.slippage = slippage
+        self.slippage_type = slippage_type
         self.position_ratio = position_ratio
 
     def run(
@@ -65,8 +71,11 @@ class BacktestEngine:
         sim = TradeSimulator(
             initial_cash=self.initial_cash,
             commission_rate=self.commission_rate,
+            min_commission=self.min_commission,
             stamp_duty_rate=self.stamp_duty_rate,
-            slippage=self.slippage
+            transfer_fee_rate=self.transfer_fee_rate,
+            slippage=self.slippage,
+            slippage_type=self.slippage_type,
         )
 
         equity_curve: List[Dict[str, Any]] = []
@@ -91,6 +100,7 @@ class BacktestEngine:
             date_str = str(row["date"])
             close_px = float(row["close"])
             open_px = float(row["open"]) if not np.isnan(row["open"]) else close_px
+            volume = float(row.get("volume", 0.0)) if not np.isnan(row.get("volume", 0.0)) else 0.0
             signal = int(row.get("signal", 0))
 
             # 新交易日开始，T+1 解冻
@@ -127,6 +137,7 @@ class BacktestEngine:
                             price=close_px,
                             target_shares=None,
                             is_limit_down=is_limit_down,
+                            day_volume=volume,
                             reason=f"止损触发 ({round(current_gain_pct * 100, 1)}%)"
                         )
                         risk_exit_triggered = True
@@ -139,6 +150,7 @@ class BacktestEngine:
                             price=close_px,
                             target_shares=None,
                             is_limit_down=is_limit_down,
+                            day_volume=volume,
                             reason=f"止盈达成 (+{round(current_gain_pct * 100, 1)}%)"
                         )
                         risk_exit_triggered = True
@@ -151,6 +163,7 @@ class BacktestEngine:
                             price=close_px,
                             target_shares=None,
                             is_limit_down=is_limit_down,
+                            day_volume=volume,
                             reason=f"持仓周期到期 ({holding_days_counter}天)"
                         )
                         risk_exit_triggered = True
@@ -171,6 +184,7 @@ class BacktestEngine:
                                 price=close_px,
                                 target_shares=target_shares,
                                 is_limit_up=is_limit_up,
+                                day_volume=volume,
                                 reason="策略买入信号"
                             )
                             holding_days_counter = 0
@@ -182,6 +196,7 @@ class BacktestEngine:
                         price=close_px,
                         target_shares=None,
                         is_limit_down=is_limit_down,
+                        day_volume=volume,
                         reason="指标死叉平仓"
                     )
                     holding_days_counter = 0
@@ -223,16 +238,30 @@ class BacktestEngine:
         norm_initial = equity_series_data[0] if equity_series_data else 1.0
         normalized_equity = [round(v / norm_initial, 4) for v in equity_series_data]
 
+        cum_max = 1.0
         for i, item in enumerate(equity_curve):
-            item["nav"] = normalized_equity[i]
+            nav_val = normalized_equity[i]
+            item["nav"] = nav_val
+            cum_max = max(cum_max, nav_val)
+            dd_pct = ((nav_val - cum_max) / cum_max * 100) if cum_max > 0 else 0.0
+            item["drawdown_pct"] = round(dd_pct, 2)
+            # 基准净值计算
+            if benchmark_series is not None and not benchmark_series.empty and i < len(benchmark_series):
+                b_init = benchmark_series.iloc[0]
+                b_val = benchmark_series.iloc[i]
+                item["benchmark_nav"] = round(b_val / b_init, 4) if b_init > 0 else 1.0
+            else:
+                item["benchmark_nav"] = 1.0
 
         return {
             "symbol": symbol,
             "strategy": strategy_name,
             "params": strategy_params or {},
             "metrics": metrics,
+            "frictions": sim.get_friction_summary(),
             "trades_count": len(sim.trades_history),
             "trades": sim.trades_history,
             "equity_curve": equity_curve,
+            "daily_nav": equity_curve,
             "final_positions": sim.positions,
         }
