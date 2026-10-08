@@ -57,3 +57,45 @@ async def stream_live_quotes(symbols: str = Query(..., description="逗号分隔
                 await asyncio.sleep(3.0)
 
     return EventSourceResponse(event_generator())
+
+
+@router.get("/indices")
+async def get_live_indices():
+    """
+    极速获取四大核心宽基指数实时行情 (上证指数/深证成指/创业板指/科创50)
+    毫秒级直连，防错校准，绝无点数/百分比混淆
+    """
+    streamer = get_quote_streamer()
+    indices = await streamer.fetch_indices_quotes()
+    return {"success": True, "data": {"indices": indices}, "count": len(indices)}
+
+
+@router.get("/indices/stream")
+async def stream_live_indices(interval: float = Query(2.5, ge=1.0, le=10.0, description="推流间隔(秒)")):
+    """
+    通过 Server-Sent Events (SSE) 持续秒级推流四大核心指数最新行情
+    前端 TopTickerBar 与 MarketTrendChart 均可直接接入，彻底告别频繁轮询
+    """
+    import time
+
+    async def event_generator():
+        streamer = get_quote_streamer()
+        while True:
+            try:
+                indices = await streamer.fetch_indices_quotes()
+                payload = {
+                    "indices": indices,
+                    "timestamp": time.strftime("%H:%M:%S")
+                }
+                yield {
+                    "event": "indices_update",
+                    "data": json.dumps(payload, ensure_ascii=False)
+                }
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"指数SSE推流异常: {e}")
+                await asyncio.sleep(3.0)
+
+    return EventSourceResponse(event_generator())

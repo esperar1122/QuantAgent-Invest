@@ -93,10 +93,30 @@ export const stocksApi = {
    * 批量获取核心重要指数实时行情（上证指数、深证成指、创业板指、科创综指等）
    */
   async getMarketIndices(forceRefresh = false) {
-    return ApiClient.get<{ indices: any[]; updated_at: string; timestamp: number }>(
-      '/api/stocks/market/indices',
-      { force_refresh: forceRefresh }
-    )
+    try {
+      const res = await ApiClient.get<{ indices: any[]; updated_at: string; timestamp: number }>(
+        '/api/stocks/market/indices',
+        { force_refresh: forceRefresh }
+      )
+      return res
+    } catch {
+      // 降级使用极速直连行情通道
+      return ApiClient.get<any>('/api/quotes/indices')
+    }
+  },
+
+  /**
+   * 极速直连获取四大指数实时快照
+   */
+  async getRealtimeIndices() {
+    return ApiClient.get<any>('/api/quotes/indices')
+  },
+
+  /**
+   * 极速获取指定股票池的实时买卖盘快照 (如 "sh600519,sz000001")
+   */
+  async getLiveQuotes(symbols: string) {
+    return ApiClient.get<any>(`/api/quotes/live/${encodeURIComponent(symbols)}`)
   },
 
   /**

@@ -396,6 +396,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { stocksApi } from '@/api/stocks'
+import { createIndicesStream, type StreamController } from '@/utils/marketStream'
 
 interface IndexMeta {
   key: string
@@ -562,6 +563,16 @@ async function loadTimelineData(item: IndexMeta) {
       if (Array.isArray(d.items) && d.items.length > 0) {
         item.items = d.items
       }
+
+      // 🛡️ 涨跌幅严谨防错校准：若点数与百分比倒置，重新依据现价和昨收计算
+      if (item.prevClose > 0 && item.currentPrice > 0) {
+        const diff = +(item.currentPrice - item.prevClose).toFixed(2)
+        const pct = +((diff / item.prevClose) * 100).toFixed(2)
+        if (Math.abs(item.changePercent) > 20 || (Math.abs(diff) > 0 && item.changePercent === 0)) {
+          item.changePercent = pct
+        }
+        item.change = diff
+      }
     }
   } catch (e) {
     // 若网络暂时波动，保持原数据
@@ -725,21 +736,50 @@ function selectIndex(key: string) {
 }
 
 let timer: number | null = null
+let sseController: StreamController | null = null
 
 onMounted(async () => {
   // 首次拉取当前指数与所有指数数据
   await Promise.allSettled(indexOptions.value.map(item => loadTimelineData(item)))
-  // 定时刷新 (10秒轮询)
+
+  // 🚀 核心优化：全站指数行情 SSE 流式推送，实时秒级更新头部切换按钮与最新行情
+  sseController = createIndicesStream({
+    interval: 2.5,
+    onData: (payload) => {
+      if (payload && Array.isArray(payload.indices)) {
+        payload.indices.forEach((remoteIdx) => {
+          const local = indexOptions.value.find(
+            (i) => i.code === remoteIdx.code || i.code === remoteIdx.full_code || (i.code.replace(/^(sh|sz)/, '') === remoteIdx.code)
+          )
+          if (local) {
+            if (remoteIdx.price && remoteIdx.price > 0) local.currentPrice = remoteIdx.price
+            if (remoteIdx.prev_close && remoteIdx.prev_close > 0) local.prevClose = remoteIdx.prev_close
+            local.change = remoteIdx.change
+            local.changePercent = remoteIdx.changePercent
+            if (remoteIdx.amount) local.totalAmount = remoteIdx.amount * 100000000
+            if (remoteIdx.high && remoteIdx.high > 0) local.high = Math.max(local.high, remoteIdx.high)
+            if (remoteIdx.low && remoteIdx.low > 0) local.low = Math.min(local.low, remoteIdx.low)
+          }
+        })
+      }
+    }
+  })
+
+  // 备用全量同步定时器 (延长至 30 秒)
   timer = window.setInterval(async () => {
     const active = currentMeta.value
     if (active) {
       await loadTimelineData(active)
     }
-  }, 10000)
+  }, 30000)
 })
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  if (sseController) {
+    sseController.close()
+    sseController = null
+  }
 })
 </script>
 

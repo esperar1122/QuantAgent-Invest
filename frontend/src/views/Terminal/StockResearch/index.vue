@@ -988,6 +988,7 @@ import PositionSizerDrawer from '@/components/Terminal/PositionSizerDrawer.vue'
 import PaperTradingModal from '@/components/Terminal/PaperTradingModal.vue'
 import { newsApi, type NewsItem } from '@/api/news'
 import { stocksApi, type StockSearchItem, type ChipsDistribution, type TechnicalSnapshot } from '@/api/stocks'
+import { createQuotesStream, type StreamController } from '@/utils/marketStream'
 import { useFavoritesStore } from '@/stores/favorites'
 import { useAppStore } from '@/stores/app'
 
@@ -1637,9 +1638,49 @@ async function triggerDeepLlmReport() {
   }
 }
 
+// ==========================================================================
+// 📡 标的盘中毫秒级高频实时行情流 (Live Quotes SSE Stream)
+// ==========================================================================
+let liveQuotesController: StreamController | null = null
+
+function subscribeLiveQuotes(code: string) {
+  if (liveQuotesController) {
+    liveQuotesController.close()
+    liveQuotesController = null
+  }
+  if (!code) return
+
+  liveQuotesController = createQuotesStream({
+    symbols: [code],
+    onData: (quotes) => {
+      const clean = code.toLowerCase().replace(/^(sh|sz|bj)/i, '')
+      const q = quotes[code] || quotes[`sh${clean}`] || quotes[`sz${clean}`] || quotes[clean] || Object.values(quotes)[0]
+      if (q && q.price > 0 && currentStock.value.code === code) {
+        currentStock.value.price = q.price
+        currentStock.value.change = q.change_pct
+        currentStock.value.changeVal = q.change
+        if (q.high) currentStock.value.high = Math.max(currentStock.value.high, q.high)
+        if (q.low) currentStock.value.low = Math.min(currentStock.value.low, q.low)
+        if (q.volume_hands) currentStock.value.volume = q.volume_hands * 100
+        if (q.turnover_rate) currentStock.value.turnover = q.turnover_rate
+        if (q.bid1_price && q.ask1_price && askOrders.value.length > 0 && bidOrders.value.length > 0) {
+          askOrders.value[4].price = q.ask1_price
+          if (q.ask1_volume) askOrders.value[4].qty = q.ask1_volume
+          bidOrders.value[0].price = q.bid1_price
+          if (q.bid1_volume) bidOrders.value[0].qty = q.bid1_volume
+        }
+      }
+    }
+  })
+}
+
 // 切换股票并拉取全量数据
 async function switchStock(code: string) {
   if (!code) return
+  if (liveQuotesController) {
+    liveQuotesController.close()
+    liveQuotesController = null
+  }
   clearDeepReportPoll()
   isDeepReportRunning.value = false
   selectedCode.value = code
@@ -1797,6 +1838,7 @@ async function loadStockDetail(code: string) {
   } finally {
     pageLoading.value = false
     fetchStockNews(code)
+    subscribeLiveQuotes(code)
   }
 }
 
@@ -2044,6 +2086,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (liveQuotesController) {
+    liveQuotesController.close()
+    liveQuotesController = null
+  }
   clearDeepReportPoll()
   if (searchTimer) clearTimeout(searchTimer)
 })

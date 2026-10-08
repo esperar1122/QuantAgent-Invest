@@ -130,6 +130,7 @@ import { useNotificationStore } from '@/stores/notifications'
 import { stocksApi } from '@/api/stocks'
 import { quantApi, type PaperAccount } from '@/api/quant'
 import PaperTradingModal from '@/components/Terminal/PaperTradingModal.vue'
+import { createIndicesStream, type StreamController } from '@/utils/marketStream'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -273,6 +274,7 @@ const marketStatusText = ref('交易中')
 const marketStatusClass = ref('status-open')
 let timer: number | null = null
 let tickerTimer: number | null = null
+let sseController: StreamController | null = null
 
 function updateMarketStatus(now: Date) {
   const day = now.getDay()
@@ -322,10 +324,39 @@ onMounted(() => {
   updateClock()
   timer = window.setInterval(updateClock, 1000)
   fetchLiveIndices(false)
-  // 每60秒定时自动轮询刷新最新指数行情（遵循每分钟时效性）
-  tickerTimer = window.setInterval(() => {
-    fetchLiveIndices(false)
-  }, 60000)
+
+  // 🚀 核心优化：全站四大指数毫秒级 SSE 流式推送
+  sseController = createIndicesStream({
+    interval: 2.5,
+    onData: (payload) => {
+      if (payload && Array.isArray(payload.indices)) {
+        payload.indices.forEach((remoteIdx) => {
+          const local = indices.value.find(
+            (i) => i.code === remoteIdx.code || i.fullCode === remoteIdx.full_code || i.fullCode === remoteIdx.code
+          )
+          if (local) {
+            if (remoteIdx.price !== undefined && remoteIdx.price !== null) {
+              local.price = Number(remoteIdx.price)
+            }
+            const chgPct = remoteIdx.changePercent ?? remoteIdx.change_percent
+            if (chgPct !== undefined && chgPct !== null) {
+              local.changePercent = Number(chgPct)
+            }
+          }
+        })
+        lastTickerUpdate.value = payload.timestamp || payload.updated_at || '实时'
+      }
+    },
+    onError: () => {
+      // 若 SSE 连接受阻，降级为每 60 秒轮询
+      if (!tickerTimer) {
+        tickerTimer = window.setInterval(() => {
+          fetchLiveIndices(false)
+        }, 60000)
+      }
+    }
+  })
+
   document.addEventListener('visibilitychange', handleVisibilityChange)
 
   // 消息通知初始化
@@ -367,6 +398,10 @@ onUnmounted(() => {
   if (tickerTimer) clearInterval(tickerTimer)
   if (timerCount) clearInterval(timerCount)
   if (timerList) clearInterval(timerList)
+  if (sseController) {
+    sseController.close()
+    sseController = null
+  }
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   notifStore.disconnect()
 })

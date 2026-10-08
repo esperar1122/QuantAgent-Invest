@@ -257,3 +257,105 @@ async def stream_batch_progress(batch_id: str, user: dict = Depends(get_current_
             "X-Accel-Buffering": "no"
         }
     )
+
+
+async def indices_quotes_generator(interval: float = 3.0):
+    """四大核心指数高频实时行情 SSE 推流生成器"""
+    from app.services.quotes.realtime_streamer import get_quote_streamer
+    streamer = get_quote_streamer()
+
+    yield f"event: connected\ndata: {json.dumps({'message': '指数实时行情流已连接', 'status': 'ok'}, ensure_ascii=False)}\n\n"
+
+    last_hb = time.monotonic()
+    last_sent_data = ""
+
+    while True:
+        try:
+            indices = await streamer.fetch_indices_quotes()
+            payload = {
+                "indices": indices,
+                "timestamp": time.strftime("%H:%M:%S"),
+                "updated_at": time.strftime("%H:%M:%S")
+            }
+            json_str = json.dumps(payload, ensure_ascii=False)
+
+            # 仅在数据更新或每15秒心跳时推送，节省网络吞吐
+            now = time.monotonic()
+            if json_str != last_sent_data or (now - last_hb >= 15.0):
+                yield f"event: indices\ndata: {json_str}\n\n"
+                last_sent_data = json_str
+                last_hb = now
+
+            await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            logger.info("📡 [SSE-Indices] 客户端断开指数推流连接")
+            break
+        except Exception as e:
+            logger.warning(f"⚠️ [SSE-Indices] 推流异常: {e}")
+            yield f"event: heartbeat\ndata: {{\"error\": \"重试中\"}}\n\n"
+            await asyncio.sleep(interval)
+
+
+async def batch_quotes_generator(symbols_str: str, interval: float = 2.5):
+    """指定股票/ETF 批量实时行情 SSE 推流生成器"""
+    from app.services.quotes.realtime_streamer import get_quote_streamer
+    streamer = get_quote_streamer()
+    symbols = [s.strip() for s in symbols_str.split(",") if s.strip()]
+
+    yield f"event: connected\ndata: {json.dumps({'message': '标的实时行情流已连接', 'symbols': symbols}, ensure_ascii=False)}\n\n"
+
+    last_hb = time.monotonic()
+
+    while True:
+        try:
+            quotes = await streamer.fetch_batch_quotes(symbols)
+            payload = {
+                "quotes": quotes,
+                "timestamp": time.strftime("%H:%M:%S")
+            }
+            yield f"event: quote\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            last_hb = time.monotonic()
+            await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            logger.info(f"📡 [SSE-Quotes] 客户端断开标的推流连接: {symbols_str}")
+            break
+        except Exception as e:
+            logger.warning(f"⚠️ [SSE-Quotes] 标的推流异常: {e}")
+            await asyncio.sleep(interval)
+
+
+@router.get("/market/indices")
+async def stream_market_indices(interval: float = 3.0):
+    """
+    全站核心宽基指数 (上证/深证/创业板/科创50) 毫秒级 SSE 实时推流
+    开盘交易时段 2~3 秒极速推流，无需前端高频轮询
+    """
+    return StreamingResponse(
+        indices_quotes_generator(interval=max(1.0, min(interval, 10.0))),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+
+@router.get("/market/quotes")
+async def stream_market_quotes(symbols: str, interval: float = 2.5):
+    """
+    自选股/个股研报标的高频 SSE 实时行情流
+    symbols: 逗号分隔的代码，如 "sh600519,sz000001,sh510300"
+    """
+    if not symbols or not symbols.strip():
+        raise HTTPException(status_code=400, detail="请提供 symbols 参数")
+
+    return StreamingResponse(
+        batch_quotes_generator(symbols_str=symbols, interval=max(1.0, min(interval, 10.0))),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
