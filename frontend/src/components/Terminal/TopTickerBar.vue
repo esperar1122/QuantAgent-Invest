@@ -40,11 +40,13 @@
 
     <!-- 右侧交易状态、主题切换与返回工作台 -->
     <div class="status-section">
-      <!-- 虚拟模拟盘入口胶囊 -->
+      <!-- 虚拟模拟盘入口胶囊 (弹性自适应收缩) -->
       <button class="paper-trading-capsule-btn" @click="openPaperTradingModal" title="点击打开虚拟模拟盘交易终端 (10万本金 · T+1实盘撮合仿真)">
         <span class="game-emoji">🎮</span>
-        <span class="paper-name">虚拟模拟盘</span>
-        <span class="paper-nav font-mono tabular-nums">¥{{ formatPaperEquity }}</span>
+        <span class="paper-name-full">虚拟模拟盘</span>
+        <span class="paper-name-compact">模拟盘</span>
+        <span class="paper-nav-full font-mono tabular-nums">¥{{ formatPaperEquity }}</span>
+        <span class="paper-nav-compact font-mono tabular-nums">¥{{ formatPaperEquityCompact }}</span>
       </button>
 
       <div class="market-status-pill">
@@ -157,6 +159,15 @@ async function fetchPaperAccountSummary() {
 const formatPaperEquity = computed(() => {
   const eq = paperAccount.value?.total_equity ?? 100000
   return Number(eq).toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+})
+
+const formatPaperEquityCompact = computed(() => {
+  const eq = Number(paperAccount.value?.total_equity ?? 100000)
+  if (eq >= 10000) {
+    const wan = eq / 10000
+    return `${wan.toFixed(wan % 1 === 0 ? 0 : 1)}万`
+  }
+  return eq.toLocaleString('zh-CN', { maximumFractionDigits: 0 })
 })
 
 function openPaperTradingModal() {
@@ -465,11 +476,11 @@ onUnmounted(() => {
 .index-ticker-strip {
   display: flex;
   align-items: center;
-  gap: clamp(6px, 1.2vw, 24px);
+  gap: clamp(4px, 0.8vw, 18px);
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  flex-shrink: 1;
+  flex: 1 1 auto;
   min-width: 0;
   padding: 0 4px;
 
@@ -576,9 +587,9 @@ onUnmounted(() => {
   flex-shrink: 0;
 
   .paper-trading-capsule-btn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
     border: 1px solid #c7d2fe;
     padding: 4px 10px;
@@ -587,17 +598,34 @@ onUnmounted(() => {
     cursor: pointer;
     margin-right: 10px;
     transition: all 0.2s ease;
+    flex-shrink: 1;
+    min-width: 0;
 
     .game-emoji {
       font-size: 13px;
+      flex-shrink: 0;
     }
-    .paper-name {
+    .paper-name-full {
       font-weight: 700;
       color: #3730a3;
+      white-space: nowrap;
     }
-    .paper-nav {
+    .paper-name-compact {
+      display: none;
+      font-weight: 700;
+      color: #3730a3;
+      white-space: nowrap;
+    }
+    .paper-nav-full {
       font-weight: 800;
       color: #4f46e5;
+      white-space: nowrap;
+    }
+    .paper-nav-compact {
+      display: none;
+      font-weight: 800;
+      color: #4f46e5;
+      white-space: nowrap;
     }
 
     &:hover {
@@ -690,31 +718,66 @@ onUnmounted(() => {
   }
 }
 
-@media (max-width: 1240px) {
+@media (max-width: 1440px) {
   .brand-section .brand-text .brand-sub {
     display: none;
   }
+  .status-section .paper-trading-capsule-btn {
+    .paper-name-full { display: none; }
+    .paper-name-compact { display: inline; }
+  }
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 1260px) {
   .status-section .market-status-pill .live-clock {
     display: none;
   }
+  .index-ticker-strip .ticker-refresh-pill .refresh-time {
+    display: none;
+  }
+  .status-section .paper-trading-capsule-btn {
+    .paper-nav-full { display: none; }
+    .paper-nav-compact { display: inline; }
+    padding: 4px 8px;
+    margin-right: 6px;
+  }
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1060px) {
   .brand-section .brand-text .brand-title {
     font-size: 13.5px;
   }
-  .index-ticker-strip .index-item:nth-child(n+3) {
-    display: none;
+  .status-section .paper-trading-capsule-btn {
+    .paper-nav-full { display: none; }
+    .paper-nav-compact { display: none; }
+    padding: 4px 8px;
+    margin-right: 6px;
+  }
+  .status-section .market-status-pill {
+    padding: 4px 8px;
+  }
+  .status-section .top-bar-divider {
+    margin: 0 6px;
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 880px) {
   .brand-section .brand-text {
     display: none;
   }
+  .status-section .market-status-pill .status-text {
+    display: none;
+  }
+  .status-section .paper-trading-capsule-btn .paper-name-compact {
+    display: none;
+  }
+  .status-section .paper-trading-capsule-btn {
+    margin-right: 4px;
+    padding: 4px 6px;
+  }
+}
+
+@media (max-width: 680px) {
   .status-section .market-status-pill {
     display: none;
   }

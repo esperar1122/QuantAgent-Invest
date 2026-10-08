@@ -1,13 +1,13 @@
 <template>
   <div class="backtest-center-view">
     <!-- 顶部状态栏 -->
-    <div class="bc-header-banner">
-      <div class="banner-title-group">
+    <div class="bc-header-banner fluid-banner">
+      <div class="banner-title-group fluid-primary-col">
         <span class="bc-badge">A-SHARE QUANT ENGINE</span>
         <h1 class="bc-title">策略历史回测中心</h1>
         <span class="bc-subtitle">严格遵循 A 股规则 · T+1 撮合约束 · 涨跌停限制 · 真实交易摩擦成本</span>
       </div>
-      <div class="banner-quick-actions">
+      <div class="banner-quick-actions fluid-secondary-col">
         <el-button size="small" type="success" plain @click="loadPreset('600519, 000001, 300750, 002594', 'custom_rule')">
           👑 核心资产组合 · 多标的回测
         </el-button>
@@ -1115,36 +1115,88 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  flex-wrap: wrap;
+  gap: clamp(10px, 1.2vw, 16px);
+  padding: clamp(12px, 1.5vw, 18px) clamp(16px, 1.8vw, 24px);
+  background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 50%, #eff6ff 100%);
+  border: 1px solid #dbeafe;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.04);
   border-radius: 10px;
-  color: #ffffff;
+  color: #0f172a;
+  min-width: 0;
+  transition: all 0.25s ease;
 
   .banner-title-group {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    flex: 1 1 320px;
+    min-width: 0;
 
     .bc-badge {
       font-size: 11px;
-      color: #38bdf8;
+      color: #0284c7;
+      background: #e0f2fe;
+      border: 1px solid #bae6fd;
+      border-radius: 4px;
+      padding: 1px 8px;
+      width: fit-content;
       font-weight: 700;
-      letter-spacing: 1px;
+      letter-spacing: 0.8px;
     }
     .bc-title {
       font-size: 20px;
       font-weight: 800;
       margin: 0;
+      color: #0f172a;
+      letter-spacing: -0.01em;
     }
     .bc-subtitle {
       font-size: 12px;
-      color: #94a3b8;
+      color: #64748b;
+      line-height: 1.4;
     }
   }
 
   .banner-quick-actions {
     display: flex;
+    align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
+    max-width: 100%;
+    flex-shrink: 0;
+
+    .el-button {
+      font-weight: 500;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+      }
+    }
+  }
+}
+
+:global(html.dark) .bc-header-banner {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-color: #334155;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  color: #f8fafc;
+
+  .banner-title-group {
+    .bc-badge {
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.3);
+    }
+    .bc-title {
+      color: #f8fafc;
+    }
+    .bc-subtitle {
+      color: #94a3b8;
+    }
   }
 }
 
@@ -1153,6 +1205,11 @@ onMounted(() => {
   grid-template-columns: 380px 1fr;
   gap: 16px;
   align-items: start;
+  min-width: 0;
+
+  @media (max-width: 1120px) {
+    grid-template-columns: 1fr;
+  }
 }
 
 .control-card {
@@ -1740,6 +1797,38 @@ onMounted(() => {
 @keyframes bpd-blink {
   50% {
     opacity: 0;
+  }
+}
+
+@media (max-width: 1200px) {
+  .bc-header-banner {
+    .banner-quick-actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .bc-header-banner {
+    padding: 12px 14px;
+
+    .banner-title-group {
+      .bc-title {
+        font-size: 17px;
+      }
+      .bc-subtitle {
+        font-size: 11px;
+      }
+    }
+
+    .banner-quick-actions {
+      gap: 6px;
+      .el-button {
+        font-size: 11.5px;
+        padding: 4px 8px;
+      }
+    }
   }
 }
 </style>

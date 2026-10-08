@@ -1,0 +1,153 @@
+/**
+ * QuantAgent-Invest 通用 DIV 容器弹性缩放与响应式规范体系 (Fluid Box & Responsive Tokens)
+ * 建立全站标准化的 DIV 矿体 / 状态栏 / 工具栏 / 胶囊组件弹性伸缩设计规范
+ */
+
+// 1. 核心弹性容器规范 (Fluid Containers)
+// 适用于所有页面顶部 Banner、状态栏、操作工具条及卡片头部
+.fluid-banner,
+.fluid-toolbar,
+.fluid-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: clamp(8px, 1vw, 16px);
+  min-width: 0;
+  box-sizing: border-box;
+  width: 100%;
+  border-radius: 10px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  // 内部子区域防溢出规范
+  > * {
+    min-width: 0;
+  }
+
+  // 主体标题与信息区自适应占据剩余空间
+  .fluid-title-col,
+  .fluid-primary-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1 1 260px;
+    min-width: 0;
+  }
+
+  // 操作按钮组自适应换行与横向排布
+  .fluid-actions-col,
+  .fluid-secondary-col {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: clamp(6px, 0.8vw, 10px);
+    flex-shrink: 0;
+    max-width: 100%;
+  }
+}
+
+// 亮色标准质感样式（默认亮色系统）
+.fluid-banner-light {
+  background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 50%, #eff6ff 100%);
+  border: 1px solid #dbeafe;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.04);
+  color: #0f172a;
+}
+
+// 暗色主题下自适应平滑映射
+html.dark .fluid-banner-light {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-color: #334155;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  color: #f8fafc;
+}
+
+// 2. 弹性胶囊组件规范 (Fluid Capsules & Pills)
+// 适用于虚拟模拟盘、交易状态、多级标签等胶囊式交互体
+.fluid-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(4px, 0.5vw, 8px);
+  padding: 4px clamp(6px, 0.8vw, 10px);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
+  transition: all 0.2s ease;
+  cursor: pointer;
+
+  .fluid-capsule-icon {
+    flex-shrink: 0;
+    font-size: 13px;
+  }
+
+  .fluid-capsule-label {
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .fluid-capsule-val {
+    font-weight: 800;
+    white-space: nowrap;
+  }
+}
+
+// 3. 通用安全弹性文本截断 (Fluid Truncate)
+.fluid-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+// 4. 弹性双栏/三栏网格规范
+.fluid-grid-responsive {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  box-sizing: border-box;
+
+  &.cols-fixed-fluid {
+    grid-template-columns: 380px 1fr;
+
+    @media (max-width: 1100px) {
+      grid-template-columns: 1fr;
+    }
+  }
+}
+
+// 5. 统一断点降级辅助类 (Fluid Breakpoint Helpers)
+@media (max-width: 1380px) {
+  .fluid-hide-xxl {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1240px) {
+  .fluid-hide-xl {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1080px) {
+  .fluid-hide-lg {
+    display: none !important;
+  }
+}
+
+@media (max-width: 860px) {
+  .fluid-hide-md {
+    display: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .fluid-hide-sm {
+    display: none !important;
+  }
+}
