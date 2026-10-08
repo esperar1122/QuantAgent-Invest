@@ -366,6 +366,7 @@ export interface StockPoolItem {
   net_profit_growth?: number | null
   revenue_growth?: number | null
   gross_margin?: number | null
+  risk_reward_ratio?: number | null
   is_index?: boolean
   trade_date?: string
   updated_at?: string
@@ -411,6 +412,8 @@ export interface StockPoolParams {
   max_revenue_growth?: number | null
   min_gross_margin?: number | null
   max_gross_margin?: number | null
+  min_risk_reward_ratio?: number | null
+  max_risk_reward_ratio?: number | null
   min_amount?: number | null
   max_amount?: number | null
   page?: number

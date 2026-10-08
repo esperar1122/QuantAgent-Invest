@@ -123,6 +123,23 @@
         </template>
       </el-table-column>
 
+      <!-- 测算盈亏比 (Risk-Reward Ratio) -->
+      <el-table-column prop="risk_reward_ratio" label="盈亏比(R:R)" width="120" align="right" sortable="custom">
+        <template #default="{ row }">
+          <el-tag
+            v-if="row.risk_reward_ratio !== null && row.risk_reward_ratio !== undefined"
+            :type="row.risk_reward_ratio >= 3.0 ? 'success' : row.risk_reward_ratio >= 2.0 ? 'primary' : row.risk_reward_ratio >= 1.5 ? 'warning' : 'info'"
+            size="small"
+            effect="plain"
+            class="num-tabular font-mono"
+            :title="`预期盈利/止损比值: ${row.risk_reward_ratio}`"
+          >
+            {{ Number(row.risk_reward_ratio).toFixed(2) }}:1
+          </el-tag>
+          <span v-else class="text-muted">--</span>
+        </template>
+      </el-table-column>
+
       <!-- 成交额 -->
       <el-table-column prop="amount" label="成交额" width="125" align="right" sortable="custom">
         <template #default="{ row }">

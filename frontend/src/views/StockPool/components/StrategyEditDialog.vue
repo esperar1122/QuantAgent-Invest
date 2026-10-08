@@ -169,6 +169,14 @@
                 </div>
               </div>
               <div class="param-item">
+                <span class="param-label">测算盈亏比 (R:R):</span>
+                <div class="range-inputs">
+                  <el-input-number v-model="form.params.min_risk_reward_ratio" :min="0" :precision="1" :step="0.5" placeholder="Min" controls-position="right" />
+                  <span class="range-sep">~</span>
+                  <el-input-number v-model="form.params.max_risk_reward_ratio" :min="0" :precision="1" :step="0.5" placeholder="Max" controls-position="right" />
+                </div>
+              </div>
+              <div class="param-item">
                 <span class="param-label">日最低成交额 (流动性门槛):</span>
                 <div class="range-inputs">
                   <el-input-number
@@ -340,6 +348,8 @@ const initialParams = () => ({
   max_revenue_growth: null as number | null,
   min_gross_margin: null as number | null,
   max_gross_margin: null as number | null,
+  min_risk_reward_ratio: null as number | null,
+  max_risk_reward_ratio: null as number | null,
   market: '全部',
   source: '全部',
   preset: undefined as string | undefined
@@ -384,6 +394,7 @@ const configuredIndicatorCount = computed(() => {
   if (p.min_net_profit_growth != null || p.max_net_profit_growth != null) count++
   if (p.min_revenue_growth != null || p.max_revenue_growth != null) count++
   if (p.min_gross_margin != null || p.max_gross_margin != null) count++
+  if (p.min_risk_reward_ratio != null || p.max_risk_reward_ratio != null) count++
   if (p.market_cap_range || p.min_market_cap != null || p.max_market_cap != null) count++
   if (p.market && p.market !== '全部') count++
   return count
@@ -422,6 +433,8 @@ const loadFromCurrentParams = () => {
     max_revenue_growth: cur.max_revenue_growth ?? null,
     min_gross_margin: cur.min_gross_margin ?? null,
     max_gross_margin: cur.max_gross_margin ?? null,
+    min_risk_reward_ratio: cur.min_risk_reward_ratio ?? null,
+    max_risk_reward_ratio: cur.max_risk_reward_ratio ?? null,
     market: cur.market || '全部',
     source: cur.source || '全部',
     preset: cur.preset || undefined

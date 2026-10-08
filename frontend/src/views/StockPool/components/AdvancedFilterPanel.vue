@@ -334,6 +334,37 @@
                     />
                   </div>
                 </div>
+
+                <!-- 测算盈亏比 (R:R) -->
+                <div class="filter-field">
+                  <div class="field-header">
+                    <span class="field-label">测算盈亏比 (R:R)</span>
+                    <span v-if="params.min_risk_reward_ratio != null || params.max_risk_reward_ratio != null" class="active-indicator">已设</span>
+                  </div>
+                  <div class="field-inputs">
+                    <el-input-number
+                      v-model="params.min_risk_reward_ratio"
+                      :min="0"
+                      :precision="1"
+                      :step="0.5"
+                      placeholder="最低盈亏比"
+                      :controls="false"
+                      size="small"
+                      class="range-input"
+                    />
+                    <span class="range-sep">~</span>
+                    <el-input-number
+                      v-model="params.max_risk_reward_ratio"
+                      :min="0"
+                      :precision="1"
+                      :step="0.5"
+                      placeholder="最高盈亏比"
+                      :controls="false"
+                      size="small"
+                      class="range-input"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </el-col>

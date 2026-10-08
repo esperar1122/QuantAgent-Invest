@@ -61,6 +61,8 @@ export function useStockPool() {
     max_revenue_growth: null,
     min_gross_margin: null,
     max_gross_margin: null,
+    min_risk_reward_ratio: null,
+    max_risk_reward_ratio: null,
     min_amount: null,
     max_amount: null,
     page: 1,
@@ -137,6 +139,13 @@ export function useStockPool() {
         type: 'warning' as const,
         cannot_delete: false,
         params: { market: '北交所', min_pct_chg: 0, market_cap_range: 'small' }
+      },
+      {
+        id: 'preset_high_risk_reward',
+        name: '⚖️ 高盈亏比波段',
+        type: 'success' as const,
+        cannot_delete: false,
+        params: { min_risk_reward_ratio: 2.5, min_pe: 0, max_pe: 50, volume_level: 'medium' }
       }
     ]
   })
@@ -156,6 +165,7 @@ export function useStockPool() {
     if (queryParams.min_net_profit_growth != null || queryParams.max_net_profit_growth != null) cnt++
     if (queryParams.min_revenue_growth != null || queryParams.max_revenue_growth != null) cnt++
     if (queryParams.min_gross_margin != null || queryParams.max_gross_margin != null) cnt++
+    if (queryParams.min_risk_reward_ratio != null || queryParams.max_risk_reward_ratio != null) cnt++
     if (queryParams.volume_level || queryParams.min_amount != null || queryParams.max_amount != null) cnt++
     if (queryParams.market_cap_range || queryParams.min_market_cap != null || queryParams.max_market_cap != null) cnt++
     return cnt
@@ -216,6 +226,13 @@ export function useStockPool() {
     if (queryParams.min_gross_margin != null || queryParams.max_gross_margin != null) {
       tags.push({ key: 'gross_margin', label: '毛利率', text: `${queryParams.min_gross_margin ?? 0}% ~ ${queryParams.max_gross_margin ?? '∞'}%` })
     }
+    if (queryParams.min_risk_reward_ratio != null || queryParams.max_risk_reward_ratio != null) {
+      tags.push({
+        key: 'risk_reward_ratio',
+        label: '盈亏比(R:R)',
+        text: `${queryParams.min_risk_reward_ratio ?? 0} ~ ${queryParams.max_risk_reward_ratio ?? '∞'}`
+      })
+    }
     if (queryParams.min_amount != null || queryParams.max_amount != null) {
       tags.push({
         key: 'amount_range',
@@ -261,6 +278,7 @@ export function useStockPool() {
       case 'net_profit_growth': queryParams.min_net_profit_growth = null; queryParams.max_net_profit_growth = null; break
       case 'revenue_growth': queryParams.min_revenue_growth = null; queryParams.max_revenue_growth = null; break
       case 'gross_margin': queryParams.min_gross_margin = null; queryParams.max_gross_margin = null; break
+      case 'risk_reward_ratio': queryParams.min_risk_reward_ratio = null; queryParams.max_risk_reward_ratio = null; break
       case 'volume_level':
       case 'amount_range':
         queryParams.volume_level = ''
@@ -312,6 +330,8 @@ export function useStockPool() {
     queryParams.max_revenue_growth = null
     queryParams.min_gross_margin = null
     queryParams.max_gross_margin = null
+    queryParams.min_risk_reward_ratio = null
+    queryParams.max_risk_reward_ratio = null
     queryParams.volume_level = ''
     queryParams.market_cap_range = ''
     queryParams.min_market_cap = null
