@@ -21,8 +21,8 @@ def normalize_symbol_to_tencent(symbol: str) -> str:
     if clean.startswith(("sh", "sz", "bj")):
         return clean
 
-    # 核心大盘宽基指数代码
-    if clean in ("000001", "000016", "000300", "000688", "000905", "000852", "000680"):
+    # 核心大盘宽基指数代码 (需输入完整 sh000001 或以下未重复代码)
+    if clean in ("000016", "000300", "000688", "000905", "000852", "000680"):
         return f"sh{clean}"
     if clean in ("399001", "399006", "399106", "399005", "399300"):
         return f"sz{clean}"
@@ -184,12 +184,29 @@ class RealtimeQuoteStreamer:
             pe_ttm = float(parts[39]) if len(parts) > 39 and parts[39] else 0.0
             market_cap_billion = float(parts[45]) if len(parts) > 45 and parts[45] else 0.0  # 亿元
 
-            # 五档买盘
-            bid1_px = float(parts[9]) if len(parts) > 9 and parts[9] else 0.0
-            bid1_vol = int(parts[10]) if len(parts) > 10 and parts[10] else 0
-            # 五档卖盘
-            ask1_px = float(parts[19]) if len(parts) > 19 and parts[19] else 0.0
-            ask1_vol = int(parts[20]) if len(parts) > 20 and parts[20] else 0
+            # 五档买卖盘解析 (5-Level Order Book)
+            bids = []
+            for i in range(5):
+                idx_p = 9 + i * 2
+                idx_v = 10 + i * 2
+                p = float(parts[idx_p]) if len(parts) > idx_p and parts[idx_p] else 0.0
+                v = int(float(parts[idx_v])) * 100 if len(parts) > idx_v and parts[idx_v] else 0
+                if p > 0:
+                    bids.append({"level": i + 1, "price": round(p, 2), "volume": v})
+
+            asks = []
+            for i in range(5):
+                idx_p = 19 + i * 2
+                idx_v = 20 + i * 2
+                p = float(parts[idx_p]) if len(parts) > idx_p and parts[idx_p] else 0.0
+                v = int(float(parts[idx_v])) * 100 if len(parts) > idx_v and parts[idx_v] else 0
+                if p > 0:
+                    asks.append({"level": i + 1, "price": round(p, 2), "volume": v})
+
+            bid1_px = bids[0]["price"] if bids else (float(parts[9]) if len(parts) > 9 and parts[9] else 0.0)
+            bid1_vol = (bids[0]["volume"] // 100) if bids else (int(parts[10]) if len(parts) > 10 and parts[10] else 0)
+            ask1_px = asks[0]["price"] if asks else (float(parts[19]) if len(parts) > 19 and parts[19] else 0.0)
+            ask1_vol = (asks[0]["volume"] // 100) if asks else (int(parts[20]) if len(parts) > 20 and parts[20] else 0)
 
             return {
                 "symbol": symbol or (f"sh{code}" if code.startswith("6") else f"sz{code}"),
@@ -211,6 +228,8 @@ class RealtimeQuoteStreamer:
                 "bid1_volume": bid1_vol,
                 "ask1_price": ask1_px,
                 "ask1_volume": ask1_vol,
+                "bids": bids,
+                "asks": asks,
                 "timestamp": parts[30] if len(parts) > 30 else str(int(time.time())),
             }
         except Exception:

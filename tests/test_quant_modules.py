@@ -365,6 +365,64 @@ def test_custom_rule_strategy():
     print("✅ test_custom_rule_strategy passed")
 
 
+def test_paper_trading_depth_queue_and_liquidity():
+    service = PaperAccountService()
+    account_id = "test_queue_liquidity_account"
+
+    # 初始化账户
+    acc = asyncio.run(service.get_or_create_account(account_id, initial_cash=100000.0))
+    assert acc["cash"] == 100000.0
+
+    # 1. 测试五档深度穿透算法
+    quote_with_depth = {
+        "price": 10.0,
+        "prev_close": 10.0,
+        "open": 10.0,
+        "volume_hands": 50000,
+        "asks": [
+            {"level": 1, "price": 10.01, "volume": 100},  # 1手
+            {"level": 2, "price": 10.02, "volume": 200},  # 2手
+            {"level": 3, "price": 10.05, "volume": 500},  # 5手
+        ],
+        "bids": [
+            {"level": 1, "price": 9.99, "volume": 100},
+            {"level": 2, "price": 9.98, "volume": 200},
+        ]
+    }
+    # 买入 300 股：吃卖一100股@10.01 + 卖二200股@10.02 -> 均价 = (100*10.01 + 200*10.02)/300 = 10.0167
+    depth_match = service._match_with_depth("BUY", 300, limit_price=None, quote=quote_with_depth)
+    assert depth_match["status"] == "FILLED"
+    assert depth_match["filled_shares"] == 300
+    assert abs(depth_match["avg_price"] - 10.017) < 0.002
+    assert "卖1档" in depth_match["details"] and "卖2档" in depth_match["details"]
+
+    # 2. 测试挂单排队机制 (allow_queue=True，限价低于卖一)
+    # 委托限价 500 买入茅台 -> 远低于现价 -> 进入 PENDING 队列
+    res_queue = asyncio.run(service.execute_trade(
+        account_id=account_id,
+        symbol="sh600519",
+        name="贵州茅台",
+        action="BUY",
+        shares=100,
+        price=500.0,
+        order_type="LIMIT",
+        allow_queue=True,
+        reason="测试挂单排队"
+    ))
+    assert len(res_queue["pending_orders"]) == 1
+    assert res_queue["pending_orders"][0]["status"] == "PENDING"
+    assert res_queue["frozen_cash"] > 50000.0  # 冻结了资金
+    order_id = res_queue["pending_orders"][0]["order_id"]
+
+    # 3. 测试撤单功能
+    res_cancel = asyncio.run(service.cancel_order(account_id=account_id, order_id=order_id))
+    assert len(res_cancel["pending_orders"]) == 0
+    assert res_cancel["frozen_cash"] == 0.0
+    assert res_cancel["cash"] == 100000.0  # 资金全额解冻退回
+
+    print("✅ test_paper_trading_depth_queue_and_liquidity passed")
+
+
 if __name__ == "__main__":
     test_performance_calculator()
     test_trade_simulator_a_share_rules()
@@ -377,4 +435,5 @@ if __name__ == "__main__":
     test_portfolio_optimizer()
     test_wechat_notifier_card_formatting()
     test_paper_trading_service()
+    test_paper_trading_depth_queue_and_liquidity()
     print("\n🎉 ALL UNIT TESTS PASSED SUCCESSFULLY!")

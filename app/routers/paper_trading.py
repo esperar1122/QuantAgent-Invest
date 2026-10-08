@@ -21,7 +21,14 @@ class PaperOrderRequest(BaseModel):
     action: str = Field(..., description="BUY 或 SELL")
     shares: int = Field(..., gt=0, description="委托股数 (买入需为100整倍数)")
     price: Optional[float] = Field(default=None, description="委托价格 (若为空则自动获取当前最新市价)")
+    order_type: str = Field(default="AUTO", description="委托类型: AUTO, MARKET, LIMIT")
+    allow_queue: bool = Field(default=False, description="是否允许限价排队挂单")
     reason: str = Field(default="用户手动委托", description="委托理由")
+    account_id: str = Field(default="default", description="模拟账户ID")
+
+
+class CancelOrderRequest(BaseModel):
+    order_id: str = Field(..., description="要撤销的委托ID")
     account_id: str = Field(default="default", description="模拟账户ID")
 
 
@@ -46,7 +53,7 @@ async def get_paper_account(account_id: str = Query("default", description="账�
 @router.post("/order")
 async def place_paper_order(req: PaperOrderRequest):
     """
-    在虚拟账户中执行模拟买入/卖出委托
+    在虚拟账户中执行模拟买入/卖出委托（支持五档盘口深度撮合与排队挂单）
     """
     try:
         updated_summary = await paper_account_service.execute_trade(
@@ -56,17 +63,41 @@ async def place_paper_order(req: PaperOrderRequest):
             action=req.action,
             shares=req.shares,
             price=req.price,
+            order_type=req.order_type,
+            allow_queue=req.allow_queue,
             reason=req.reason
         )
         return {
             "success": True,
             "data": updated_summary,
-            "message": f"模拟委托成交成功: {req.action} {req.name}({req.symbol}) {req.shares}股"
+            "message": f"模拟委托提交成功: {req.action} {req.name}({req.symbol}) {req.shares}股"
         }
     except ValueError as ve:
         return {"success": False, "data": None, "message": str(ve)}
     except Exception as e:
         logger.error(f"模拟委托执行异常: {e}")
+        return {"success": False, "data": None, "message": f"系统错误: {str(e)}"}
+
+
+@router.post("/cancel-order")
+async def cancel_paper_order(req: CancelOrderRequest):
+    """
+    撤销排队挂单并释放冻结资金/持仓
+    """
+    try:
+        updated_summary = await paper_account_service.cancel_order(
+            account_id=req.account_id,
+            order_id=req.order_id
+        )
+        return {
+            "success": True,
+            "data": updated_summary,
+            "message": f"委托挂单 {req.order_id} 已成功撤销并释放冻结"
+        }
+    except ValueError as ve:
+        return {"success": False, "data": None, "message": str(ve)}
+    except Exception as e:
+        logger.error(f"撤单异常: {e}")
         return {"success": False, "data": None, "message": f"系统错误: {str(e)}"}
 
 

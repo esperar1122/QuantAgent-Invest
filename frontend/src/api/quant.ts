@@ -176,6 +176,23 @@ export interface PaperAccount {
   today_pnl: number
   holdings: PaperHolding[]
   recent_trades: any[]
+  pending_orders?: PaperPendingOrder[]
+}
+
+export interface PaperPendingOrder {
+  order_id: string
+  trade_time?: string
+  time?: string
+  symbol: string
+  name: string
+  action: 'BUY' | 'SELL'
+  order_type: 'MARKET' | 'LIMIT' | 'AUTO'
+  shares: number
+  price: number
+  amount: number
+  status: 'PENDING' | 'FILLED' | 'CANCELLED'
+  details?: string
+  reason?: string
 }
 
 export interface PaperOrderRequest {
@@ -183,14 +200,18 @@ export interface PaperOrderRequest {
   action: 'BUY' | 'SELL'
   shares: number
   price?: number
+  order_type?: 'AUTO' | 'MARKET' | 'LIMIT'
+  allow_queue?: boolean
   reason?: string
+  account_id?: string
 }
 
 export interface PaperOrderResponse {
   success: boolean
   message: string
-  order: any
-  account_summary: any
+  data?: any
+  order?: any
+  account_summary?: any
 }
 
 export const quantApi = {
@@ -216,6 +237,9 @@ export const quantApi = {
   },
   submitPaperOrder(params: PaperOrderRequest) {
     return ApiClient.post<PaperOrderResponse>('/api/paper-trading/order', params)
+  },
+  cancelPaperOrder(params: { order_id: string; account_id?: string }) {
+    return ApiClient.post<PaperOrderResponse>('/api/paper-trading/cancel-order', params)
   },
   testWechat(webhook_url?: string) {
     return ApiClient.post<{ success: boolean; message: string }>('/api/paper-trading/test-wechat', null, {

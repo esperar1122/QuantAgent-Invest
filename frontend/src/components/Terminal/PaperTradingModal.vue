@@ -42,6 +42,7 @@
         <el-radio-group v-model="activeTab" size="small">
           <el-radio-button label="holdings">当前持仓 ({{ account?.holdings?.length || 0 }})</el-radio-button>
           <el-radio-button label="trade">模拟委托下单</el-radio-button>
+          <el-radio-button label="pending">排队挂单 ({{ account?.pending_orders?.length || 0 }})</el-radio-button>
           <el-radio-button label="history">历史成交明细</el-radio-button>
         </el-radio-group>
 
@@ -128,6 +129,19 @@
               </el-radio-group>
             </el-form-item>
 
+            <el-form-item label="撮合模式">
+              <el-radio-group v-model="orderForm.order_mode" size="small">
+                <el-radio-button label="MARKET">五档即时撮合</el-radio-button>
+                <el-radio-button label="LIMIT">限价排队撮合</el-radio-button>
+              </el-radio-group>
+              <div class="form-hint" v-if="orderForm.order_mode === 'MARKET'">
+                ⚡ 基于实时五档盘口深度穿透吃单，超出深度叠加流动性冲击滑点
+              </div>
+              <div class="form-hint" v-else>
+                ⏳ 限价劣于对手方最优价时进入买卖盘队列等待行情击穿撮合，支持随时主动撤单
+              </div>
+            </el-form-item>
+
             <el-form-item label="标的代码">
               <el-input
                 v-model="orderForm.symbol"
@@ -197,7 +211,64 @@
         </el-card>
       </div>
 
-      <!-- TAB 3: 历史成交明细 -->
+      <!-- TAB 3: 排队挂单 -->
+      <div v-if="activeTab === 'pending'" class="tab-pane">
+        <el-table
+          :data="account?.pending_orders || []"
+          size="small"
+          style="width: 100%"
+          max-height="360"
+        >
+          <el-table-column prop="trade_time" label="委托时间" width="145" />
+          <el-table-column prop="symbol" label="代码" width="85" />
+          <el-table-column prop="name" label="标的名称" width="100" />
+          <el-table-column prop="action" label="方向" width="70">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.action === 'BUY' ? 'danger' : 'success'">
+                {{ row.action === 'BUY' ? '买入' : '卖出' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="price" label="委托限价" width="85" align="right">
+            <template #default="{ row }">
+              <span class="font-mono">¥{{ row.price?.toFixed(2) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="shares" label="委托股数" width="85" align="right">
+            <template #default="{ row }">
+              <span class="font-mono">{{ row.shares }} 股</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="amount" label="委托/冻结金额" width="105" align="right">
+            <template #default="{ row }">
+              <span class="font-mono">¥{{ formatMoney(row.amount) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="details" label="排队状态/撮合说明" min-width="160">
+            <template #default="{ row }">
+              <span class="text-hint-sub">{{ row.details || '挂单排队中' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="80" align="center">
+            <template #default="{ row }">
+              <el-button
+                size="small"
+                type="danger"
+                plain
+                :loading="cancellingOrderId === row.order_id"
+                @click="handleCancelOrder(row.order_id)"
+              >
+                撤单
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div v-if="!account?.pending_orders || account.pending_orders.length === 0" class="empty-hint">
+          <span>暂无排队中的委托挂单，当限价未被盘口击穿时将在此显示并支持随时撤单</span>
+        </div>
+      </div>
+
+      <!-- TAB 4: 历史成交明细 -->
       <div v-if="activeTab === 'history'" class="tab-pane">
         <el-table
           :data="account?.recent_trades || []"
@@ -205,37 +276,42 @@
           style="width: 100%"
           max-height="360"
         >
-          <el-table-column prop="trade_time" label="成交时间" width="150" />
-          <el-table-column prop="symbol" label="标的代码" width="90" />
-          <el-table-column prop="name" label="标的名称" width="100" />
-          <el-table-column prop="action" label="方向" width="80">
+          <el-table-column prop="trade_time" label="成交时间" width="145" />
+          <el-table-column prop="symbol" label="标的代码" width="85" />
+          <el-table-column prop="name" label="标的名称" width="95" />
+          <el-table-column prop="action" label="方向" width="75">
             <template #default="{ row }">
               <el-tag size="small" :type="row.action === 'BUY' ? 'danger' : 'success'">
                 {{ row.action === 'BUY' ? '买入' : '卖出' }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="price" label="成交价" width="90" align="right">
+          <el-table-column prop="price" label="成交价" width="85" align="right">
             <template #default="{ row }">
               <span class="font-mono">¥{{ row.price?.toFixed(2) }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="shares" label="成交股数" width="90" align="right">
+          <el-table-column prop="shares" label="成交股数" width="85" align="right">
             <template #default="{ row }">
               <span class="font-mono">{{ row.shares }} 股</span>
             </template>
           </el-table-column>
-          <el-table-column prop="amount" label="成交金额" width="110" align="right">
+          <el-table-column prop="amount" label="成交金额" width="105" align="right">
             <template #default="{ row }">
               <span class="font-mono">¥{{ formatMoney(row.amount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="fee" label="摩擦费用" width="90" align="right">
+          <el-table-column prop="fee" label="费用" width="75" align="right">
             <template #default="{ row }">
               <span class="font-mono text-fee">¥{{ row.fee?.toFixed(2) }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="realized_pnl" label="已实现盈亏" width="110" align="right">
+          <el-table-column prop="slippage_cost" label="滑点" width="75" align="right">
+            <template #default="{ row }">
+              <span class="font-mono text-fee">¥{{ (row.slippage_cost || 0).toFixed(2) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="realized_pnl" label="已实现盈亏" width="105" align="right">
             <template #default="{ row }">
               <span v-if="row.action === 'SELL'" class="font-mono" :class="row.realized_pnl >= 0 ? 'color-up' : 'color-down'">
                 {{ row.realized_pnl >= 0 ? '+' : '' }}¥{{ row.realized_pnl?.toFixed(2) }}
@@ -243,6 +319,7 @@
               <span v-else>-</span>
             </template>
           </el-table-column>
+          <el-table-column prop="details" label="撮合详情" min-width="140" show-overflow-tooltip />
         </el-table>
       </div>
     </div>
@@ -275,9 +352,10 @@ const visible = computed({
   set: (val: boolean) => emit('update:modelValue', val)
 })
 
-const activeTab = ref<'holdings' | 'trade' | 'history'>('holdings')
+const activeTab = ref<'holdings' | 'trade' | 'pending' | 'history'>('holdings')
 const loading = ref(false)
 const submitting = ref(false)
+const cancellingOrderId = ref<string | null>(null)
 const wechatTesting = ref(false)
 const account = ref<PaperAccount | null>(null)
 
@@ -287,6 +365,7 @@ const orderForm = ref({
   name: '',
   price: 0,
   shares: 100,
+  order_mode: 'MARKET' as 'MARKET' | 'LIMIT',
   reason: ''
 })
 
@@ -343,6 +422,25 @@ async function fetchAccount() {
   }
 }
 
+async function handleCancelOrder(orderId: string) {
+  cancellingOrderId.value = orderId
+  try {
+    const res = await quantApi.cancelPaperOrder({ order_id: orderId })
+    const resAny = res as any
+    const isSuccess = resAny?.success === true || resAny?.data?.success === true
+    if (isSuccess) {
+      ElMessage.success(resAny?.message || resAny?.data?.message || '委托挂单已成功撤销')
+      await fetchAccount()
+    } else {
+      ElMessage.error(resAny?.message || resAny?.data?.message || '撤单失败')
+    }
+  } catch (err: any) {
+    ElMessage.error(err.message || '撤单请求异常')
+  } finally {
+    cancellingOrderId.value = null
+  }
+}
+
 async function handleSubmitOrder() {
   if (!orderForm.value.symbol) {
     ElMessage.warning('请输入标的代码')
@@ -355,21 +453,29 @@ async function handleSubmitOrder() {
 
   submitting.value = true
   try {
+    const isLimit = orderForm.value.order_mode === 'LIMIT'
     const res = await quantApi.submitPaperOrder({
       symbol: orderForm.value.symbol,
       action: orderForm.value.action,
       shares: orderForm.value.shares,
       price: orderForm.value.price > 0 ? orderForm.value.price : undefined,
+      order_type: isLimit ? 'LIMIT' : 'MARKET',
+      allow_queue: isLimit,
       reason: orderForm.value.reason
     })
 
-    const data = (res as any)?.data || res
-    if (data?.success) {
-      ElMessage.success(data.message || '模拟委托撮合成交成功！')
+    const resAny = res as any
+    const isSuccess = resAny?.success === true || resAny?.data?.success === true
+    if (isSuccess) {
+      ElMessage.success(resAny?.message || resAny?.data?.message || '模拟委托提交成功！')
       await fetchAccount()
-      activeTab.value = 'holdings'
+      if (isLimit) {
+        activeTab.value = 'pending'
+      } else {
+        activeTab.value = 'holdings'
+      }
     } else {
-      ElMessage.error(data?.message || '委托失败')
+      ElMessage.error(resAny?.message || resAny?.data?.message || '委托失败')
     }
   } catch (err: any) {
     console.error('模拟下单失败:', err)
