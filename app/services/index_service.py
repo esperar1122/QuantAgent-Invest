@@ -8,6 +8,8 @@ A股重要指数服务模块 (沪深300、中证500、科创综指、科创50、
 import logging
 import datetime
 import asyncio
+import time
+import math
 from typing import List, Dict, Any, Tuple, Optional
 import requests
 
@@ -450,50 +452,65 @@ def fetch_timeline_data(code: str) -> Dict[str, Any]:
         sina_sym = f"{prefix}{clean_num}"
         name = code
 
-    # 1. 毫秒级抓取最新盘口与昨收基准
+    # 0. 尝试命中内存高速缓存 (交易时间 5s，非交易时间 120s)
+    global _timeline_cache
+    if '_timeline_cache' not in globals():
+        _timeline_cache = {}
+
+    now_ts = time.time()
+    now_dt = datetime.datetime.now()
+    is_trading_hour = (9 <= now_dt.hour <= 15) and (now_dt.weekday() < 5)
+    cache_ttl = 5.0 if is_trading_hour else 120.0
+
+    if norm_code in _timeline_cache:
+        cached_ts, cached_data = _timeline_cache[norm_code]
+        if (now_ts - cached_ts) < cache_ttl and cached_data.get("items"):
+            return cached_data
+
+    # 1. 获取最新盘口与昨收基准
+    from app.services.quotes.realtime_streamer import get_quote_streamer
+    streamer = get_quote_streamer()
+
     curr_price = 0.0
     prev_close = 0.0
     change_val = 0.0
     pct_val = 0.0
     tot_vol = 0.0
     tot_amt = 0.0
+    high_price = 0.0
+    low_price = 0.0
 
     try:
-        url_q = f"http://qt.gtimg.cn/q=s_{tx_sym}"
-        rq = requests.get(url_q, timeout=3)
-        resp_text = rq.content.decode("gbk", errors="ignore")
-        if "~" in resp_text:
-            parts = resp_text.split("~")
-            if len(parts) > 1 and parts[1]:
-                name = parts[1]
-            if len(parts) > 3 and parts[3]:
-                curr_price = float(parts[3])
-            if len(parts) > 4 and parts[4]:
-                change_val = float(parts[4])
-            if len(parts) > 5 and parts[5]:
-                pct_val = float(parts[5])
-            if len(parts) > 6 and parts[6]:
-                tot_vol = float(parts[6])
-            if len(parts) > 7 and parts[7]:
-                tot_amt = float(parts[7]) * 10000.0  # 万元转元
-            prev_close = curr_price - change_val
-    except Exception as qe:
-        logger.debug(f"抓取盘口昨收异常: {qe}")
+        quote_batch = asyncio.run(streamer.fetch_batch_quotes([norm_code, tx_sym]))
+        q = quote_batch.get(norm_code) or quote_batch.get(tx_sym) or (list(quote_batch.values())[0] if quote_batch else None)
+        if q and q.get("price", 0) > 0:
+            name = q.get("name") or name
+            curr_price = float(q["price"])
+            prev_close = float(q.get("prev_close") or curr_price)
+            change_val = float(q.get("change") or (curr_price - prev_close))
+            pct_val = float(q.get("change_pct") or 0.0)
+            tot_vol = float(q.get("volume_hands") or 0.0) * 100.0
+            tot_amt = float(q.get("amount_wan") or 0.0) * 10000.0
+            high_price = float(q.get("high") or curr_price)
+            low_price = float(q.get("low") or curr_price)
 
-    # 2. 获取1分钟分时序列 (Sina 1-min)
+            # 🛡️ 百分比严格防错校验
+            if prev_close > 0 and (abs(pct_val) > 20.0 or (abs(change_val) > 0 and pct_val == 0.0)):
+                pct_val = round(((curr_price - prev_close) / prev_close) * 100.0, 2)
+    except Exception as qe:
+        logger.debug(f"快照获取降级: {qe}")
+
+    # 2. 获取分时走势序列 (优先新浪 1-min，备用腾讯 flashdata，兜底平滑插值)
     items = []
     source = "sina"
-    high_price = curr_price or 0.0
-    low_price = curr_price or 0.0
 
+    # [Level 1] 新浪 1-min 接口
     try:
         url_sina = f"https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?symbol={sina_sym}&scale=1&ma=no&datalen=300"
-        rk = requests.get(url_sina, timeout=4)
+        rk = requests.get(url_sina, timeout=3)
         raw_list = rk.json()
         if isinstance(raw_list, list) and raw_list:
-            now = datetime.datetime.now()
-            today_str = now.strftime("%Y-%m-%d")
-
+            today_str = now_dt.strftime("%Y-%m-%d")
             today_rows = [p for p in raw_list if p.get("day", "").startswith(today_str)]
             if not today_rows:
                 dates = sorted(set(p.get("day", "")[:10] for p in raw_list if p.get("day")))
@@ -506,8 +523,6 @@ def fetch_timeline_data(code: str) -> Dict[str, Any]:
 
                 cum_pa = 0.0
                 cum_a = 0.0
-                high_price = -1e9
-                low_price = 1e9
                 last_p = prev_close
 
                 for row in today_rows:
@@ -522,7 +537,7 @@ def fetch_timeline_data(code: str) -> Dict[str, Any]:
                     avg = (cum_pa / cum_a) if cum_a > 0 else p
 
                     high_price = max(high_price, p)
-                    low_price = min(low_price, p)
+                    low_price = min(low_price, p) if low_price > 0 else p
 
                     diff = p - prev_close
                     pct = (diff / prev_close * 100.0) if prev_close else 0.0
@@ -540,18 +555,113 @@ def fetch_timeline_data(code: str) -> Dict[str, Any]:
                     })
                     last_p = p
 
-                if items:
+                if items and curr_price == 0.0:
                     curr_price = items[-1]["price"]
                     change_val = round(curr_price - prev_close, 3)
                     pct_val = round((change_val / prev_close * 100.0) if prev_close else 0.0, 2)
     except Exception as e:
-        logger.warning(f"⚠️ 分时线获取异常 ({sina_sym}): {e}")
+        logger.debug(f"新浪分时线降级: {e}")
+
+    # [Level 2] 备用：腾讯 flashdata 分钟线
+    if not items:
+        try:
+            import re
+            url_tx = f"http://data.gtimg.cn/flashdata/hushen/minute/{tx_sym}.js"
+            rtx = requests.get(url_tx, timeout=3, allow_redirects=True)
+            matches = re.findall(r'(\d{4})\s+([\d\.]+)\s+(\d+)', rtx.text)
+            if matches:
+                source = "tencent"
+                if not prev_close:
+                    prev_close = float(matches[0][1])
+
+                cum_vol = 0.0
+                cum_pv = 0.0
+                last_p = prev_close
+
+                for m in matches:
+                    t_raw, p_str, v_str = m
+                    time_str = f"{t_raw[:2]}:{t_raw[2:]}"
+                    p = float(p_str)
+                    v = float(v_str)
+
+                    step_v = max(0.0, v - cum_vol)
+                    cum_vol = v
+                    cum_pv += p * step_v
+                    avg = (cum_pv / cum_vol) if cum_vol > 0 else p
+
+                    high_price = max(high_price, p)
+                    low_price = min(low_price, p) if low_price > 0 else p
+
+                    diff = p - prev_close
+                    pct = (diff / prev_close * 100.0) if prev_close else 0.0
+
+                    items.append({
+                        "time": time_str,
+                        "day": now_dt.strftime("%Y-%m-%d"),
+                        "price": round(p, 3),
+                        "avg_price": round(avg, 3),
+                        "volume": round(step_v, 2),
+                        "amount": round(step_v * p, 2),
+                        "change": round(diff, 3),
+                        "pct_chg": round(pct, 2),
+                        "is_up": p >= last_p
+                    })
+                    last_p = p
+
+                if items and curr_price == 0.0:
+                    curr_price = items[-1]["price"]
+                    change_val = round(curr_price - prev_close, 3)
+                    pct_val = round((change_val / prev_close * 100.0) if prev_close else 0.0, 2)
+        except Exception as te:
+            logger.debug(f"腾讯分钟线降级: {te}")
+
+    # [Level 3] 兜底：离线标的/非交易时间平滑插值撮合回放
+    if not items and curr_price > 0 and prev_close > 0:
+        source = "interpolation"
+        start_p = prev_close
+        end_p = curr_price
+        high_p = high_price if high_price > 0 else max(start_p, end_p) * 1.005
+        low_p = low_price if low_price > 0 else min(start_p, end_p) * 0.995
+
+        # 生成 240 点标准交易时间刻度
+        timeline_slots = []
+        for h in (9, 10, 11):
+            for m in range(60):
+                if h == 9 and m < 30: continue
+                if h == 11 and m > 30: continue
+                timeline_slots.append(f"{h:02d}:{m:02d}")
+        for h in (13, 14, 15):
+            for m in range(60):
+                if h == 15 and m > 0: continue
+                timeline_slots.append(f"{h:02d}:{m:02d}")
+
+        tot_steps = len(timeline_slots)
+        last_val = start_p
+        for idx, t_str in enumerate(timeline_slots):
+            ratio = idx / max(1, tot_steps - 1)
+            # 平滑 S 型曲线过渡
+            smooth_ratio = (1 - math.cos(ratio * math.pi)) / 2 if 'math' in globals() else ratio
+            p = start_p + (end_p - start_p) * smooth_ratio
+            diff = p - prev_close
+            pct = (diff / prev_close * 100.0)
+            items.append({
+                "time": t_str,
+                "day": now_dt.strftime("%Y-%m-%d"),
+                "price": round(p, 3),
+                "avg_price": round((start_p + p) / 2.0, 3),
+                "volume": 1000.0,
+                "amount": round(p * 1000.0, 2),
+                "change": round(diff, 3),
+                "pct_chg": round(pct, 2),
+                "is_up": p >= last_val
+            })
+            last_val = p
 
     # 计算对称动态量程比例 (默认最小 0.5%)
     max_diff = max(abs(high_price - prev_close), abs(low_price - prev_close), abs(change_val))
     max_ratio = max((max_diff / prev_close) if prev_close else 0.005, 0.005)
 
-    return {
+    result_data = {
         "code": norm_code,
         "name": name,
         "prev_close": round(prev_close, 3),
@@ -567,3 +677,7 @@ def fetch_timeline_data(code: str) -> Dict[str, Any]:
         "items": items,
         "source": source
     }
+
+    # 写入高速缓存
+    _timeline_cache[norm_code] = (now_ts, result_data)
+    return result_data
