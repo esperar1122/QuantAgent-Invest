@@ -88,6 +88,21 @@ npm run build
 本项目从原本侧重于大模型报告生成的“AI 投研助手”，正式升级为具备实战闭环能力的**个人量化系统**，并在前端全面上线交互工作台：
 
 #### 0. 前端量化全景落地与交互优化 (Frontend Quant Experience)
+- **回测策略库持久化与自定义管理系统 (`useBacktestStrategies.ts` & `BacktestStrategy*.vue`)**：
+  - **核心目标**：满足“回测策略自定义像量化策略库一样持久化存放”的实战需求；
+  - **后端 MongoDB 持久化**：`app/routers/backtest.py` 接入集合 `user_backtest_strategies`，提供完整的 RESTful CRUD API 与 6 套经典系统推荐策略种子（核心资产多标的组合、平安多因子、茅台双均线、宁德MACD、300ETF布林、突破先锋新高）；
+  - **前端双轨可靠性保障**：`frontend/src/composables/useBacktestStrategies.ts` 结合 localStorage 实现离线与弱网双轨无缝降级；
+  - **策略库交互闭环**：回测中心顶部导航增加【🎯 回测策略库】入口、【经典策略快捷装载】下拉列表与【保存当前配置为策略】按钮；新增 `BacktestStrategyManageDialog.vue` 与 `BacktestStrategyEditDialog.vue` 弹窗，支持全要素参数修改与当前控制台配置一键提取。
+- **回测动态执行进度条与内核日志看板 (`BacktestCenter/index.vue`)**：
+  - 启动回测后呈现多阶段全息动效加载条，涵盖数据加载校验、信号矩阵演算、A股T+1与涨跌停模拟、摩擦成本核算、净值归因等各阶段；
+  - 动态滚动输出执行日志，带耗时统计与百分比动态递增，彻底根除死等痛点。
+- **全站 DIV 响应式弹性收缩规范与顶栏遮挡根治 (`responsive.scss`)**：
+  - 沉淀全站响应式样式规范 `responsive.scss`，支持流式 Flex 容器（`.fluid-banner`, `.fluid-primary-col`, `.fluid-secondary-col`）；
+  - 全局顶部行情栏集成虚拟模拟盘弹性胶囊，自适应缩放与文字折叠，根治窗口缩小时创业板指等指数信息被遮挡的问题；
+  - 回测中心顶部栏完全适配浅色主题（Light Theme），消除暗色残留。
+- **股票多维指标筛选加入“盈亏比 (R:R)”选项 (`StockPool/index.vue` & `stocks.py`)**：
+  - 后端：在 `app/routers/stocks.py` 增加 `min_profit_loss_ratio` 筛选，基于近期波动幅度和阻力/支撑位动态估算各标的盈亏比；
+  - 前端：筛选抽屉中新增盈亏比选项（全部/≥1.5/≥2.0/≥2.5/≥3.0），股票池列表动态显示盈亏比标签，并支持联动至量化策略库持久化。
 - **自选股全景穿透直跳 (`frontend/src/views/Favorites/index.vue`)**：
   - 彻底废除旧版数据残缺的 `/terminal/stocks/:code` 详情页跳转；
   - 点击股票代码、名称或 `[深度研判]` 按钮，直接穿透跳转至 `/terminal/stock?code=...` 全景研报工作台，完全继承分时图、K线、CYQ 筹码分布、技术指标与机构研报案卷。
@@ -370,6 +385,20 @@ AI 将自动基于该文档在几秒内无缝接续全部上下文！
 > 无论在设备 A（家里）还是设备 B（公司/笔记本），任何接手的 Antigravity 助手请严格参考此状态与清单，确保开发无缝衔接。
 
 ### 1. 当前阶段已完成状态 (Status: Backend & Frontend Complete & 100% Tested)
+- ✅ **回测策略库持久化与自定义管理系统（全栈闭环）**：
+  - **全要素策略模型**：标的/组合（支持等权与波动率倒数加权）、底层算法（`custom_rule`/`dual_ma`/`macd`/`bollinger`）、指标超参数、止损止盈风控规则（硬止损/动态止盈/最长持股/单次仓位）、交易摩擦与滑点深度模型（标准A股/ETF/自定义、滑点类型与价差）；
+  - **双轨可靠持久化**：后端 MongoDB 集合 `user_backtest_strategies` 提供完整 RESTful CRUD API（查/增/改/删/恢复系统推荐）；前端 `useBacktestStrategies.ts` 结合 localStorage 实现无缝降级兜底；
+  - **策略库交互闭环**：回测中心顶部栏新增“🎯 回测策略库”入口与“经典策略快捷装载”下拉菜单；参数配置控制台支持“一键从当前页面提取并保存为策略”；新增策略管理弹窗 `BacktestStrategyManageDialog.vue` 与编辑弹窗 `BacktestStrategyEditDialog.vue`。
+- ✅ **回测动态执行进度条与内核日志看板 (Dynamic Backtest Progress Dashboard)**：
+  - 启动回测后呈现多阶段全息动效加载条，涵盖数据加载校验、信号矩阵演算、A股T+1与涨跌停模拟、摩擦成本核算、净值归因等各阶段；
+  - 动态滚动输出执行日志，带耗时统计与百分比动态递增，彻底根除死等痛点。
+- ✅ **全站 DIV 响应式弹性收缩规范与顶栏遮挡根治 (`responsive.scss`)**：
+  - 沉淀全站响应式样式规范 `responsive.scss`，支持流式 Flex 容器（`.fluid-banner`, `.fluid-primary-col`, `.fluid-secondary-col`）；
+  - 全局顶部行情栏集成虚拟模拟盘弹性胶囊，自适应缩放与文字折叠，根治窗口缩小时创业板指等指数信息被遮挡的问题；
+  - 回测中心顶部栏完全适配浅色主题（Light Theme），消除暗色残留。
+- ✅ **股票多维指标筛选加入“盈亏比 (R:R)”选项（全栈闭环）**：
+  - 后端：在 `app/routers/stocks.py` 增加 `min_profit_loss_ratio` 筛选，基于近期波动幅度和阻力/支撑位动态估算各标的盈亏比；
+  - 前端：筛选抽屉中新增盈亏比选项（全部/≥1.5/≥2.0/≥2.5/≥3.0），股票池列表动态显示盈亏比标签，并支持联动至量化策略库持久化。
 - ✅ **A股历史回测引擎与自定义多指标策略（全栈闭环）**：
   - 后端：撮合逻辑（T+1、涨跌停限制、滑点佣金印花税）、8 大量化指标（夏普/年化/最大回撤/胜率/盈亏比等）、双均线/MACD/布林带策略；
   - **自定义多因子组合策略 (`CustomRuleStrategy`)**：自由组合均线（金叉/多头/站上长线）、量能（放量异动/温和放量）、RSI（超跌/反弹）、KDJ（低位金叉/极度超卖）、通道突破（新高），支持 AND/OR 逻辑；
@@ -422,5 +451,6 @@ python scripts/sync_realtime_valuation.py
 #### 优先级 P2：进阶功能与外部联动（按需选做）
 1. **微信 Webhook 界面配置项**：在前端“系统配置”或用户头像抽屉中增加微信 Webhook / Server酱 Key 交互配置，无需手动改 `.env`；
 2. **实盘券商网格交易策略模板**：将目前双均线/MACD策略扩充至网格交易 (Grid Trading) 和日内做 T 策略模板。
+
 
 
