@@ -125,6 +125,15 @@
           <el-icon><VideoPlay /></el-icon>
           {{ isRunning ? '执行中...' : '重新运行工作流' }}
         </el-button>
+        <el-button 
+          size="small" 
+          :loading="isDeepReportRunning"
+          @click="triggerDeepLlmReport"
+          class="cf-llm-btn"
+        >
+          <span class="llm-icon">{{ isDeepReportRunning ? '⏳' : '⚡' }}</span>
+          <span>{{ isDeepReportRunning ? `${deepReportProgress}% 推演中` : '调度云端大模型' }}</span>
+        </el-button>
         <el-button size="small" @click="goToReport">
           <el-icon><Document /></el-icon>
           查看全息研报
@@ -266,10 +275,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VideoPlay, Document, TrendCharts, Star, ArrowDown } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import EvidenceAggregator from '@/components/Terminal/EvidenceAggregator.vue'
 import { stocksApi } from '@/api/stocks'
 import { useFavoritesStore } from '@/stores/favorites'
@@ -320,6 +329,8 @@ function isChipActive(code: string) {
 
 function switchStock(code: string) {
   if (!code || code === currentStock.value.code) return
+  clearDeepReportPoll()
+  isDeepReportRunning.value = false
   selectedCode.value = code
   router.replace({ path: '/terminal/workflow', query: { code } })
   loadStockDetail(code)
@@ -542,6 +553,115 @@ function goToStock() {
 function goToReport() {
   router.push({ path: '/terminal/report', query: { code: currentStock.value.code } })
 }
+
+// ==========================================================================
+// ⚡ 云端大模型多智能体深度研报调度
+// ==========================================================================
+const isDeepReportRunning = ref(false)
+const deepReportProgress = ref(0)
+let deepReportTimer: any = null
+
+function appendRuntimeLog(node: string, nodeClass: string, msg: string) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const now = new Date()
+  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+  runtimeLogs.value.push({ time, node, nodeClass, msg })
+  nextTick(() => {
+    if (logBodyRef.value) {
+      logBodyRef.value.scrollTop = logBodyRef.value.scrollHeight
+    }
+  })
+}
+
+function clearDeepReportPoll() {
+  if (deepReportTimer) {
+    clearInterval(deepReportTimer)
+    deepReportTimer = null
+  }
+}
+
+async function triggerDeepLlmReport() {
+  if (isDeepReportRunning.value) return
+  const code = currentStock.value.code
+  const name = currentStock.value.name
+  if (!code) return
+
+  try {
+    await ElMessageBox.confirm(
+      `即将调度云端 LangGraph 多智能体协同引擎对【${name} (${code})】开展深度链式推理。全流程包含宏观研判、多空辩论、筹码穿透与风险仲裁，大约耗时 30-90 秒，将消耗真实 LLM 算力 Token。\n\n是否确认在后台启动深度推演？`,
+      '调度云端大模型多智能体',
+      {
+        confirmButtonText: '确认调度',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    )
+  } catch {
+    return
+  }
+
+  try {
+    isDeepReportRunning.value = true
+    deepReportProgress.value = 5
+    appendRuntimeLog('Cloud LLM Engine', 'node-risk', `[调度指令下发] 唤醒 LangGraph 深度多智能体推理图 (标的: ${name} ${code})`)
+
+    const res = await stocksApi.triggerDeepAnalysis(code, {
+      analysts: ['market', 'news', 'fundamentals'],
+      research_depth: 'deep'
+    })
+
+    const taskId = (res as any)?.task_id || (res as any)?.data?.task_id
+    if (!taskId) {
+      ElMessage.warning('未能获取后台推演任务 ID，请稍后重试')
+      isDeepReportRunning.value = false
+      return
+    }
+
+    appendRuntimeLog('LangGraph Agent', 'node-sys', `[异步推演中] 云端任务 ID: ${taskId.slice(-8)}，各智能体节点并行交叉质询中...`)
+    ElMessage.success(`云端推演任务已提交！任务编号: ${taskId.slice(-8)}，正实时异步分析中...`)
+
+    clearDeepReportPoll()
+    deepReportTimer = setInterval(async () => {
+      try {
+        const statusRes = await stocksApi.getDeepAnalysisStatus(code, taskId)
+        const statusData = (statusRes as any)?.data || statusRes
+        if (statusData) {
+          deepReportProgress.value = Math.min(98, Math.max(deepReportProgress.value, statusData.progress || 10))
+          if (statusData.current_step) {
+            appendRuntimeLog('LangGraph Flow', 'node-analyst', `[推演进度 ${deepReportProgress.value}%] ${statusData.current_step}`)
+          }
+
+          if (statusData.status === 'completed' || statusData.status === 'SUCCESS' || statusData.progress >= 100) {
+            clearDeepReportPoll()
+            deepReportProgress.value = 100
+            isDeepReportRunning.value = false
+            appendRuntimeLog('Arbitration Agent', 'node-decision', `[推演完成] 云端大模型深度研报推演完成！证据案卷库与决策结论已点亮`)
+            ElMessage.success({
+              message: `【${name}】云端大模型深度研报推演完成！已点亮真实推理证据案卷`,
+              duration: 5000
+            })
+            // 重新刷新案卷与详情
+            await loadStockDetail(code)
+          } else if (statusData.status === 'failed' || statusData.status === 'error') {
+            clearDeepReportPoll()
+            isDeepReportRunning.value = false
+            appendRuntimeLog('Workflow Error', 'node-risk', `[异常中断] 大模型推演失败: ${statusData.error || '未知异常'}`)
+            ElMessage.error(`大模型推演失败: ${statusData.error || '未知异常'}`)
+          }
+        }
+      } catch (pollErr) {
+        console.warn('轮询大模型推演状态异常:', pollErr)
+      }
+    }, 3000)
+  } catch (err: any) {
+    isDeepReportRunning.value = false
+    ElMessage.error(`提交大模型推演任务失败: ${err.message || '网络异常'}`)
+  }
+}
+
+onUnmounted(() => {
+  clearDeepReportPoll()
+})
 </script>
 
 <style scoped lang="scss">
@@ -832,6 +952,21 @@ function goToReport() {
           background-color: #f79009;
           animation: blink 1s infinite;
         }
+      }
+    }
+
+    .cf-llm-btn {
+      background: linear-gradient(135deg, #175cd3 0%, #7c3aed 100%) !important;
+      border: none !important;
+      color: #ffffff !important;
+      font-weight: 600;
+
+      &:hover:not(:disabled) {
+        filter: brightness(1.08);
+      }
+
+      .llm-icon {
+        margin-right: 3px;
       }
     }
   }

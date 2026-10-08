@@ -692,8 +692,32 @@
           <div class="casefile-header">
             <div class="cf-title-row">
               <span class="cf-title">智能体研究案卷 (Case File)</span>
-              <span class="cf-version">{{ currentDossier?.has_offline_report ? '🤖 离线全息智能体研报' : 'v2.4 量化实时推演' }}</span>
+              <div class="cf-header-tools">
+                <span class="cf-version">{{ currentDossier?.has_offline_report ? '🤖 已穿透深度研报' : 'v2.4 本地实时推演' }}</span>
+                <button
+                  class="cf-llm-btn"
+                  :class="{ loading: isDeepReportRunning }"
+                  :disabled="isDeepReportRunning"
+                  @click="triggerDeepLlmReport"
+                  :title="isDeepReportRunning ? '大模型正在后台推演' : '调度云端 LangGraph 多智能体链式大模型深度推演'"
+                >
+                  <span class="llm-icon">{{ isDeepReportRunning ? '⏳' : '⚡' }}</span>
+                  <span>{{ isDeepReportRunning ? `${deepReportProgress}% 推演中` : '调度云端大模型' }}</span>
+                </button>
+              </div>
             </div>
+
+            <!-- 大模型后台推演实时进度卡 -->
+            <div v-if="isDeepReportRunning" class="cf-running-strip">
+              <div class="strip-text">
+                <span class="strip-step">{{ deepReportCurrentStep || '大模型多智能体交叉论证中...' }}</span>
+                <span class="strip-pct tabular-nums">{{ deepReportProgress }}%</span>
+              </div>
+              <div class="strip-bar">
+                <div class="strip-fill" :style="{ width: `${deepReportProgress}%` }"></div>
+              </div>
+            </div>
+
             <div class="cf-decision-ribbon">
               <span class="ribbon-label">最终仲裁结论:</span>
               <span class="ribbon-badge" :class="currentDossier?.arbitration?.bias === 'bullish' ? 'bullish' : 'neutral'">
@@ -944,7 +968,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Connection,
@@ -957,7 +981,7 @@ import {
   DataAnalysis,
   WarningFilled
 } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import StockKlineChart from '@/components/Terminal/StockKlineChart.vue'
 import TechnicalAnalysisModal from '@/components/TechnicalIndicators/TechnicalAnalysisModal.vue'
 import PositionSizerDrawer from '@/components/Terminal/PositionSizerDrawer.vue'
@@ -1521,9 +1545,103 @@ function onStockSelectChange(val: string) {
   }
 }
 
+// ==========================================================================
+// ⚡ 云端大模型多智能体深度研报 (LangGraph Deep Report)
+// ==========================================================================
+const isDeepReportRunning = ref(false)
+const deepReportProgress = ref(0)
+const deepReportCurrentStep = ref('')
+let deepReportTimer: any = null
+
+function clearDeepReportPoll() {
+  if (deepReportTimer) {
+    clearInterval(deepReportTimer)
+    deepReportTimer = null
+  }
+}
+
+async function triggerDeepLlmReport() {
+  if (isDeepReportRunning.value) return
+  const code = currentStock.value.code
+  const name = currentStock.value.name
+  if (!code) return
+
+  try {
+    await ElMessageBox.confirm(
+      `即将调度云端 LangGraph 多智能体协同引擎对【${name} (${code})】开展深度链式推理。全流程包含宏观研判、多空辩论、筹码穿透与风险仲裁，大约耗时 30-90 秒，将消耗真实 LLM 算力 Token。\n\n是否确认在后台启动深度推演？`,
+      '调度云端大模型多智能体',
+      {
+        confirmButtonText: '确认调度',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    )
+  } catch {
+    return
+  }
+
+  try {
+    isDeepReportRunning.value = true
+    deepReportProgress.value = 5
+    deepReportCurrentStep.value = '正在唤醒 LangGraph 智能体推演图...'
+
+    const res = await stocksApi.triggerDeepAnalysis(code, {
+      analysts: ['market', 'news', 'fundamentals'],
+      research_depth: 'deep'
+    })
+
+    const taskId = (res as any)?.task_id || (res as any)?.data?.task_id
+    if (!taskId) {
+      ElMessage.warning('未能获取后台推演任务 ID，请稍后重试')
+      isDeepReportRunning.value = false
+      return
+    }
+
+    ElMessage.success(`云端推演任务已提交！任务编号: ${taskId.slice(-8)}，正实时异步分析中...`)
+
+    clearDeepReportPoll()
+    deepReportTimer = setInterval(async () => {
+      try {
+        const statusRes = await stocksApi.getDeepAnalysisStatus(code, taskId)
+        const statusData = (statusRes as any)?.data || statusRes
+        if (statusData) {
+          deepReportProgress.value = Math.min(98, Math.max(deepReportProgress.value, statusData.progress || 10))
+          if (statusData.current_step) {
+            deepReportCurrentStep.value = statusData.current_step
+          }
+
+          if (statusData.status === 'completed' || statusData.status === 'SUCCESS' || statusData.progress >= 100) {
+            clearDeepReportPoll()
+            deepReportProgress.value = 100
+            deepReportCurrentStep.value = '大模型深度研报推演完成！'
+            isDeepReportRunning.value = false
+            ElMessage.success({
+              message: `【${name}】云端大模型深度研报推演完成！已点亮真实推理证据案卷`,
+              duration: 5000
+            })
+            // 重新刷新案卷库与详情
+            await loadStockDetail(code)
+          } else if (statusData.status === 'failed' || statusData.status === 'error') {
+            clearDeepReportPoll()
+            isDeepReportRunning.value = false
+            ElMessage.error(`大模型推演失败: ${statusData.error || '未知异常'}`)
+          }
+        }
+      } catch (pollErr) {
+        console.warn('轮询大模型推演状态异常:', pollErr)
+      }
+    }, 3000)
+  } catch (err: any) {
+    isDeepReportRunning.value = false
+    ElMessage.error(`提交大模型推演任务失败: ${err.message || '网络异常'}`)
+  }
+}
+
 // 切换股票并拉取全量数据
 async function switchStock(code: string) {
   if (!code) return
+  clearDeepReportPoll()
+  isDeepReportRunning.value = false
   selectedCode.value = code
   currentChips.value = null
   currentIndicators.value = null
@@ -1923,6 +2041,11 @@ onMounted(() => {
   const initialCode = (route.query.code as string) || 'sh000001'
   selectedCode.value = initialCode
   loadStockDetail(initialCode)
+})
+
+onUnmounted(() => {
+  clearDeepReportPoll()
+  if (searchTimer) clearTimeout(searchTimer)
 })
 </script>
 
@@ -3237,13 +3360,100 @@ onMounted(() => {
       color: #101828;
     }
 
+    .cf-header-tools {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .cf-version {
       font-size: 10px;
       color: #667085;
       background-color: #f2f4f7;
-      padding: 1px 5px;
-      border-radius: 2px;
+      padding: 2px 6px;
+      border-radius: 4px;
       font-family: monospace;
+      white-space: nowrap;
+    }
+
+    .cf-llm-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #ffffff;
+      background: linear-gradient(135deg, #175cd3 0%, #7c3aed 100%);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 3px rgba(23, 92, 211, 0.25);
+      white-space: nowrap;
+
+      &:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 6px rgba(23, 92, 211, 0.35);
+        filter: brightness(1.05);
+      }
+
+      &:active:not(:disabled) {
+        transform: translateY(0);
+      }
+
+      &.loading, &:disabled {
+        opacity: 0.75;
+        cursor: not-allowed;
+        background: #94a3b8;
+        box-shadow: none;
+      }
+
+      .llm-icon {
+        font-size: 12px;
+      }
+    }
+  }
+
+  .cf-running-strip {
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    background-color: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 4px;
+
+    .strip-text {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      color: #166534;
+      margin-bottom: 4px;
+
+      .strip-step {
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 250px;
+      }
+      .strip-pct {
+        font-weight: 700;
+        font-family: monospace;
+      }
+    }
+
+    .strip-bar {
+      height: 4px;
+      background-color: #dcfce7;
+      border-radius: 2px;
+      overflow: hidden;
+
+      .strip-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #16a34a, #22c55e);
+        transition: width 0.3s ease;
+      }
     }
   }
 

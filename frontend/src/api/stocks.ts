@@ -219,6 +219,20 @@ export const stocksApi = {
   },
 
   /**
+   * 金融工作台一键异步调度云端大模型深度研报 (LangGraph Multi-Agent)
+   */
+  async triggerDeepAnalysis(symbol: string, payload?: { research_depth?: string; analysts?: string[] }) {
+    return ApiClient.post<any>(`/api/stocks/${symbol}/dossier/generate-deep-report`, payload)
+  },
+
+  /**
+   * 轮询大模型深度研报进度
+   */
+  async getDeepAnalysisStatus(symbol: string, taskId: string) {
+    return ApiClient.get<any>(`/api/stocks/${symbol}/dossier/deep-report-status/${taskId}`)
+  },
+
+  /**
    * 获取市场总览全景数据（KPI宏观指标、行业板块、量化主线、事件流）
    */
   async getMarketOverview(forceRefresh = false) {

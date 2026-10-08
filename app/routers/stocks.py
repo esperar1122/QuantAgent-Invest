@@ -1412,6 +1412,94 @@ async def execute_stock_workflow_endpoint(code: str):
         raise HTTPException(status_code=500, detail=f"执行工作流流水线失败: {str(e)}")
 
 
+class DeepReportTriggerRequest(BaseModel):
+    research_depth: str = Field(default="快速", description="研究深度: 快速/标准/深度")
+    analysts: Optional[List[str]] = Field(default=None, description="分析师团队列表")
+
+
+@router.post("/{code}/dossier/generate-deep-report", response_model=dict)
+async def trigger_dossier_deep_report_endpoint(
+    code: str,
+    background_tasks: BackgroundTasks,
+    payload: Optional[DeepReportTriggerRequest] = None,
+    current_user: Optional[dict] = Depends(get_optional_current_user)
+):
+    """
+    金融工作台：一键调度云端大模型 (LangGraph Multi-Agent) 深度研报推演
+    异步提交后台执行，产物自动落入 analysis_reports 并被案卷库穿透识别
+    """
+    from app.services.simple_analysis_service import get_simple_analysis_service
+    from app.models.analysis import SingleAnalysisRequest, AnalysisParameters
+    market, normalized_code = _detect_market_and_code(code)
+
+    user_id = str(current_user.get("id") or current_user.get("_id") or "terminal_user") if current_user else "terminal_user"
+    depth = payload.research_depth if payload else "快速"
+    analysts = payload.analysts if payload and payload.analysts else ["market", "fundamentals", "news", "risk"]
+
+    req = SingleAnalysisRequest(
+        symbol=normalized_code,
+        parameters=AnalysisParameters(
+            market_type="A股",
+            research_depth=depth,
+            selected_analysts=analysts
+        )
+    )
+
+    try:
+        service = get_simple_analysis_service()
+        init_res = await service.create_analysis_task(user_id, req)
+        task_id = init_res["task_id"]
+
+        async def _run_deep_bg():
+            try:
+                bg_service = get_simple_analysis_service()
+                await bg_service.execute_analysis_background(task_id, user_id, req)
+                logger.info(f"✅ [Terminal] 标的 {normalized_code} 云端大模型深度研报完成: {task_id}")
+            except Exception as ex:
+                logger.error(f"❌ [Terminal] 标的 {normalized_code} 云端大模型研报失败: {task_id}, err={ex}", exc_info=True)
+
+        background_tasks.add_task(_run_deep_bg)
+        return ok({
+            "task_id": task_id,
+            "symbol": normalized_code,
+            "status": "pending",
+            "message": "云端多智能体大模型深度研推任务已在后台启动"
+        })
+    except Exception as e:
+        logger.error(f"❌ 调度大模型研报失败 ({code}): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"调度大模型深度研报失败: {str(e)}")
+
+
+@router.get("/{code}/dossier/deep-report-status/{task_id}", response_model=dict)
+async def get_dossier_deep_report_status_endpoint(code: str, task_id: str):
+    """
+    金融工作台：实时查询云端大模型深度研报的流转状态与进度
+    """
+    from app.services.simple_analysis_service import get_simple_analysis_service
+    try:
+        service = get_simple_analysis_service()
+        status_res = await service.get_task_status(task_id)
+        if not status_res:
+            return ok({"task_id": task_id, "status": "unknown", "progress": 0})
+
+        st = status_res.get("status")
+        progress = status_res.get("progress", 0)
+        has_result = status_res.get("result") is not None or status_res.get("has_result", False)
+
+        return ok({
+            "task_id": task_id,
+            "symbol": code,
+            "status": st,
+            "progress": progress,
+            "completed": st in ["completed", "success"] or has_result,
+            "failed": st in ["failed", "error"],
+            "current_step": status_res.get("current_step") or status_res.get("status_message") or ""
+        })
+    except Exception as e:
+        logger.warning(f"查询研报任务状态失败 ({task_id}): {e}")
+        return ok({"task_id": task_id, "status": "processing", "progress": 50})
+
+
 @router.get("/{code}/news", response_model=dict)
 async def get_news(code: str, days: int = 30, limit: int = 50, include_announcements: bool = True, current_user: Optional[dict] = Depends(get_optional_current_user)):
     """获取A股新闻与公告"""
