@@ -3,16 +3,301 @@
 """
 
 import logging
+import uuid
+import datetime
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.core.database import get_mongo_db
 from app.services.backtest.backtest_engine import BacktestEngine
 from app.services.backtest.data_loader import load_backtest_data
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/backtest", tags=["量化回测"])
+
+
+# =====================================================================
+# 回测策略库数据模型与预设
+# =====================================================================
+
+class BacktestStrategyConfigPayload(BaseModel):
+    symbol: str = Field(default="600519", description="标的代码或多标的代码逗号分隔")
+    strategy_name: str = Field(default="custom_rule", description="策略内核: custom_rule, dual_ma, macd, bollinger")
+    sizing_model: Optional[str] = Field(default="equal_weight", description="资金分配模型")
+    initial_capital: Optional[float] = Field(default=100000.0, description="初始本金")
+    strategy_params: Optional[Dict[str, Any]] = Field(default_factory=dict, description="策略指标参数")
+    risk_params: Optional[Dict[str, Any]] = Field(default_factory=dict, description="风控止盈止损参数")
+    friction_params: Optional[Dict[str, Any]] = Field(default_factory=dict, description="交易摩擦与滑点参数")
+
+
+class BacktestStrategyCreatePayload(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50, description="策略名称")
+    description: Optional[str] = Field(default="", max_length=300, description="策略描述与投资逻辑")
+    icon: Optional[str] = Field(default="🎯", description="策略图标")
+    tag_type: Optional[str] = Field(default="primary", description="标签主题色")
+    config: BacktestStrategyConfigPayload = Field(..., description="完整回测配置")
+
+
+class BacktestStrategyUpdatePayload(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=50)
+    description: Optional[str] = Field(default=None, max_length=300)
+    icon: Optional[str] = None
+    tag_type: Optional[str] = None
+    config: Optional[BacktestStrategyConfigPayload] = None
+
+
+DEFAULT_SYSTEM_BACKTEST_STRATEGIES: List[Dict[str, Any]] = [
+    {
+        "id": "preset_btest_portfolio_core",
+        "name": "👑 核心资产组合 · 多标的回测",
+        "description": "精选消费、金融、新能源跨行业龙头多标的配置，结合量价与突破多因子协同，分散个股特质风险。",
+        "icon": "👑",
+        "tag_type": "success",
+        "is_system": True,
+        "cannot_delete": False,
+        "config": {
+            "symbol": "600519, 000001, 300750, 002594",
+            "strategy_name": "custom_rule",
+            "sizing_model": "equal_weight",
+            "initial_capital": 200000.0,
+            "strategy_params": {
+                "condition_mode": "and",
+                "ma_mode": "cross",
+                "ma_fast": 5,
+                "ma_slow": 20,
+                "volume_filter": "vol_surge",
+                "vol_ratio": 1.5,
+                "rsi_filter": "none",
+                "rsi_threshold": 30,
+                "kdj_filter": "none",
+                "breakout_filter": "none",
+                "breakout_days": 20
+            },
+            "risk_params": {
+                "stop_loss_pct": 7.0,
+                "take_profit_pct": 20.0,
+                "max_holding_days": 20,
+                "position_ratio": 95
+            },
+            "friction_params": {
+                "friction_preset": "a_share",
+                "slippage_type": "percent",
+                "slippage_val": 0.1,
+                "commission_wan": 2.5,
+                "min_commission": 5.0,
+                "stamp_duty_pct": 0.05,
+                "transfer_fee_wan": 0.1
+            }
+        }
+    },
+    {
+        "id": "preset_btest_pingan_factor",
+        "name": "🌟 平安银行 · 自定义多因子",
+        "description": "针对金融大盘白马定制：均线金叉 + 成交量异动倍增 + 硬止损与动态止盈，兼顾稳健与防守。",
+        "icon": "🌟",
+        "tag_type": "primary",
+        "is_system": True,
+        "cannot_delete": False,
+        "config": {
+            "symbol": "000001",
+            "strategy_name": "custom_rule",
+            "sizing_model": "equal_weight",
+            "initial_capital": 100000.0,
+            "strategy_params": {
+                "condition_mode": "and",
+                "ma_mode": "cross",
+                "ma_fast": 5,
+                "ma_slow": 20,
+                "volume_filter": "vol_surge",
+                "vol_ratio": 1.5,
+                "rsi_filter": "none",
+                "rsi_threshold": 30,
+                "kdj_filter": "none",
+                "breakout_filter": "none",
+                "breakout_days": 20
+            },
+            "risk_params": {
+                "stop_loss_pct": 5.0,
+                "take_profit_pct": 15.0,
+                "max_holding_days": 15,
+                "position_ratio": 95
+            },
+            "friction_params": {
+                "friction_preset": "a_share",
+                "slippage_type": "percent",
+                "slippage_val": 0.1,
+                "commission_wan": 2.5,
+                "min_commission": 5.0,
+                "stamp_duty_pct": 0.05,
+                "transfer_fee_wan": 0.1
+            }
+        }
+    },
+    {
+        "id": "preset_btest_maotai_dual_ma",
+        "name": "📈 贵州茅台 · 趋势双均线",
+        "description": "经典短期MA5与长期MA20金叉死叉，顺应白酒消费白马长期主升浪波段趋势。",
+        "icon": "📈",
+        "tag_type": "primary",
+        "is_system": True,
+        "cannot_delete": False,
+        "config": {
+            "symbol": "600519",
+            "strategy_name": "dual_ma",
+            "sizing_model": "equal_weight",
+            "initial_capital": 100000.0,
+            "strategy_params": {
+                "fast_period": 5,
+                "slow_period": 20
+            },
+            "risk_params": {
+                "stop_loss_pct": 6.0,
+                "take_profit_pct": 25.0,
+                "max_holding_days": 30,
+                "position_ratio": 95
+            },
+            "friction_params": {
+                "friction_preset": "a_share",
+                "slippage_type": "percent",
+                "slippage_val": 0.1,
+                "commission_wan": 2.5,
+                "min_commission": 5.0,
+                "stamp_duty_pct": 0.05,
+                "transfer_fee_wan": 0.1
+            }
+        }
+    },
+    {
+        "id": "preset_btest_ningde_macd",
+        "name": "🌊 宁德时代 · MACD动量波段",
+        "description": "标准DIF与DEA金叉动量捕捉，灵敏捕获高弹性成长赛道龙头的波段起涨点。",
+        "icon": "🌊",
+        "tag_type": "danger",
+        "is_system": True,
+        "cannot_delete": False,
+        "config": {
+            "symbol": "300750",
+            "strategy_name": "macd",
+            "sizing_model": "equal_weight",
+            "initial_capital": 100000.0,
+            "strategy_params": {
+                "fast": 12,
+                "slow": 26,
+                "signal": 9
+            },
+            "risk_params": {
+                "stop_loss_pct": 8.0,
+                "take_profit_pct": 18.0,
+                "max_holding_days": 15,
+                "position_ratio": 90
+            },
+            "friction_params": {
+                "friction_preset": "a_share",
+                "slippage_type": "percent",
+                "slippage_val": 0.1,
+                "commission_wan": 2.5,
+                "min_commission": 5.0,
+                "stamp_duty_pct": 0.05,
+                "transfer_fee_wan": 0.1
+            }
+        }
+    },
+    {
+        "id": "preset_btest_etf300_bollinger",
+        "name": "🎯 沪深300ETF · 布林均值回归",
+        "description": "指数ETF低摩擦震荡收敛与均值回归，触及下轨超跌反弹建仓，触及上轨遇阻止盈。",
+        "icon": "🎯",
+        "tag_type": "warning",
+        "is_system": True,
+        "cannot_delete": False,
+        "config": {
+            "symbol": "510300",
+            "strategy_name": "bollinger",
+            "sizing_model": "equal_weight",
+            "initial_capital": 100000.0,
+            "strategy_params": {
+                "window": 20,
+                "num_std": 2.0
+            },
+            "risk_params": {
+                "stop_loss_pct": 4.0,
+                "take_profit_pct": 10.0,
+                "max_holding_days": 10,
+                "position_ratio": 95
+            },
+            "friction_params": {
+                "friction_preset": "etf",
+                "slippage_type": "percent",
+                "slippage_val": 0.05,
+                "commission_wan": 1.0,
+                "min_commission": 5.0,
+                "stamp_duty_pct": 0.0,
+                "transfer_fee_wan": 0.1
+            }
+        }
+    },
+    {
+        "id": "preset_btest_breakout_pioneer",
+        "name": "⚡ 突破先锋 · 阶段新高主升",
+        "description": "放量突破20日阶段新高形态，结合短均线多头排列，专攻高爆发力主升浪短线进攻。",
+        "icon": "⚡",
+        "tag_type": "danger",
+        "is_system": True,
+        "cannot_delete": False,
+        "config": {
+            "symbol": "002594",
+            "strategy_name": "custom_rule",
+            "sizing_model": "equal_weight",
+            "initial_capital": 100000.0,
+            "strategy_params": {
+                "condition_mode": "and",
+                "ma_mode": "bull",
+                "ma_fast": 5,
+                "ma_slow": 10,
+                "volume_filter": "vol_surge",
+                "vol_ratio": 1.8,
+                "rsi_filter": "none",
+                "rsi_threshold": 30,
+                "kdj_filter": "none",
+                "breakout_filter": "new_high",
+                "breakout_days": 20
+            },
+            "risk_params": {
+                "stop_loss_pct": 5.0,
+                "take_profit_pct": 20.0,
+                "max_holding_days": 12,
+                "position_ratio": 90
+            },
+            "friction_params": {
+                "friction_preset": "a_share",
+                "slippage_type": "percent",
+                "slippage_val": 0.1,
+                "commission_wan": 2.5,
+                "min_commission": 5.0,
+                "stamp_duty_pct": 0.05,
+                "transfer_fee_wan": 0.1
+            }
+        }
+    }
+]
+
+
+async def ensure_seed_backtest_strategies(db):
+    """确保回测策略系统预设存入 MongoDB"""
+    try:
+        count = await db["user_backtest_strategies"].count_documents({})
+        if count == 0:
+            now_iso = datetime.datetime.now().isoformat()
+            for s in DEFAULT_SYSTEM_BACKTEST_STRATEGIES:
+                doc = dict(s)
+                doc["created_at"] = now_iso
+                doc["updated_at"] = now_iso
+                await db["user_backtest_strategies"].insert_one(doc)
+    except Exception as e:
+        logger.warning(f"初始化回测策略系统种子异常: {e}")
+
 
 
 class BacktestRunRequest(BaseModel):
@@ -178,3 +463,122 @@ async def run_backtest(req: BacktestRunRequest):
             data=None,
             message=f"回测执行失败: {str(e)}"
         )
+
+
+# =====================================================================
+# 用户回测策略库持久化管理 API (MongoDB + Local Fallback)
+# =====================================================================
+
+@router.get("/user-strategies", response_model=dict)
+@router.get("/custom-strategies", response_model=dict)
+async def list_user_backtest_strategies():
+    """获取所有用户自建与系统推荐的回测策略列表"""
+    try:
+        db = get_mongo_db()
+        await ensure_seed_backtest_strategies(db)
+        cursor = db["user_backtest_strategies"].find({}, {"_id": 0})
+        strategies = [doc async for doc in cursor]
+
+        # 排序：系统预设优先，其次按 updated_at 倒序
+        def sort_key(s):
+            is_sys = 1 if s.get("is_system") else 0
+            updated = s.get("updated_at") or ""
+            return (-is_sys, updated)
+
+        strategies.sort(key=sort_key)
+        return {"success": True, "data": strategies, "message": "获取回测策略库成功"}
+    except Exception as e:
+        logger.warning(f"从 MongoDB 获取回测策略库异常，降级返回内存种子: {e}")
+        return {"success": True, "data": DEFAULT_SYSTEM_BACKTEST_STRATEGIES, "message": "降级读取预设策略"}
+
+
+@router.post("/user-strategies", response_model=dict)
+@router.post("/custom-strategies", response_model=dict)
+async def create_user_backtest_strategy(payload: BacktestStrategyCreatePayload):
+    """新建自定义回测策略"""
+    db = get_mongo_db()
+    strat_id = f"btest_{uuid.uuid4().hex[:12]}"
+    now_iso = datetime.datetime.now().isoformat()
+    doc = {
+        "id": strat_id,
+        "name": payload.name.strip(),
+        "description": (payload.description or "").strip(),
+        "icon": payload.icon or "🎯",
+        "tag_type": payload.tag_type or "primary",
+        "config": payload.config.dict(),
+        "is_system": False,
+        "cannot_delete": False,
+        "created_at": now_iso,
+        "updated_at": now_iso
+    }
+    try:
+        await db["user_backtest_strategies"].insert_one(doc)
+        doc.pop("_id", None)
+    except Exception as e:
+        logger.error(f"保存回测策略到 MongoDB 失败: {e}")
+        doc.pop("_id", None)
+    return {"success": True, "data": doc, "message": "策略创建成功"}
+
+
+@router.put("/user-strategies/{strategy_id}", response_model=dict)
+@router.put("/custom-strategies/{strategy_id}", response_model=dict)
+async def update_user_backtest_strategy(strategy_id: str, payload: BacktestStrategyUpdatePayload):
+    """修改自定义或系统预设回测策略"""
+    db = get_mongo_db()
+    existing = await db["user_backtest_strategies"].find_one({"id": strategy_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="未找到该回测策略")
+
+    update_fields: Dict[str, Any] = {"updated_at": datetime.datetime.now().isoformat()}
+    if payload.name is not None:
+        update_fields["name"] = payload.name.strip()
+    if payload.description is not None:
+        update_fields["description"] = payload.description.strip()
+    if payload.icon is not None:
+        update_fields["icon"] = payload.icon
+    if payload.tag_type is not None:
+        update_fields["tag_type"] = payload.tag_type
+    if payload.config is not None:
+        update_fields["config"] = payload.config.dict()
+
+    await db["user_backtest_strategies"].update_one({"id": strategy_id}, {"$set": update_fields})
+    updated_doc = await db["user_backtest_strategies"].find_one({"id": strategy_id}, {"_id": 0})
+    return {"success": True, "data": updated_doc, "message": "回测策略已成功更新"}
+
+
+@router.delete("/user-strategies/{strategy_id}", response_model=dict)
+@router.delete("/custom-strategies/{strategy_id}", response_model=dict)
+async def delete_user_backtest_strategy(strategy_id: str):
+    """删除自建回测策略"""
+    db = get_mongo_db()
+    existing = await db["user_backtest_strategies"].find_one({"id": strategy_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="未找到该回测策略或已被删除")
+
+    if existing.get("cannot_delete"):
+        raise HTTPException(status_code=400, detail="该系统核心回测策略不允许被删除")
+
+    res = await db["user_backtest_strategies"].delete_one({"id": strategy_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="未找到该回测策略或已被删除")
+    return {"success": True, "data": {"id": strategy_id}, "message": "已成功删除回测策略"}
+
+
+@router.post("/user-strategies/reset-defaults", response_model=dict)
+@router.post("/custom-strategies/reset-defaults", response_model=dict)
+async def reset_default_backtest_strategies():
+    """恢复重置系统经典推荐回测策略"""
+    db = get_mongo_db()
+    now_iso = datetime.datetime.now().isoformat()
+    for s in DEFAULT_SYSTEM_BACKTEST_STRATEGIES:
+        doc = dict(s)
+        doc["updated_at"] = now_iso
+        await db["user_backtest_strategies"].update_one(
+            {"id": s["id"]},
+            {"$set": doc, "$setOnInsert": {"created_at": now_iso}},
+            upsert=True
+        )
+    cursor = db["user_backtest_strategies"].find({}, {"_id": 0})
+    all_strats = [d async for d in cursor]
+    return {"success": True, "data": all_strats, "message": "已成功恢复系统推荐回测策略"}
+

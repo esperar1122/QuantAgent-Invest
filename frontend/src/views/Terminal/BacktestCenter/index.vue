@@ -8,20 +8,33 @@
         <span class="bc-subtitle">严格遵循 A 股规则 · T+1 撮合约束 · 涨跌停限制 · 真实交易摩擦成本</span>
       </div>
       <div class="banner-quick-actions fluid-secondary-col">
-        <el-button size="small" type="success" plain @click="loadPreset('600519, 000001, 300750, 002594', 'custom_rule')">
-          👑 核心资产组合 · 多标的回测
+        <el-button size="small" type="warning" @click="openManageDialog">
+          <el-icon style="margin-right: 4px;"><Collection /></el-icon>
+          🎯 回测策略库 ({{ customStrategies.length }})
         </el-button>
-        <el-button size="small" type="primary" plain @click="loadPreset('000001', 'custom_rule')">
-          🌟 平安银行 · 自定义多因子
-        </el-button>
-        <el-button size="small" type="primary" plain @click="loadPreset('600519', 'dual_ma')">
-          茅台 · 双均线回测
-        </el-button>
-        <el-button size="small" type="primary" plain @click="loadPreset('300750', 'macd')">
-          宁德时代 · MACD回测
-        </el-button>
-        <el-button size="small" type="primary" plain @click="loadPreset('510300', 'bollinger')">
-          300ETF · 布林带回归
+        <el-dropdown trigger="click" @command="handleQuickStrategyCommand">
+          <el-button size="small" type="primary" plain>
+            <span>经典策略快捷装载</span>
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="item in customStrategies.slice(0, 8)"
+                :key="item.id"
+                :command="item.id"
+              >
+                <span>{{ item.icon || '🎯' }} {{ item.name }}</span>
+              </el-dropdown-item>
+              <el-dropdown-item divided command="__manage__">
+                ⚙️ 打开完整策略库管理...
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button size="small" type="success" plain @click="openCreateDialog">
+          <el-icon style="margin-right: 4px;"><Plus /></el-icon>
+          保存当前配置为策略
         </el-button>
       </div>
     </div>
@@ -31,7 +44,13 @@
       <!-- 左栏：回测控制台 (380px) -->
       <aside class="bc-control-col">
         <el-card shadow="never" class="control-card">
-          <div class="card-section-title">1. 选择回测策略</div>
+          <div class="card-section-title flex-between">
+            <span>1. 选择回测策略</span>
+            <div class="section-actions">
+              <el-button link size="small" type="primary" @click="openManageDialog">策略库</el-button>
+              <el-button link size="small" type="success" @click="openCreateDialog">存为策略</el-button>
+            </div>
+          </div>
           <el-select v-model="form.strategy_name" class="full-width" @change="onStrategyChange">
             <el-option label="🌟 自定义多指标组合策略 (Custom Rule)" value="custom_rule" />
             <el-option label="📈 双均线金叉死叉策略 (Dual MA)" value="dual_ma" />
@@ -733,15 +752,37 @@
         </div>
       </main>
     </div>
+
+    <!-- 🎯 回测策略库管理与编辑弹窗 -->
+    <BacktestStrategyManageDialog
+      v-model:visible="manageDialogVisible"
+      :strategies="customStrategies"
+      @apply="applyStrategy($event, true)"
+      @create="openCreateDialog"
+      @edit="openEditDialog"
+      @delete="deleteStrategy"
+      @reset-defaults="resetStrategyDefaults"
+    />
+
+    <BacktestStrategyEditDialog
+      v-model:visible="editDialogVisible"
+      :strategy="editingStrategy"
+      :current-context="currentContext"
+      @save="handleSaveStrategy"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { quantApi, type BacktestResponse } from '@/api/quant'
+import { quantApi, type BacktestResponse, type CustomBacktestStrategy, type CustomBacktestStrategyCreatePayload } from '@/api/quant'
 import { ElMessage } from 'element-plus'
+import { Collection, Plus, ArrowDown } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import { useBacktestStrategies } from '@/composables/useBacktestStrategies'
+import BacktestStrategyManageDialog from './components/BacktestStrategyManageDialog.vue'
+import BacktestStrategyEditDialog from './components/BacktestStrategyEditDialog.vue'
 
 const route = useRoute()
 const chartRef = ref<HTMLDivElement | null>(null)
@@ -749,6 +790,19 @@ let chartInstance: echarts.ECharts | null = null
 
 const running = ref(false)
 const result = ref<BacktestResponse | null>(null)
+
+// 🎯 回测策略库状态管理
+const {
+  customStrategies,
+  createStrategy,
+  updateStrategy,
+  deleteStrategy,
+  resetDefaults: resetStrategyDefaults
+} = useBacktestStrategies()
+
+const manageDialogVisible = ref(false)
+const editDialogVisible = ref(false)
+const editingStrategy = ref<CustomBacktestStrategy | null>(null)
 
 // 🌟 回测动态执行进度条与内核日志流
 const progressPercent = ref(0)
@@ -956,10 +1010,102 @@ function setQuickDateRange(years: number) {
   ]
 }
 
-function loadPreset(symbol: string, strategy: string) {
-  form.value.symbol = symbol
-  form.value.strategy_name = strategy
-  runBacktest()
+const currentContext = computed(() => ({
+  form: {
+    symbol: form.value.symbol,
+    strategy_name: form.value.strategy_name,
+    sizing_model: form.value.sizing_model,
+    initial_capital: form.value.initial_capital
+  },
+  strategyParams: strategyParams.value,
+  riskParams: riskParams.value,
+  frictionParams: frictionParams.value,
+  frictionPreset: frictionPreset.value
+}))
+
+function openManageDialog() {
+  manageDialogVisible.value = true
+}
+
+function openCreateDialog() {
+  editingStrategy.value = null
+  editDialogVisible.value = true
+}
+
+function openEditDialog(item: CustomBacktestStrategy) {
+  editingStrategy.value = item
+  editDialogVisible.value = true
+}
+
+async function handleSaveStrategy({ isEdit, id, data }: { isEdit: boolean; id?: string; data: CustomBacktestStrategyCreatePayload }) {
+  if (isEdit && id) {
+    await updateStrategy(id, data)
+  } else {
+    await createStrategy(data)
+  }
+}
+
+function applyStrategy(item: CustomBacktestStrategy, autoRun = false) {
+  if (!item || !item.config) return
+
+  // 1. 标的与分配
+  if (item.config.symbol) {
+    form.value.symbol = item.config.symbol
+  }
+  if (item.config.sizing_model) {
+    form.value.sizing_model = item.config.sizing_model
+  }
+  if (item.config.strategy_name) {
+    form.value.strategy_name = item.config.strategy_name
+  }
+  if (item.config.initial_capital) {
+    form.value.initial_capital = item.config.initial_capital
+  }
+
+  // 2. 策略超参数
+  if (item.config.strategy_params) {
+    strategyParams.value = {
+      ...strategyParams.value,
+      ...item.config.strategy_params
+    }
+  }
+
+  // 3. 风控参数
+  if (item.config.risk_params) {
+    riskParams.value = {
+      ...riskParams.value,
+      ...item.config.risk_params
+    }
+  }
+
+  // 4. 摩擦与滑点
+  if (item.config.friction_params) {
+    const fp = item.config.friction_params
+    if (fp.friction_preset) frictionPreset.value = fp.friction_preset as any
+    if (fp.slippage_type) frictionParams.value.slippage_type = fp.slippage_type
+    if (fp.slippage_val !== undefined) frictionParams.value.slippage_val = fp.slippage_val
+    if (fp.commission_wan !== undefined) frictionParams.value.commission_wan = fp.commission_wan
+    if (fp.min_commission !== undefined) frictionParams.value.min_commission = fp.min_commission
+    if (fp.stamp_duty_pct !== undefined) frictionParams.value.stamp_duty_pct = fp.stamp_duty_pct
+    if (fp.transfer_fee_wan !== undefined) frictionParams.value.transfer_fee_wan = fp.transfer_fee_wan
+  }
+
+  ElMessage.success(`🎉 已成功装载回测策略【${item.name}】！`)
+
+  if (autoRun) {
+    runBacktest()
+  }
+}
+
+function handleQuickStrategyCommand(command: string) {
+  if (command === '__manage__') {
+    openManageDialog()
+  } else {
+    const strat = customStrategies.value.find(s => s.id === command)
+    if (strat) {
+      applyStrategy(strat, true)
+    }
+  }
 }
 
 async function runBacktest() {
@@ -1221,6 +1367,24 @@ onMounted(() => {
     font-weight: 700;
     color: #334155;
     margin-bottom: 8px;
+
+    &.flex-between {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .section-actions {
+      display: flex;
+      gap: 4px;
+
+      .el-button {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 0 4px;
+        height: auto;
+      }
+    }
   }
 
   .full-width {

@@ -214,6 +214,58 @@ export interface PaperOrderResponse {
   account_summary?: any
 }
 
+export interface BacktestStrategyConfig {
+  symbol: string
+  strategy_name: string
+  sizing_model?: string
+  initial_capital?: number
+  strategy_params?: Record<string, any>
+  risk_params?: {
+    stop_loss_pct?: number
+    take_profit_pct?: number
+    max_holding_days?: number
+    position_ratio?: number
+  }
+  friction_params?: {
+    friction_preset?: string
+    slippage_type?: string
+    slippage_val?: number
+    commission_wan?: number
+    min_commission?: number
+    stamp_duty_pct?: number
+    transfer_fee_wan?: number
+  }
+}
+
+export interface CustomBacktestStrategy {
+  id: string
+  name: string
+  description?: string
+  icon?: string
+  tag_type?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
+  config: BacktestStrategyConfig
+  created_at: string
+  updated_at: string
+  is_system?: boolean
+  cannot_delete?: boolean
+}
+
+export interface CustomBacktestStrategyCreatePayload {
+  name: string
+  description?: string
+  icon?: string
+  tag_type?: string
+  config: BacktestStrategyConfig
+}
+
+export interface CustomBacktestStrategyUpdatePayload {
+  name?: string
+  description?: string
+  icon?: string
+  tag_type?: string
+  config?: BacktestStrategyConfig
+}
+
 export const quantApi = {
   // 回测
   getStrategies() {
@@ -222,6 +274,24 @@ export const quantApi = {
   runBacktest(params: BacktestRequest) {
     return ApiClient.post<BacktestResponse>('/api/backtest/run', params)
   },
+
+  // 回测策略库持久化
+  getUserStrategies() {
+    return ApiClient.get<{ success: boolean; data: CustomBacktestStrategy[]; message: string }>('/api/backtest/user-strategies')
+  },
+  createUserStrategy(payload: CustomBacktestStrategyCreatePayload) {
+    return ApiClient.post<{ success: boolean; data: CustomBacktestStrategy; message: string }>('/api/backtest/user-strategies', payload)
+  },
+  updateUserStrategy(id: string, payload: CustomBacktestStrategyUpdatePayload) {
+    return ApiClient.put<{ success: boolean; data: CustomBacktestStrategy; message: string }>(`/api/backtest/user-strategies/${id}`, payload)
+  },
+  deleteUserStrategy(id: string) {
+    return ApiClient.delete<{ success: boolean; data: any; message: string }>(`/api/backtest/user-strategies/${id}`)
+  },
+  resetDefaultUserStrategies() {
+    return ApiClient.post<{ success: boolean; data: CustomBacktestStrategy[]; message: string }>('/api/backtest/user-strategies/reset-defaults')
+  },
+
 
   // 仓位管理
   calculateAtr(params: AtrCalculateRequest) {
