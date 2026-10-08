@@ -351,7 +351,7 @@ onUnmounted(() => {
 <style scoped lang="scss">
 .terminal-sidebar {
   position: relative;
-  height: calc(100vh - 66px);
+  height: 100%;
   background-color: #ffffff;
   border-right: 1px solid #e4e7ec;
   display: flex;

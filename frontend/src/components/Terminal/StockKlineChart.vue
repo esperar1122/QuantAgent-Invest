@@ -691,7 +691,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { stocksApi } from '@/api/stocks'
 
 interface KlineItem {
@@ -782,7 +782,7 @@ function switchPeriod(p: string) {
 }
 
 // 尺寸定义
-const width = 840
+const width = ref(840)
 const height = 420
 const padding = { top: 20, right: 60, bottom: 25, left: 20 }
 const mainChartHeight = 260
@@ -851,7 +851,30 @@ function onPanelDragEnd() {
   window.removeEventListener('mouseup', onPanelDragEnd)
 }
 
+let resizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+  if (containerRef.value) {
+    const rect = containerRef.value.getBoundingClientRect()
+    if (rect.width > 0) {
+      width.value = Math.round(rect.width)
+    }
+    resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0) {
+          width.value = Math.round(entry.contentRect.width)
+        }
+      }
+    })
+    resizeObserver.observe(containerRef.value)
+  }
+})
+
 onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   window.removeEventListener('mousemove', onPanelDragMove)
   window.removeEventListener('mouseup', onPanelDragEnd)
 })
@@ -1159,7 +1182,7 @@ const maxVol = computed(() => {
 
 const candleWidth = computed(() => {
   const n = chartData.value.length || 1
-  const usableWidth = width - padding.left - padding.right
+  const usableWidth = width.value - padding.left - padding.right
   return Math.max(4, Math.min(18, (usableWidth / n) * 0.68))
 })
 
@@ -1180,7 +1203,7 @@ const timelinePrevCloseY = computed(() => getYByPrice(timelinePrevClose.value))
 const candlePoints = computed(() => {
   const n = chartData.value.length
   if (n === 0) return []
-  const step = (width - padding.left - padding.right) / Math.max(1, n - 1)
+  const step = (width.value - padding.left - padding.right) / Math.max(1, n - 1)
 
   return chartData.value.map((d, i) => {
     const x = padding.left + i * step
@@ -1214,7 +1237,7 @@ const candlePoints = computed(() => {
 
 // 🔥 分时走势点位计算 (严格映射在 240 分钟时间轴坐标系内，11:30 精确落在中轴线)
 const timelinePoints = computed(() => {
-  const usableWidth = width - padding.left - padding.right
+  const usableWidth = width.value - padding.left - padding.right
 
   return timelineItems.value.map((d, i) => {
     const minIdx = d.minuteIndex !== undefined ? d.minuteIndex : i
@@ -1244,7 +1267,7 @@ const timelineAreaPath = computed(() => {
 })
 
 const timelineVolPoints = computed(() => {
-  const usableWidth = width - padding.left - padding.right
+  const usableWidth = width.value - padding.left - padding.right
   const barW = Math.max(1.2, (usableWidth / TOTAL_TIMELINE_MINUTES) * 0.8)
 
   return timelineItems.value.map((d, i) => {
@@ -1318,14 +1341,14 @@ const mainGridYLines = computed(() => [
 ])
 
 const gridXLines = computed(() => {
-  const usableWidth = width - padding.left - padding.right
+  const usableWidth = width.value - padding.left - padding.right
   if (currentPeriod.value === 'timeline') {
     return [
       padding.left,
       padding.left + usableWidth * 0.25,
       padding.left + usableWidth * 0.5,
       padding.left + usableWidth * 0.75,
-      width - padding.right
+      width.value - padding.right
     ]
   }
   const res: number[] = []
@@ -1381,13 +1404,13 @@ const dateTicks = computed(() => {
 
 // 🔥 分时图时间刻度 (09:30, 10:30, 11:30/13:00 在中轴, 14:00, 15:00 在最右侧)
 const timelineTimeTicks = computed(() => {
-  const usableWidth = width - padding.left - padding.right
+  const usableWidth = width.value - padding.left - padding.right
   return [
     { x: padding.left, label: '09:30' },
     { x: padding.left + usableWidth * 0.25, label: '10:30' },
     { x: padding.left + usableWidth * 0.5, label: '11:30/13:00' },
     { x: padding.left + usableWidth * 0.75, label: '14:00' },
-    { x: width - padding.right, label: '15:00' }
+    { x: width.value - padding.right, label: '15:00' }
   ]
 })
 
@@ -1400,15 +1423,15 @@ const renderedDrawings = computed(() => {
         y: getYByPrice(d.price)
       }
     } else if (d.type === 'trendline') {
-      const x1 = padding.left + ((d.timeIndex ?? 0) / Math.max(1, visibleCount.value)) * (width - padding.left - padding.right)
+      const x1 = padding.left + ((d.timeIndex ?? 0) / Math.max(1, visibleCount.value)) * (width.value - padding.left - padding.right)
       const y1 = getYByPrice(d.price)
-      const x2 = padding.left + ((d.timeIndex2 ?? 10) / Math.max(1, visibleCount.value)) * (width - padding.left - padding.right)
+      const x2 = padding.left + ((d.timeIndex2 ?? 10) / Math.max(1, visibleCount.value)) * (width.value - padding.left - padding.right)
       const y2 = getYByPrice(d.price2 ?? d.price)
       return { ...d, x1, y1, x2, y2 }
     } else if (d.type === 'rect') {
-      const x1 = padding.left + ((d.timeIndex ?? 0) / Math.max(1, visibleCount.value)) * (width - padding.left - padding.right)
+      const x1 = padding.left + ((d.timeIndex ?? 0) / Math.max(1, visibleCount.value)) * (width.value - padding.left - padding.right)
       const y1 = getYByPrice(d.price)
-      const x2 = padding.left + ((d.timeIndex2 ?? 10) / Math.max(1, visibleCount.value)) * (width - padding.left - padding.right)
+      const x2 = padding.left + ((d.timeIndex2 ?? 10) / Math.max(1, visibleCount.value)) * (width.value - padding.left - padding.right)
       const y2 = getYByPrice(d.price2 ?? d.price)
       return {
         ...d,
@@ -1418,7 +1441,7 @@ const renderedDrawings = computed(() => {
         boxH: Math.abs(y2 - y1)
       }
     } else if (d.type === 'price_tag') {
-      const x = padding.left + ((d.timeIndex ?? 0) / Math.max(1, visibleCount.value)) * (width - padding.left - padding.right)
+      const x = padding.left + ((d.timeIndex ?? 0) / Math.max(1, visibleCount.value)) * (width.value - padding.left - padding.right)
       const y = getYByPrice(d.price)
       return { ...d, x, y }
     }
@@ -1466,7 +1489,7 @@ let dragStartIndex = 0
 function handleMouseDown(e: MouseEvent) {
   const target = e.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
-  const mouseX = ((e.clientX - rect.left) / rect.width) * width
+  const mouseX = ((e.clientX - rect.left) / rect.width) * width.value
   const mouseY = ((e.clientY - rect.top) / rect.height) * height
   const clickPrice = getPriceByY(mouseY)
 
@@ -1491,7 +1514,7 @@ function handleMouseDown(e: MouseEvent) {
 
   // 3. 价格标注 (单点标注)
   if (activeTool.value === 'price_tag') {
-    const usableW = width - padding.left - padding.right
+    const usableW = width.value - padding.left - padding.right
     const relX = Math.max(0, Math.min(usableW, mouseX - padding.left))
     const timeIdx = (relX / usableW) * visibleCount.value
     drawings.value.push({
@@ -1505,7 +1528,7 @@ function handleMouseDown(e: MouseEvent) {
   }
 
   // 4. 两点工具 (趋势线 / 箱体)
-  const usableW = width - padding.left - padding.right
+  const usableW = width.value - padding.left - padding.right
   const relX = Math.max(0, Math.min(usableW, mouseX - padding.left))
   const timeIdx = (relX / usableW) * visibleCount.value
 
@@ -1563,7 +1586,7 @@ const tooltipPos = ref({ x: 0 })
 function handleMouseMove(e: MouseEvent) {
   const target = e.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
-  const mouseX = ((e.clientX - rect.left) / rect.width) * width
+  const mouseX = ((e.clientX - rect.left) / rect.width) * width.value
   const mouseY = ((e.clientY - rect.top) / rect.height) * height
 
   // 1. 拖动平移中
@@ -1583,7 +1606,7 @@ function handleMouseMove(e: MouseEvent) {
     drawingDraft.value.y2 = mouseY
   }
 
-  if (mouseX < padding.left || mouseX > width - padding.right) {
+  if (mouseX < padding.left || mouseX > width.value - padding.right) {
     hoverX.value = null
     currentHoverItem.value = null
     currentHoverTimelineItem.value = null

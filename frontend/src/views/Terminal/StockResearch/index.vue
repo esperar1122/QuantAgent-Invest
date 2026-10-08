@@ -2134,6 +2134,8 @@ onUnmounted(() => {
 
   .search-input-wrapper {
     width: 380px;
+    max-width: 100%;
+    min-width: 220px;
 
     .terminal-stock-select {
       width: 100%;
@@ -2403,15 +2405,21 @@ onUnmounted(() => {
 
 .metrics-strip {
   display: flex;
-  gap: 14px;
-  border-left: 1px solid #eaecf0;
-  border-right: 1px solid #eaecf0;
-  padding: 0 16px;
+  align-items: center;
+  gap: clamp(8px, 1.2vw, 16px);
+  padding: 8px 14px;
+  background: #f8fafc;
+  border: 1px solid #eaecf0;
+  border-radius: 6px;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
 
   .m-item {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 48px;
 
     .mk {
       font-size: 10px;
@@ -2419,7 +2427,7 @@ onUnmounted(() => {
     }
 
     .mv {
-      font-size: 11px;
+      font-size: 11.5px;
       font-weight: 600;
       color: #344054;
     }
@@ -2428,15 +2436,43 @@ onUnmounted(() => {
 
 .header-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
   flex-shrink: 0;
 }
 
 .three-columns-workspace {
   display: grid;
-  grid-template-columns: 280px 1fr 400px;
+  grid-template-columns: clamp(250px, 18vw, 280px) 1fr clamp(340px, 24vw, 400px);
   gap: 14px;
   align-items: stretch;
+  min-width: 0;
+
+  @media (max-width: 1440px) {
+    grid-template-columns: 240px 1fr 340px;
+    gap: 12px;
+  }
+
+  @media (max-width: 1180px) {
+    grid-template-columns: 1fr 360px;
+
+    .left-quant-col {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+  }
+
+  @media (max-width: 860px) {
+    grid-template-columns: 1fr;
+
+    .left-quant-col {
+      display: flex;
+      flex-direction: column;
+    }
+  }
 }
 
 .left-quant-col {
@@ -3723,6 +3759,8 @@ onUnmounted(() => {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
     padding: 14px 20px;
     border-radius: 10px;
     background: #ffffff;
@@ -3783,6 +3821,8 @@ onUnmounted(() => {
       display: flex;
       flex-direction: column;
       gap: 6px;
+      flex: 1 1 360px;
+      min-width: 0;
 
       .engine-badge {
         display: inline-flex;
@@ -3913,6 +3953,14 @@ onUnmounted(() => {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 12px;
+
+    @media (max-width: 1280px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (max-width: 640px) {
+      grid-template-columns: 1fr;
+    }
 
     .point-card {
       background: #ffffff;

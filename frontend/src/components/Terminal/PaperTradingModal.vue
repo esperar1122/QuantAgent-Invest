@@ -2,7 +2,7 @@
   <el-dialog
     v-model="visible"
     title="🎮 虚拟模拟盘交易终端 (Paper Trading · 10万本金)"
-    width="920px"
+    width="min(920px, 94vw)"
     class="paper-trading-dialog"
     :destroy-on-close="false"
   >
@@ -542,6 +542,14 @@ onMounted(() => {
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 14px;
+
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+  }
 
   .ov-item {
     display: flex;

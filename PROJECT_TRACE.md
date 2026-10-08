@@ -436,6 +436,20 @@ AI 将自动基于该文档在几秒内无缝接续全部上下文！
     - 重构 `TerminalLayout.vue`，用现代 `100dvh` 与 `flex: 1; min-height: 0;` 替换硬编码的 `calc(100vh - 66px)`；
     - 优化 `vite.config.ts`：将 `dompurify` 打包入独立 `markdown` 分块，静默 Sass 2.0 `legacy-js-api` 废弃警告；
     - 经 `vue-tsc` 与 Vite 严格构建检验，0 Error、0 Warning 100% 编译通过。
+- ✅ **全终端美观视觉、缩放自适应与排版布局深度重构（全栈交付）**：
+  - **K线/分时图矢量缩放与清晰度重构 (`StockKlineChart.vue`)**：
+    - 废除原先写死 `const width = 840` 导致的图表横向变形拉伸问题；
+    - 引入基于 `containerRef` 的原生 `ResizeObserver` 动态监听，`width` 实时与物理像素尺寸严格 1:1 对齐；
+    - 无论是 80%~150% 浏览器缩放还是 Windows 笔记本 125%/150% 显示缩放，K线实体、分时折线、均线、网格与鼠标十字线始终保持物理级锐利、无横向变形失真，光标坐标拾取零漂移；
+  - **三栏投研工作台弹性自适应排版 (`StockResearch/index.vue`)**：
+    - 彻底解除原先三栏硬编码 `280px 1fr 400px` 在笔记本缩放时挤爆中间图表的隐患；
+    - 建立响应式网格流体系：超宽屏 (>1400px) 保持 3 栏极客视角；常规/缩放笔记本 (1180px~1400px) 动态调窄左右侧边 (`240px 1fr 340px`)，优先保全核心 K 线图呼吸感；中屏 (860px~1180px) 优雅降级为图表/案卷双主列+量化画像沉底自适应网格；小屏 (<860px) 流式平铺；
+    - 顶部 10 项金融指标条由生硬悬挂边框重构为自适应金融胶囊条 (`.metrics-strip`)，折行与缩放时自然延展；
+    - 顶部买卖决策看板 (`.decision-signal-banner`) 与建仓/加仓/减仓/止损四维点位卡片 (`.decision-points-grid`) 增加断点网格，杜绝任何文字挤压折裂；
+  - **回测中心与模拟盘弹窗弹性适配 (`BacktestCenter/index.vue`, `PaperTradingModal.vue`)**：
+    - `PaperTradingModal.vue` 弹窗宽度改用 `min(920px, 94vw)`，4 项资产指标卡在小屏或缩放时自适应降为 2 列/1 列，彻底消除视口横向滚动溢出；
+    - `BacktestCenter/index.vue` 绩效 3 列指标卡与摩擦成本 4 列指标卡增加小屏自适应折行断点；
+    - `TerminalSidebar.vue` 高度重构为 `height: 100%`，彻底消除 `calc(100vh - 66px)` 硬编码。
 
 ### 2. 跨设备数据同步运维与极速数据源指南 (Data Pipeline & Operations Guide for Antigravity)
 
