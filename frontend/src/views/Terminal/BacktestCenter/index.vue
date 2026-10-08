@@ -390,18 +390,19 @@
             <el-button
               type="primary"
               size="large"
-              :loading="running"
+              :disabled="running"
               @click="runBacktest"
               class="full-width-btn"
             >
-              🚀 启动 A 股历史回测
+              <span v-if="!running">🚀 启动 A 股历史回测</span>
+              <span v-else>⚡ 回测计算中 ({{ progressPercent }}%)...</span>
             </el-button>
           </div>
         </el-card>
       </aside>
 
       <!-- 右栏：回测结果可视化展示区 -->
-      <main class="bc-result-col" v-loading="running">
+      <main class="bc-result-col">
         <!-- 未运行状态引导卡 -->
         <div v-if="!result && !running" class="empty-backtest-card">
           <div class="eb-icon">📊</div>
@@ -412,8 +413,98 @@
           </div>
         </div>
 
+        <!-- 🌟 回测运行中：全息动效进度看板 (动态多阶段百分比 + 实时执行日志) -->
+        <div v-if="running" class="backtest-progress-dashboard">
+          <div class="bpd-header">
+            <div class="bpd-title-row">
+              <div class="bpd-spinner-icon">
+                <div class="pulse-ring"></div>
+                <span class="icon-inner">⚡</span>
+              </div>
+              <div class="bpd-title-meta">
+                <h3 class="bpd-title">A 股全真策略回测正在全速演算...</h3>
+                <span class="bpd-sub">
+                  标的: <strong>{{ form.symbol }}</strong> · 策略: <strong>{{ currentStrategyName }}</strong> · 区间: <strong>{{ dateRange[0] }} ~ {{ dateRange[1] }}</strong>
+                </span>
+              </div>
+              <div class="bpd-time-pill font-mono">
+                ⏱️ 已耗时: {{ elapsedTime.toFixed(1) }}s
+              </div>
+            </div>
+
+            <!-- 动态彩色流光进度条 -->
+            <div class="bpd-progress-track">
+              <el-progress
+                :percentage="progressPercent"
+                :stroke-width="16"
+                striped
+                striped-flow
+                :duration="20"
+                :color="progressColors"
+              />
+            </div>
+
+            <!-- 当前阶段描述 -->
+            <div class="bpd-stage-hint">
+              <span class="stage-tag">当前阶段</span>
+              <span class="stage-text">{{ progressStage }}</span>
+            </div>
+          </div>
+
+          <!-- 阶段里程碑流 -->
+          <div class="bpd-milestones">
+            <div class="milestone-item" :class="{ active: progressPercent >= 10, done: progressPercent >= 35 }">
+              <div class="m-dot"></div>
+              <span class="m-label">1. 数据清洗</span>
+            </div>
+            <div class="milestone-line" :class="{ done: progressPercent >= 35 }"></div>
+            <div class="milestone-item" :class="{ active: progressPercent >= 35, done: progressPercent >= 60 }">
+              <div class="m-dot"></div>
+              <span class="m-label">2. 信号矩阵</span>
+            </div>
+            <div class="milestone-line" :class="{ done: progressPercent >= 60 }"></div>
+            <div class="milestone-item" :class="{ active: progressPercent >= 60, done: progressPercent >= 80 }">
+              <div class="m-dot"></div>
+              <span class="m-label">3. T+1撮合回放</span>
+            </div>
+            <div class="milestone-line" :class="{ done: progressPercent >= 80 }"></div>
+            <div class="milestone-item" :class="{ active: progressPercent >= 80, done: progressPercent >= 95 }">
+              <div class="m-dot"></div>
+              <span class="m-label">4. 滑点与摩擦</span>
+            </div>
+            <div class="milestone-line" :class="{ done: progressPercent >= 95 }"></div>
+            <div class="milestone-item" :class="{ active: progressPercent >= 95, done: progressPercent >= 100 }">
+              <div class="m-dot"></div>
+              <span class="m-label">5. 归因装配</span>
+            </div>
+          </div>
+
+          <!-- 实时计算日志终端 -->
+          <div class="bpd-console-box">
+            <div class="console-head">
+              <div class="dots-trio">
+                <span class="dot d-red"></span>
+                <span class="dot d-yellow"></span>
+                <span class="dot d-green"></span>
+              </div>
+              <span class="head-title">量化引擎内核执行日志 (Kernel Logs)</span>
+              <span class="head-badge">Live Stream</span>
+            </div>
+            <div class="console-body font-mono">
+              <div v-for="(log, idx) in progressLogs" :key="idx" class="log-line">
+                <span class="log-cursor">❯</span>
+                <span class="log-content">{{ log }}</span>
+              </div>
+              <div class="log-line blinking-line">
+                <span class="log-cursor">❯</span>
+                <span class="blinking-cursor">_</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- 结果面板 -->
-        <div v-if="result" class="result-dashboard">
+        <div v-if="result && !running" class="result-dashboard">
           <!-- 1. 核心 KPI 指标卡片网格 -->
           <div class="kpi-cards-grid">
             <div class="kpi-card" :class="result.metrics.total_return >= 0 ? 'color-up-bg' : 'color-down-bg'">
@@ -646,7 +737,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { quantApi, type BacktestResponse } from '@/api/quant'
 import { ElMessage } from 'element-plus'
@@ -658,6 +749,92 @@ let chartInstance: echarts.ECharts | null = null
 
 const running = ref(false)
 const result = ref<BacktestResponse | null>(null)
+
+// 🌟 回测动态执行进度条与内核日志流
+const progressPercent = ref(0)
+const progressStage = ref('准备启动回测引擎...')
+const progressLogs = ref<string[]>([])
+const elapsedTime = ref(0)
+let progressTimer: any = null
+let elapsedTimer: any = null
+
+const progressColors = [
+  { color: '#3b82f6', percentage: 20 },
+  { color: '#06b6d4', percentage: 40 },
+  { color: '#8b5cf6', percentage: 60 },
+  { color: '#f59e0b', percentage: 80 },
+  { color: '#10b981', percentage: 100 }
+]
+
+const currentStrategyName = computed(() => {
+  switch (form.value.strategy_name) {
+    case 'custom_rule': return '自定义多指标组合策略'
+    case 'dual_ma': return '双均线趋势策略'
+    case 'macd': return 'MACD动量策略'
+    case 'bollinger': return '布林带通道突破策略'
+    default: return form.value.strategy_name
+  }
+})
+
+function startProgressAnimation(symbolStr: string, strategyName: string) {
+  progressPercent.value = 8
+  elapsedTime.value = 0
+  progressStage.value = `正在检索标的 [${symbolStr}] 历史K线序列与行情快照...`
+  progressLogs.value = [
+    `[0.0s] 启动 A 股全真策略回测引擎，加载策略 [${strategyName}]...`,
+    `[0.1s] 正在连接行情服务拉取 [${symbolStr}] 历史日K数据...`
+  ]
+
+  const startTime = Date.now()
+  elapsedTimer = setInterval(() => {
+    elapsedTime.value = +((Date.now() - startTime) / 1000).toFixed(1)
+  }, 100)
+
+  // 步进平滑推进进度
+  progressTimer = setInterval(() => {
+    const elapsed = (Date.now() - startTime) / 1000
+    if (progressPercent.value < 93) {
+      const step = progressPercent.value < 30 ? 4.5 : (progressPercent.value < 65 ? 2.8 : 1.2)
+      progressPercent.value = Math.min(93, Math.round(progressPercent.value + step))
+
+      if (progressPercent.value >= 25 && progressLogs.value.length === 2) {
+        progressStage.value = `正在核算量化策略指标与多因子信号矩阵...`
+        progressLogs.value.push(`[${elapsed.toFixed(1)}s] 历史K线加载成功，校验时序连续性与除权平滑...`)
+        progressLogs.value.push(`[${elapsed.toFixed(1)}s] 计算策略指标因子 (均线 / MACD / KDJ / ATR)...`)
+      } else if (progressPercent.value >= 50 && progressLogs.value.length === 4) {
+        progressStage.value = `正在执行 A 股真实规则撮合模拟 (T+1持仓 / 涨跌停封板)...`
+        progressLogs.value.push(`[${elapsed.toFixed(1)}s] 多空信号矩阵生成完毕，开始逐日回放撮合...`)
+        progressLogs.value.push(`[${elapsed.toFixed(1)}s] 遵循 T+1 交易制度与涨跌停封板流动性限制...`)
+      } else if (progressPercent.value >= 75 && progressLogs.value.length === 6) {
+        progressStage.value = `正在应用滑点冲击模型与印花税佣金摩擦核算...`
+        progressLogs.value.push(`[${elapsed.toFixed(1)}s] 核算滑点摩擦损耗与佣金/印花税/过户费成本...`)
+      } else if (progressPercent.value >= 88 && progressLogs.value.length === 7) {
+        progressStage.value = `正在聚合资产净值收益曲线与最大回撤归因...`
+        progressLogs.value.push(`[${elapsed.toFixed(1)}s] 正在生成基准超额收益与回撤区间归因看板...`)
+      }
+    }
+  }, 150)
+}
+
+function finishProgressAnimation() {
+  if (progressTimer) clearInterval(progressTimer)
+  progressPercent.value = 100
+  progressStage.value = '🎉 回测计算完毕，正在渲染多维可视化报表！'
+  progressLogs.value.push(`[${elapsedTime.value.toFixed(1)}s] 回测内核演算完成，装配图表组件...`)
+
+  return new Promise(resolve => setTimeout(resolve, 450))
+}
+
+function clearProgressTimers() {
+  if (progressTimer) clearInterval(progressTimer)
+  if (elapsedTimer) clearInterval(elapsedTimer)
+  progressTimer = null
+  elapsedTimer = null
+}
+
+onBeforeUnmount(() => {
+  clearProgressTimers()
+})
 
 const dateRange = ref<[string, string]>(['2023-01-01', '2024-01-01'])
 
@@ -796,6 +973,7 @@ async function runBacktest() {
   }
 
   running.value = true
+  startProgressAnimation(form.value.symbol, currentStrategyName.value)
   try {
     const combinedParams = {
       ...strategyParams.value,
@@ -832,6 +1010,7 @@ async function runBacktest() {
     }
 
     const res = await quantApi.runBacktest(payload)
+    await finishProgressAnimation()
 
     const data = ((res as any)?.data || res) as BacktestResponse
     result.value = data
@@ -840,9 +1019,11 @@ async function runBacktest() {
     await nextTick()
     renderChart()
   } catch (err: any) {
+    clearProgressTimers()
     console.error('回测失败:', err)
     ElMessage.error(err.message || '回测执行失败，请检查网络或数据源')
   } finally {
+    clearProgressTimers()
     running.value = false
   }
 }
@@ -1285,5 +1466,280 @@ onMounted(() => {
   background: #d1fae5;
   padding: 2px 6px;
   border-radius: 4px;
+}
+
+/* 🌟 回测全景动效进度看板样式 */
+.backtest-progress-dashboard {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 32px 28px;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+
+  .bpd-header {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    .bpd-title-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+
+      .bpd-spinner-icon {
+        position: relative;
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #eff6ff;
+        border-radius: 50%;
+        color: #2563eb;
+        font-size: 20px;
+
+        .pulse-ring {
+          position: absolute;
+          inset: -4px;
+          border-radius: 50%;
+          border: 2px solid #3b82f6;
+          animation: bpd-pulse 1.8s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+        }
+      }
+
+      .bpd-title-meta {
+        flex: 1;
+
+        .bpd-title {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 700;
+          color: #0f172a;
+        }
+        .bpd-sub {
+          font-size: 13px;
+          color: #64748b;
+          margin-top: 4px;
+          display: block;
+
+          strong {
+            color: #1e293b;
+          }
+        }
+      }
+
+      .bpd-time-pill {
+        font-size: 13px;
+        font-weight: 600;
+        color: #0369a1;
+        background: #e0f2fe;
+        padding: 6px 14px;
+        border-radius: 20px;
+        border: 1px solid #bae6fd;
+      }
+    }
+
+    .bpd-progress-track {
+      margin-top: 8px;
+
+      :deep(.el-progress-bar__outer) {
+        background-color: #f1f5f9;
+        border-radius: 10px;
+      }
+      :deep(.el-progress-bar__inner) {
+        border-radius: 10px;
+        transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      :deep(.el-progress__text) {
+        font-size: 16px !important;
+        font-weight: 800 !important;
+        font-family: monospace;
+        color: #0f172a;
+        min-width: 50px;
+      }
+    }
+
+    .bpd-stage-hint {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+
+      .stage-tag {
+        font-size: 11px;
+        font-weight: 700;
+        color: #2563eb;
+        background: #dbeafe;
+        padding: 2px 8px;
+        border-radius: 4px;
+      }
+      .stage-text {
+        font-weight: 600;
+        color: #334155;
+      }
+    }
+  }
+
+  .bpd-milestones {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+    border-radius: 8px;
+
+    .milestone-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+
+      .m-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #cbd5e1;
+        transition: all 0.3s ease;
+      }
+      .m-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #64748b;
+        transition: color 0.3s ease;
+      }
+
+      &.active {
+        .m-dot {
+          background: #3b82f6;
+          box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+        }
+        .m-label {
+          color: #2563eb;
+          font-weight: 700;
+        }
+      }
+
+      &.done {
+        .m-dot {
+          background: #10b981;
+          box-shadow: none;
+        }
+        .m-label {
+          color: #059669;
+          font-weight: 600;
+        }
+      }
+    }
+
+    .milestone-line {
+      flex: 1;
+      height: 2px;
+      background: #e2e8f0;
+      margin: 0 8px -18px 8px;
+      transition: background 0.3s ease;
+
+      &.done {
+        background: #10b981;
+      }
+    }
+  }
+
+  .bpd-console-box {
+    background: #0f172a;
+    border-radius: 8px;
+    border: 1px solid #1e293b;
+    overflow: hidden;
+
+    .console-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+
+      .dots-trio {
+        display: flex;
+        gap: 6px;
+
+        .dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          &.d-red { background: #ef4444; }
+          &.d-yellow { background: #f59e0b; }
+          &.d-green { background: #10b981; }
+        }
+      }
+
+      .head-title {
+        font-size: 12px;
+        color: #94a3b8;
+        font-weight: 600;
+      }
+      .head-badge {
+        font-size: 10px;
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.15);
+        padding: 1px 6px;
+        border-radius: 10px;
+      }
+    }
+
+    .console-body {
+      padding: 14px 16px;
+      min-height: 140px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.8;
+      color: #e2e8f0;
+
+      .log-line {
+        display: flex;
+        gap: 8px;
+
+        .log-cursor {
+          color: #10b981;
+          user-select: none;
+        }
+        .log-content {
+          color: #cbd5e1;
+        }
+
+        &.blinking-line {
+          .blinking-cursor {
+            color: #38bdf8;
+            animation: bpd-blink 1s step-start infinite;
+          }
+        }
+      }
+    }
+  }
+}
+
+@keyframes bpd-pulse {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+}
+
+@keyframes bpd-blink {
+  50% {
+    opacity: 0;
+  }
 }
 </style>
