@@ -492,6 +492,16 @@ AI 将自动基于该文档在几秒内无缝接续全部上下文！
     - `app/services/backtest/backtest_engine.py`：单标的与多标的组合回测内核原生引入 `trailing_stop_pct`（浮盈峰值回撤跟踪离场）与 `breakeven_trigger_pct`（浮盈达标后回踩成本线保本离场）；
     - `app/services/backtest/performance_metrics.py`：新增计算 `max_consecutive_losses`（最大连续亏损笔数）、`max_consecutive_wins`、`avg_win`、`avg_loss`、`max_single_loss`、`expectancy_per_trade`（单笔数学期望收益）；
     - `BacktestCenter/index.vue`：前台表单提供移动跟踪与保本止损参数调节，结果看板网格扩充至 8 大 KPI 卡片，新增“连续亏损风控警报”与“单笔期望收益卡片”，均赢/均亏明细直观可见。
+  - **P0 级 ATR 动态波动率标尺与五大量价生命周期状态机重构 (`StockResearch/index.vue`)**：
+    - **彻底铲除固定硬编码乘数**：彻底废弃旧有 `px * 0.96`、`px * 1.03`、`px * 1.08`、`sup * 0.97` 等固定百分比死价格算法，根除高波妖股容易被洗盘毛刺震荡出局、低波权重蓝筹试错空间过大的致命缺陷；
+    - **引入真实波动标尺 $ATR_{14}$ 自适应引擎**：优先提取 `TechnicalSnapshot.atr.atr14` 与日内振幅建立弹性度量衡，以标的真实波动幅度 $k \times ATR$ 动态适配缓冲垫与防守位；
+    - **落地短线五大量价生命周期状态机 (Market Regime State Machine)**：
+      1. `DOWNWARD_TREND` (破位阴跌防守禁区)：均线死叉下行或重度套牢压制时，**建仓点与加仓点直接输出 NULL**，UI 渲染 `--` 与 `⛔ 破位禁区·暂无安全买点`、`⛔ 严禁逆势加仓摊平`，坚决不硬塞买点，坚决杜绝误导散户抄底接飞刀；
+      2. `STRONG_MOMENTUM` (主升浪强势加速期)：多头主升加速、上方筹码真空时，**卖点升级为动态移动跟踪止盈 (Trailing Stop)**，以 $\max(\text{MA5}, px - 1.2 \times ATR)$ 为防守底线，不破 MA5 坚决持股待涨让利润奔跑，**彻底杜绝大牛股过早卖飞**；
+      3. `PULLBACK_SETUP` (良性缩量回踩区)：精确锚定核心筹码密集峰与 MA10 共振支撑点；
+      4. `RANGE_BOUND` (箱体震荡中枢)：仅在箱底给出低吸点，处于半空中明确提示“半空中观望·日内无买点”；
+      5. `EXTREME_OVERSOLD` (极度超跌衰竭区)：5日负乖离深超 -5% 时提供左侧超窄幅试仓点，严格执行单笔试错铁律。
+    - **卡片空安全 (Null-Safety) 与多模态视觉响应**：建仓/加仓卡片在禁区时置灰禁用，减仓卡片在主升浪时渲染为紫调“移动防守线”动态标识，散户试算器与模拟盘下单无缝兼容。
 
 ### 2. 跨设备数据同步运维与极速数据源指南 (Data Pipeline & Operations Guide for Antigravity)
 
