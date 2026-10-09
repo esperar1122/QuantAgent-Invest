@@ -212,7 +212,7 @@
               {{ tradeDecision.riskRewardRatio }} : 1
             </span>
             <span class="rr-sub">
-              {{ tradeDecision.buyPoint.price !== null ? `冒 1 份风险博 ${tradeDecision.riskRewardRatio} 份收益` : '下行破位通道·严禁盲目开仓' }}
+              {{ tradeDecision.rrSubtitle }}
             </span>
           </div>
           <div class="decision-btn-cluster">
@@ -1438,9 +1438,9 @@ const boardProfile = computed(() => {
 
 // ⚡ ATR 动态波动率自适应决策引擎与五大量价生命周期点位推演
 const tradeDecision = computed(() => {
-  if (isCurrentIndex.value) return null
+  if (isCurrentIndex.value || !currentStock.value.price || currentStock.value.price <= 0) return null
 
-  const px = currentStock.value.price || 10.0
+  const px = currentStock.value.price
   const chg = currentStock.value.change || 0.0
   const high = currentStock.value.high || px
   const low = currentStock.value.low || px
@@ -1469,17 +1469,23 @@ const tradeDecision = computed(() => {
   const trappedRatio = chips?.trapped_ratio ?? +(100.0 - profitRatio).toFixed(1)
   const conc70 = chips?.concentration_70 ?? 9.5
   
-  // 必须是位于现价附近的真支撑 (低于或贴近现价，不能把上方的老破位点当成当前支撑)
-  const validSupports = (chips?.support_levels || []).filter(s => s && s.price <= px * 1.012)
+  // 必须是位于现价附近的真支撑 (低于或贴近现价，按价格降序排列取离现价最近的第一道有效支撑峰)
+  const validSupports = (chips?.support_levels || [])
+    .filter(s => s && s.price <= px * 1.012)
+    .sort((a, b) => b.price - a.price)
   const sup = validSupports[0]
 
-  // 必须是位于现价附近的真阻力 (高于或贴近现价)
-  const validResistances = (chips?.resistance_levels || []).filter(r => r && r.price >= px * 0.988)
+  // 必须是位于现价附近的真阻力 (高于或贴近现价，按价格升序排列取离现价最近的第一道有效阻力峰)
+  const validResistances = (chips?.resistance_levels || [])
+    .filter(r => r && r.price >= px * 0.988)
+    .sort((a, b) => a.price - b.price)
   const res = validResistances[0]
 
   // 4. 判定短线量价五大生命周期状态机 (Market Regime State Machine)
-  // A. 极端超跌衰竭 (结合板块极限负乖离阈值 bp.oversoldBias 或 KDJ J < 5)
-  const isExtremeOversold = bias5 <= bp.oversoldBias || (kdjJ !== undefined && kdjJ !== null && kdjJ < 5) || (profitRatio <= 12.0 && chg > 0)
+  // A. 极端超跌衰竭 (结合板块极限负乖离阈值 bp.oversoldBias 或 KDJ J < 5；获利盘极低必须配合深度负乖离共振，严防微涨假阳诱多)
+  const isExtremeOversold = bias5 <= bp.oversoldBias || 
+    (kdjJ !== undefined && kdjJ !== null && kdjJ < 5) || 
+    (profitRatio <= 10.0 && bias5 <= (bp.oversoldBias * 0.75) && chg > 0)
 
   // B. 破位阴跌禁区 (MA5/MA10 死叉向下且处于均线下，或高位重度套牢破位且非超跌)
   const isDowntrendBroken = !isExtremeOversold && Boolean(
@@ -1869,6 +1875,17 @@ const tradeDecision = computed(() => {
     riskRewardRatio = +(upsideGain / downsideRisk).toFixed(2)
   }
 
+  let rrSubtitle = ''
+  if (regime === 'DOWNWARD_TREND') {
+    rrSubtitle = '下行破位通道·严禁盲目开仓'
+  } else if (!hasBuySignal) {
+    rrSubtitle = `半空中无买点·追高盈亏比不足 (${riskRewardRatio}:1) · 建议等待回踩挂单`
+  } else if (riskRewardRatio >= 2.0) {
+    rrSubtitle = `黄金盈亏比 · 冒 1 份风险博 ${riskRewardRatio} 份收益`
+  } else {
+    rrSubtitle = `常规盈亏比 · 冒 1 份风险博 ${riskRewardRatio} 份收益`
+  }
+
   return {
     regime,
     regimeLabel,
@@ -1882,6 +1899,7 @@ const tradeDecision = computed(() => {
     sellPoint,
     stopLossPoint,
     riskRewardRatio,
+    rrSubtitle,
     atrVal,
     atrPct
   }
@@ -1918,7 +1936,7 @@ function syncCalcPricesWithDecision() {
 }
 
 watch(
-  () => [currentStock.value.code, currentStock.value.price],
+  () => [currentStock.value.code, currentStock.value.price, tradeDecision.value?.signalTitle],
   () => {
     syncCalcPricesWithDecision()
   },
@@ -2964,12 +2982,15 @@ function openPositionSizer() {
 }
 
 function openPaperTradePreset(action: 'BUY' | 'SELL' = 'BUY') {
+  const p = action === 'BUY' ? calcEntryPx.value : (currentStock.value.price || 10.0)
+  const s = action === 'BUY' ? (calcShares.value > 0 ? calcShares.value : 100) : 100
+
   presetPaperOrder.value = {
     symbol: currentStock.value.code,
     name: currentStock.value.name,
-    price: currentStock.value.price,
+    price: p,
     action,
-    shares: 100
+    shares: s
   }
   paperModalVisible.value = true
 }
