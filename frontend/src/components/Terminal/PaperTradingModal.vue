@@ -185,7 +185,7 @@
             <el-form-item label="预估成交金额">
               <span class="est-amount font-mono tabular-nums">¥{{ formatMoney(estimatedAmount) }}</span>
               <span class="friction-note">
-                (已仿真 A股佣金万2.5最低5元起，卖出单边印花税万5，过户费万0.1)
+                (已仿真 券商佣金万0.876最低0.5元起(免5)，卖出印花税{{ isOrderETF ? '0%(ETF免征)' : '万5' }}，过户费万0.1)
               </span>
             </el-form-item>
 
@@ -372,6 +372,20 @@ const orderForm = ref({
 const estimatedAmount = computed(() => {
   const p = orderForm.value.price || 10
   return +(p * orderForm.value.shares).toFixed(2)
+})
+
+const isOrderETF = computed(() => {
+  const sym = (orderForm.value.symbol || '').toLowerCase().replace(/^(sh|sz|bj)/, '')
+  const name = (orderForm.value.name || '').toLowerCase()
+  return (
+    sym.startsWith('51') ||
+    sym.startsWith('56') ||
+    sym.startsWith('58') ||
+    sym.startsWith('50') ||
+    sym.startsWith('15') ||
+    sym.startsWith('16') ||
+    name.includes('etf')
+  )
 })
 
 function formatMoney(val: number | undefined) {

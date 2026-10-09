@@ -34,12 +34,14 @@
         <div v-else class="indicator-tags">
           <template v-if="isOfflineEmpty">
             <span class="indicator-badge ma5">MA5: --</span>
+            <span class="indicator-badge ma10">MA10: --</span>
             <span class="indicator-badge ma20">MA20: --</span>
             <span class="indicator-badge ma60">MA60: --</span>
             <span class="indicator-badge offline-pill">离线等待数据</span>
           </template>
           <template v-else>
             <span class="indicator-badge ma5">MA5: {{ (currentHoverItem ? currentHoverItem.ma5 : latestItem?.ma5 || 0).toFixed(2) }}</span>
+            <span class="indicator-badge ma10">MA10: {{ (currentHoverItem ? currentHoverItem.ma10 : latestItem?.ma10 || 0).toFixed(2) }}</span>
             <span class="indicator-badge ma20">MA20: {{ (currentHoverItem ? currentHoverItem.ma20 : latestItem?.ma20 || 0).toFixed(2) }}</span>
             <span class="indicator-badge ma60">MA60: {{ (currentHoverItem ? currentHoverItem.ma60 : latestItem?.ma60 || 0).toFixed(2) }}</span>
           </template>
@@ -272,6 +274,7 @@
           <!-- 均线折线 -->
           <g class="ma-lines">
             <path :d="ma5Path" fill="none" stroke="#D97706" stroke-width="1.4" stroke-linejoin="round" />
+            <path :d="ma10Path" fill="none" stroke="#EC4899" stroke-width="1.4" stroke-linejoin="round" />
             <path :d="ma20Path" fill="none" stroke="#175CD3" stroke-width="1.4" stroke-linejoin="round" />
             <path :d="ma60Path" fill="none" stroke="#7C3AED" stroke-width="1.4" stroke-linejoin="round" />
           </g>
@@ -494,10 +497,11 @@
           />
           <g v-for="(m, i) in macdPoints" :key="'macd-bar-' + i">
             <rect 
-              :x="m.x - (currentPeriod === 'timeline' ? 1.5 : candleWidth / 2)" 
+              v-if="m.barHeight > 0"
+              :x="m.barX" 
               :y="m.barY" 
-              :width="currentPeriod === 'timeline' ? 2 : candleWidth" 
-              :height="Math.max(m.barHeight, 1)" 
+              :width="m.barW" 
+              :height="m.barHeight" 
               :fill="m.val >= 0 ? '#D92D20' : '#039855'"
             />
           </g>
@@ -510,8 +514,38 @@
             fill="#475467" 
             font-weight="600"
           >
-            MACD(12,26,9) DIF: <tspan fill="#175CD3">{{ (currentHoverItem ? currentHoverItem.dif : latestItem?.dif || 0).toFixed(2) }}</tspan> DEA: <tspan fill="#D97706">{{ (currentHoverItem ? currentHoverItem.dea : latestItem?.dea || 0).toFixed(2) }}</tspan>
+            MACD(12,26,9) DIF: <tspan fill="#175CD3">{{ formatMacdNumber(activeDifVal) }}</tspan> DEA: <tspan fill="#D97706">{{ formatMacdNumber(activeDeaVal) }}</tspan> MACD: <tspan :fill="activeMacdVal >= 0 ? '#D92D20' : '#039855'">{{ formatMacdNumber(activeMacdVal) }}</tspan>
           </text>
+          <!-- MACD 动态刻度标尺 (对称显示) -->
+          <g class="subchart-macd-ticks">
+            <text 
+              :x="width - padding.right + 6" 
+              :y="subChartTop + 12" 
+              font-size="9" 
+              fill="#98A2B3" 
+              class="tabular-nums font-mono"
+            >
+              +{{ macdScaleDisplay }}
+            </text>
+            <text 
+              :x="width - padding.right + 6" 
+              :y="macdZeroY + 3" 
+              font-size="9" 
+              fill="#98A2B3" 
+              class="tabular-nums font-mono"
+            >
+              0.00
+            </text>
+            <text 
+              :x="width - padding.right + 6" 
+              :y="subChartTop + subChartHeight - 4" 
+              font-size="9" 
+              fill="#98A2B3" 
+              class="tabular-nums font-mono"
+            >
+              -{{ macdScaleDisplay }}
+            </text>
+          </g>
         </g>
 
         <!-- ================= 副图：RSI ================= -->
@@ -703,6 +737,7 @@ interface KlineItem {
   vol: number
   turnover: number
   ma5: number
+  ma10: number
   ma20: number
   ma60: number
   dif: number
@@ -722,6 +757,9 @@ interface TimelineItem {
   change: number
   is_up: boolean
   minuteIndex?: number
+  dif?: number
+  dea?: number
+  macd?: number
 }
 
 interface DrawnShape {
@@ -1000,22 +1038,24 @@ async function loadTimelineData() {
     const res = await (stocksApi as any).getTimeline(props.stockCode)
     const d = (res as any)?.data || res
     if (d && Array.isArray(d.items) && d.items.length > 0) {
+      const itemsList: TimelineItem[] = d.items.map((it: any, idx: number) => {
+        const tStr = String(it.time || '').slice(-5)
+        const minuteIdx = getTimelineMinuteIndex(tStr, idx)
+        return {
+          time: tStr,
+          price: Number(it.price || it.close || props.currentPrice || 10),
+          avg_price: Number(it.avg_price || it.price || props.currentPrice || 10),
+          volume: Number(it.volume || 1000),
+          pct_chg: Number(it.pct_chg || 0),
+          change: Number(it.change || 0),
+          is_up: Boolean(it.is_up ?? (it.price >= (it.avg_price || it.price))),
+          minuteIndex: minuteIdx
+        }
+      })
+      calculateTimelineIndicators(itemsList)
       timelineRaw.value = {
         prev_close: Number(d.prev_close || props.currentPrice || 10),
-        items: d.items.map((it: any, idx: number) => {
-          const tStr = String(it.time || '').slice(-5)
-          const minuteIdx = getTimelineMinuteIndex(tStr, idx)
-          return {
-            time: tStr,
-            price: Number(it.price || it.close || props.currentPrice || 10),
-            avg_price: Number(it.avg_price || it.price || props.currentPrice || 10),
-            volume: Number(it.volume || 1000),
-            pct_chg: Number(it.pct_chg || 0),
-            change: Number(it.change || 0),
-            is_up: Boolean(it.is_up ?? (it.price >= (it.avg_price || it.price))),
-            minuteIndex: minuteIdx
-          }
-        })
+        items: itemsList
       }
       isOfflineEmpty.value = false
       return
@@ -1032,6 +1072,24 @@ async function loadTimelineData() {
   }
 }
 
+function calculateTimelineIndicators(items: TimelineItem[]) {
+  if (items.length === 0) return
+  let ema12 = items[0].price
+  let ema26 = items[0].price
+  let dea = 0
+  for (let i = 0; i < items.length; i++) {
+    const p = items[i].price
+    ema12 = (ema12 * 11 + p * 2) / 13
+    ema26 = (ema26 * 25 + p * 2) / 27
+    const dif = ema12 - ema26
+    dea = (dea * 8 + dif * 2) / 10
+    const macd = (dif - dea) * 2
+    items[i].dif = +dif.toFixed(4)
+    items[i].dea = +dea.toFixed(4)
+    items[i].macd = +macd.toFixed(4)
+  }
+}
+
 // ================= K 线数据与指标 =================
 const rawData = ref<KlineItem[]>([])
 const loading = ref(false)
@@ -1041,21 +1099,39 @@ const visibleCount = ref(50)   // 屏幕内可见 bar 数量 (15 ~ 150)
 const startIndex = ref(0)       // 可见视口起始偏移量
 
 function calculateIndicators(data: KlineItem[]) {
+  if (data.length === 0) return
+
+  // 1. 均线 MA 计算 (MA5, MA10, MA20, MA60)
   for (let i = 0; i < data.length; i++) {
     const slice5 = data.slice(Math.max(0, i - 4), i + 1)
     data[i].ma5 = +(slice5.reduce((s, d) => s + d.close, 0) / slice5.length).toFixed(2)
+
+    const slice10 = data.slice(Math.max(0, i - 9), i + 1)
+    data[i].ma10 = +(slice10.reduce((s, d) => s + d.close, 0) / slice10.length).toFixed(2)
 
     const slice20 = data.slice(Math.max(0, i - 19), i + 1)
     data[i].ma20 = +(slice20.reduce((s, d) => s + d.close, 0) / slice20.length).toFixed(2)
 
     const slice60 = data.slice(Math.max(0, i - 59), i + 1)
     data[i].ma60 = +(slice60.reduce((s, d) => s + d.close, 0) / slice60.length).toFixed(2)
+  }
 
-    const dif = +((data[i].ma5 - data[i].ma20) * 0.8).toFixed(2)
-    const dea = +(dif * 0.75).toFixed(2)
-    data[i].dif = dif
-    data[i].dea = dea
-    data[i].macd = +((dif - dea) * 2).toFixed(2)
+  // 2. 真实标准 MACD(12, 26, 9) 指标计算 (EMA 递归递推)
+  let ema12 = data[0].close
+  let ema26 = data[0].close
+  let dea = 0
+
+  for (let i = 0; i < data.length; i++) {
+    const c = data[i].close
+    ema12 = (ema12 * 11 + c * 2) / 13
+    ema26 = (ema26 * 25 + c * 2) / 27
+    const dif = ema12 - ema26
+    dea = (dea * 8 + dif * 2) / 10
+    const macd = (dif - dea) * 2
+
+    data[i].dif = +dif.toFixed(4)
+    data[i].dea = +dea.toFixed(4)
+    data[i].macd = +macd.toFixed(4)
 
     data[i].rsi6 = +(50 + Math.sin(i * 0.5) * 25 + Math.random() * 6).toFixed(1)
     data[i].rsi12 = +(52 + Math.sin(i * 0.3) * 18).toFixed(1)
@@ -1087,6 +1163,7 @@ async function loadKlineData() {
           vol: v,
           turnover: Number(bar.turnover_rate || 1.5),
           ma5: 0,
+          ma10: 0,
           ma20: 0,
           ma60: 0,
           dif: 0,
@@ -1287,36 +1364,108 @@ const timelineVolPoints = computed(() => {
 
 // K 线均线折线
 const ma5Path = computed(() => generatePath(chartData.value.map((d, i) => [candlePoints.value[i]?.x || 0, getYByPrice(d.ma5)])))
+const ma10Path = computed(() => generatePath(chartData.value.map((d, i) => [candlePoints.value[i]?.x || 0, getYByPrice(d.ma10)])))
 const ma20Path = computed(() => generatePath(chartData.value.map((d, i) => [candlePoints.value[i]?.x || 0, getYByPrice(d.ma20)])))
 const ma60Path = computed(() => generatePath(chartData.value.map((d, i) => [candlePoints.value[i]?.x || 0, getYByPrice(d.ma60)])))
 
-// MACD 副图
+// MACD 副图 (自适应动态比例尺与对称零轴)
 const macdZeroY = computed(() => subChartTop + subChartHeight / 2)
+const availableHalfMacdHeight = computed(() => (subChartHeight / 2) - 6)
+
+// 视口动态绝对峰值自适应比例尺 (彻底根绝低价股/ETF贴地横线与高价股飞出屏幕)
+const macdScaleLimit = computed(() => {
+  let maxAbs = 0.001
+  if (currentPeriod.value === 'timeline') {
+    for (const it of timelineItems.value) {
+      if (it.dif !== undefined) {
+        maxAbs = Math.max(maxAbs, Math.abs(it.dif), Math.abs(it.dea || 0), Math.abs(it.macd || 0))
+      }
+    }
+  } else {
+    for (const d of chartData.value) {
+      maxAbs = Math.max(maxAbs, Math.abs(d.dif || 0), Math.abs(d.dea || 0), Math.abs(d.macd || 0))
+    }
+  }
+  if (maxAbs < 0.001) maxAbs = 0.01
+  return maxAbs * 1.15
+})
+
+const macdScaleDisplay = computed(() => {
+  const v = macdScaleLimit.value
+  if (v < 0.1) return v.toFixed(3)
+  return v.toFixed(2)
+})
+
+const activeDifVal = computed(() => {
+  if (currentPeriod.value === 'timeline') {
+    return currentHoverTimelineItem.value?.dif ?? latestTimelineItem.value?.dif ?? 0
+  }
+  return currentHoverItem.value ? currentHoverItem.value.dif : (latestItem.value?.dif ?? 0)
+})
+
+const activeDeaVal = computed(() => {
+  if (currentPeriod.value === 'timeline') {
+    return currentHoverTimelineItem.value?.dea ?? latestTimelineItem.value?.dea ?? 0
+  }
+  return currentHoverItem.value ? currentHoverItem.value.dea : (latestItem.value?.dea ?? 0)
+})
+
+const activeMacdVal = computed(() => {
+  if (currentPeriod.value === 'timeline') {
+    return currentHoverTimelineItem.value?.macd ?? latestTimelineItem.value?.macd ?? 0
+  }
+  return currentHoverItem.value ? currentHoverItem.value.macd : (latestItem.value?.macd ?? 0)
+})
+
+function formatMacdNumber(val: number): string {
+  if (val === undefined || isNaN(val)) return '0.00'
+  const abs = Math.abs(val)
+  if (abs === 0) return '0.00'
+  if (abs < 0.1) return val.toFixed(3)
+  return val.toFixed(2)
+}
+
 const macdPoints = computed(() => {
-  const dataset = currentPeriod.value === 'timeline' ? timelinePoints.value : candlePoints.value
-  return dataset.map((pt, i) => {
+  const isTimeline = currentPeriod.value === 'timeline'
+  const dataset = isTimeline ? timelinePoints.value : candlePoints.value
+  const usableWidth = width.value - padding.left - padding.right
+  const tlBarW = Math.max(1.2, (usableWidth / TOTAL_TIMELINE_MINUTES) * 0.8)
+  const barW = isTimeline ? tlBarW : Math.max(2, candleWidth.value * 0.7)
+
+  return dataset.map((pt) => {
     const x = pt.x
-    const val = (pt as any).data?.macd ?? (Math.sin(i * 0.15) * 0.6)
-    const barScale = 20
-    const h = Math.min(subChartHeight / 2 - 2, Math.abs(val) * barScale)
-    const barY = val >= 0 ? macdZeroY.value - h : macdZeroY.value
-    return { x, val, barY, barHeight: h }
+    const rawVal = (pt as any).data?.macd ?? 0
+    const val = Number(rawVal) || 0
+    const ratio = Math.min(1, Math.abs(val) / macdScaleLimit.value)
+    const h = ratio * availableHalfMacdHeight.value
+    const barHeight = val !== 0 ? Math.max(1, h) : 0
+    const barY = val >= 0 ? macdZeroY.value - barHeight : macdZeroY.value
+    return {
+      x,
+      val,
+      barX: x - barW / 2,
+      barW,
+      barY,
+      barHeight
+    }
   })
 })
 
 const macdDifPath = computed(() => {
   const dataset = currentPeriod.value === 'timeline' ? timelinePoints.value : candlePoints.value
-  return generatePath(dataset.map((pt, i) => {
-    const dif = (pt as any).data?.dif ?? (Math.sin(i * 0.15) * 0.4)
-    return [pt.x, macdZeroY.value - dif * 18]
+  return generatePath(dataset.map(pt => {
+    const dif = Number((pt as any).data?.dif) || 0
+    const y = macdZeroY.value - (dif / macdScaleLimit.value) * availableHalfMacdHeight.value
+    return [pt.x, y]
   }))
 })
 
 const macdDeaPath = computed(() => {
   const dataset = currentPeriod.value === 'timeline' ? timelinePoints.value : candlePoints.value
-  return generatePath(dataset.map((pt, i) => {
-    const dea = (pt as any).data?.dea ?? (Math.sin(i * 0.15 - 0.3) * 0.3)
-    return [pt.x, macdZeroY.value - dea * 18]
+  return generatePath(dataset.map(pt => {
+    const dea = Number((pt as any).data?.dea) || 0
+    const y = macdZeroY.value - (dea / macdScaleLimit.value) * availableHalfMacdHeight.value
+    return [pt.x, y]
   }))
 })
 
@@ -1749,6 +1898,7 @@ function handleMouseLeave() {
     font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
 
     &.ma5 { color: #d97706; }
+    &.ma10 { color: #ec4899; }
     &.ma20 { color: #175cd3; }
     &.ma60 { color: #7c3aed; }
     &.timeline-prev { color: #667085; }

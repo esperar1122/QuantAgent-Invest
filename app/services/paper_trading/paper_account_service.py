@@ -16,6 +16,35 @@ logger = logging.getLogger(__name__)
 class PaperAccountService:
     """虚拟仿真账户服务（支持五档盘口撮合、排队挂单与流动性风控）"""
 
+    # 券商佣金与交易摩擦费率（用户专享: 万0.876，免5最低0.5元起收；ETF免印花税）
+    DEFAULT_COMMISSION_RATE = 0.0000876  # 佣金万0.876
+    DEFAULT_MIN_COMMISSION = 0.5         # 免5，最低0.5元起收
+    DEFAULT_STAMP_DUTY_RATE = 0.0005     # 普通股票卖出印花税万5 (ETF免征)
+    DEFAULT_TRANSFER_FEE_RATE = 0.00001  # 过户费万0.1
+
+    @staticmethod
+    def is_etf(symbol: str) -> bool:
+        s = (symbol or "").lower().replace("sh", "").replace("sz", "").replace("bj", "")
+        return (
+            s.startswith("51") or
+            s.startswith("56") or
+            s.startswith("58") or
+            s.startswith("50") or
+            s.startswith("15") or
+            s.startswith("16")
+        )
+
+    @classmethod
+    def calc_fees(cls, symbol: str, gross_amount: float, action: str) -> tuple[float, float, float]:
+        """计算佣金、印花税、过户费 (返回 commission, stamp_duty, transfer_fee)"""
+        commission = max(cls.DEFAULT_MIN_COMMISSION, round(gross_amount * cls.DEFAULT_COMMISSION_RATE, 2))
+        transfer_fee = round(gross_amount * cls.DEFAULT_TRANSFER_FEE_RATE, 2)
+        if action == "SELL":
+            stamp_duty = 0.0 if cls.is_etf(symbol) else round(gross_amount * cls.DEFAULT_STAMP_DUTY_RATE, 2)
+        else:
+            stamp_duty = 0.0
+        return commission, stamp_duty, transfer_fee
+
     def __init__(self):
         # 内存缓存（配合 MongoDB 持久化）
         self._memory_accounts: Dict[str, Dict[str, Any]] = {}
@@ -284,8 +313,7 @@ class PaperAccountService:
         # 4.1 限价买单价格低于卖一价 -> 挂单排队
         if is_limit_order and action == "BUY" and price is not None and price < ask1_px:
             gross_amount = round(shares * price, 2)
-            commission = max(5.0, round(gross_amount * 0.00025, 2))
-            transfer_fee = round(gross_amount * 0.00001, 2)
+            commission, _, transfer_fee = self.calc_fees(symbol, gross_amount, "BUY")
             total_needed = gross_amount + commission + transfer_fee
 
             if total_needed > acc["cash"]:
@@ -362,8 +390,7 @@ class PaperAccountService:
 
         # 6. 结算买入/卖出资金与持仓
         if action == "BUY":
-            commission = max(5.0, round(gross_amount * 0.00025, 2))
-            transfer_fee = round(gross_amount * 0.00001, 2)
+            commission, _, transfer_fee = self.calc_fees(symbol, gross_amount, "BUY")
             total_cost = gross_amount + commission + transfer_fee
 
             if total_cost > acc["cash"]:
@@ -423,9 +450,7 @@ class PaperAccountService:
 
         elif action == "SELL":
             pos = acc["positions"][symbol]
-            commission = max(5.0, round(gross_amount * 0.00025, 2))
-            stamp_duty = round(gross_amount * 0.0005, 2)  # 印花税万5
-            transfer_fee = round(gross_amount * 0.00001, 2)
+            commission, stamp_duty, transfer_fee = self.calc_fees(symbol, gross_amount, "SELL")
             total_fee = commission + stamp_duty + transfer_fee
 
             net_proceeds = round(gross_amount - total_fee, 2)
@@ -554,7 +579,7 @@ class PaperAccountService:
                 shs = o["shares"]
                 gross = round(shs * exec_px, 2)
                 frozen_amt = o.get("frozen_amount", gross)
-                fee = o.get("fee", 5.0)
+                fee = o.get("fee", 0.5)
 
                 # 解冻并结算
                 acc["frozen_cash"] = round(max(0.0, acc.get("frozen_cash", 0.0) - frozen_amt), 2)
@@ -595,9 +620,7 @@ class PaperAccountService:
                 exec_px = o["price"]
                 shs = o["shares"]
                 gross = round(shs * exec_px, 2)
-                commission = max(5.0, round(gross * 0.00025, 2))
-                stamp_duty = round(gross * 0.0005, 2)
-                transfer_fee = round(gross * 0.00001, 2)
+                commission, stamp_duty, transfer_fee = self.calc_fees(sym, gross, "SELL")
                 total_fee = commission + stamp_duty + transfer_fee
                 net_proceeds = round(gross - total_fee, 2)
 

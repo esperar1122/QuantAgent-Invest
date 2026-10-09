@@ -207,10 +207,24 @@
 
         <div class="banner-right">
           <div class="rr-box">
-            <span class="rr-label">推演盈亏比 (盈利:风险)</span>
-            <span class="rr-val tabular-nums" :class="{ 'rr-great': tradeDecision.riskRewardRatio >= 2.0 }">
-              {{ tradeDecision.riskRewardRatio }} : 1
-            </span>
+            <span class="rr-label">扣费真实盈亏比 (实时 vs 挂单)</span>
+            <div class="rr-dual-display">
+              <div class="rr-track-item">
+                <span class="rr-track-title">实时现价:</span>
+                <span class="rr-val tabular-nums" :class="tradeDecision.realtimeRR >= 2.0 ? 'rr-great' : (tradeDecision.realtimeRR >= 1.25 ? 'rr-fair' : 'rr-poor')">
+                  {{ tradeDecision.realtimeRR }} : 1
+                </span>
+              </div>
+              <template v-if="tradeDecision.hasPlannedEntry">
+                <span class="rr-track-divider">|</span>
+                <div class="rr-track-item" :title="`挂单在 ¥${tradeDecision.buyPoint.price} 的计划挂单扣费盈亏比`">
+                  <span class="rr-track-title plan">挂单计划:</span>
+                  <span class="rr-val-plan tabular-nums">
+                    {{ tradeDecision.plannedRR }} : 1
+                  </span>
+                </div>
+              </template>
+            </div>
             <span class="rr-sub">
               {{ tradeDecision.rrSubtitle }}
             </span>
@@ -320,6 +334,9 @@
               <span class="dist-val trailing-tag" v-if="tradeDecision.sellPoint.isTrailing && tradeDecision.sellPoint.trailingStopPrice">
                 防守线 ¥{{ tradeDecision.sellPoint.trailingStopPrice.toFixed(isCurrentETF ? 3 : 2) }}
               </span>
+              <span class="dist-val extended-tag" v-if="tradeDecision.sellPoint.extendedPrice" :title="`两层次止盈·扩展博弈目标位 ¥${tradeDecision.sellPoint.extendedPrice}`">
+                🎯 目标二: ¥{{ tradeDecision.sellPoint.extendedPrice.toFixed(isCurrentETF ? 3 : 2) }} (+{{ tradeDecision.sellPoint.extendedDistancePct }}%)
+              </span>
             </template>
             <template v-else>
               <span class="price-val null-price">--</span>
@@ -363,18 +380,18 @@
           <div class="veto-items-box">
             <div class="box-title">
               <span>🚦 小资金交易一票否决审查清单</span>
-              <span class="box-subtitle">（任一红灯即全票否决）</span>
+              <span class="box-subtitle">（动能对冲·红灯否决·紫灯豁免）</span>
             </div>
             <div class="veto-items-list">
               <div
                 v-for="item in vetoItems"
                 :key="item.id"
                 class="veto-item-row"
-                :class="item.vetoed ? 'is-red' : 'is-green'"
+                :class="item.vetoed ? 'is-red' : (item.isExempted ? 'is-purple' : 'is-green')"
               >
                 <div class="vi-status-badge">
                   <span class="vi-dot"></span>
-                  <span class="vi-status-text">{{ item.vetoed ? '一票否决' : '合规通过' }}</span>
+                  <span class="vi-status-text">{{ item.statusText || (item.vetoed ? '一票否决' : '合规通过') }}</span>
                 </div>
                 <div class="vi-content">
                   <div class="vi-label">{{ item.label }}</div>
@@ -404,8 +421,30 @@
                 <span class="pm-v color-down font-bold">{{ tradeDisciplineLine }}</span>
               </div>
               <div class="pm-row">
-                <span class="pm-k">单笔最大亏损预算:</span>
-                <span class="pm-v font-mono tabular-nums">不超过本金 {{ retailCalc.maxRiskPct }}% (¥{{ maxRiskDollars.toFixed(0) }})</span>
+                <span class="pm-k">单笔最大风险预算:</span>
+                <span class="pm-v font-mono tabular-nums">严格锁定账户总本金 {{ retailCalc.maxRiskPct }}% (按动态现金反推仓位)</span>
+              </div>
+              <div
+                class="pm-row pm-advice-row"
+                :class="entryAdvice.shouldEnter && entryAdvice.isWorth ? 'is-recommended' : (hasAnyVeto || !entryAdvice.isWorth ? 'is-rejected' : 'is-cautious')"
+              >
+                <div class="pm-advice-top">
+                  <span class="pm-k font-bold">🎯 算法建仓决策:</span>
+                  <div class="pm-advice-badges">
+                    <div class="advice-chip" :class="'chip-' + entryAdvice.actionTagType">
+                      <span class="chip-label">开仓指令:</span>
+                      <span class="chip-val">{{ entryAdvice.actionText }}</span>
+                    </div>
+                    <div class="advice-chip" :class="'chip-' + entryAdvice.worthTagType">
+                      <span class="chip-label">博弈价值:</span>
+                      <span class="chip-val">{{ entryAdvice.worthText }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="pm-advice-detail">
+                  <span class="detail-label">算法逻辑:</span>
+                  <span class="detail-text">{{ entryAdvice.detail }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -438,8 +477,8 @@
         <div class="calc-body-grid">
           <!-- 左侧：参数输入调节 -->
           <div class="calc-inputs-section">
-            <div class="calc-sub-title">1. 本金与风险容忍度输入</div>
-            <div class="inputs-row">
+            <div class="calc-sub-title">1. 本金与风控天花板设置</div>
+            <div class="inputs-row inputs-three">
               <div class="input-item">
                 <span class="input-lbl">账户总资金 (元)</span>
                 <el-input-number
@@ -463,10 +502,33 @@
                   class="full-width"
                 />
               </div>
+              <div class="input-item">
+                <span class="input-lbl">单标的仓位硬顶 (%)</span>
+                <el-input-number
+                  v-model="retailCalc.maxPositionCapPct"
+                  :min="10"
+                  :max="80"
+                  :step="5"
+                  :precision="0"
+                  size="small"
+                  class="full-width"
+                  title="为防止单只高Beta标的遇黑天鹅导致灾难性亏损，系统强制设定单标的最高持仓上限"
+                />
+              </div>
             </div>
 
-            <div class="calc-sub-title" style="margin-top: 10px;">2. 交易点位预设 (可微调)</div>
-            <div class="inputs-row inputs-three">
+            <div class="calc-sub-title-row" style="margin-top: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+              <span class="calc-sub-title">2. 开仓点位与基准模式</span>
+              <el-radio-group v-model="calcEntryMode" size="small" @change="onEntryModeChange">
+                <el-radio-button label="realtime">
+                  ⚡ 实时市价追入 (¥{{ (currentStock.price || 10).toFixed(isCurrentETF ? 3 : 2) }})
+                </el-radio-button>
+                <el-radio-button label="planned" :disabled="!tradeDecision?.buyPoint?.price">
+                  🎯 挂单计划低吸 (¥{{ (tradeDecision?.buyPoint?.price || currentStock.price || 10).toFixed(isCurrentETF ? 3 : 2) }})
+                </el-radio-button>
+              </el-radio-group>
+            </div>
+            <div class="inputs-row inputs-three" style="margin-top: 6px;">
               <div class="input-item">
                 <span class="input-lbl">计划买入价 (元)</span>
                 <el-input-number
@@ -512,18 +574,25 @@
                   <span class="ck-val font-mono tabular-nums text-primary">{{ calcShares }}</span>
                   <span class="ck-unit">股 ({{ calcLots }}手)</span>
                 </div>
-                <span class="ck-sub">占用市值 ¥{{ calcPositionValue.toLocaleString() }} (仓位 {{ calcPositionRatio }}%)</span>
+                <span class="ck-sub">
+                  占用市值 ¥{{ calcPositionValue.toLocaleString() }} (仓位 {{ calcPositionRatio }}% · 硬顶 {{ retailCalc.maxPositionCapPct }}%)
+                </span>
+                <span class="ck-split-note" v-if="calcLots > 0" style="display: block; font-size: 10.5px; color: #0284c7; margin-top: 3px; font-weight: 600;">
+                  ⚡ 分批建议: 首笔底仓 20% ({{ Math.floor(calcFirstStageShares/100) }}手) · 突破再加仓
+                </span>
               </div>
 
               <div class="calc-kpi-item" :class="calcRealRR >= 2.0 ? 'rr-good' : (calcRealRR >= 1.5 ? 'rr-medium' : 'rr-bad')">
-                <span class="ck-lbl">扣费真实净盈亏比 (R:R)</span>
+                <span class="ck-lbl">
+                  扣费真实净盈亏比 ({{ calcEntryMode === 'realtime' ? '实时市价' : '挂单计划' }})
+                </span>
                 <div class="ck-val-row">
                   <span class="ck-val font-mono tabular-nums">{{ calcRealRR }}:1</span>
                   <el-tag size="small" :type="calcRealRR >= 2.0 ? 'success' : (calcRealRR >= 1.5 ? 'warning' : 'danger')" effect="dark">
                     {{ calcRealRR >= 2.5 ? '极佳' : (calcRealRR >= 2.0 ? '优良' : (calcRealRR >= 1.5 ? '及格' : '不划算')) }}
                   </el-tag>
                 </div>
-                <span class="ck-sub">含万2.5佣金+5元起+0.05%印花税</span>
+                <span class="ck-sub">含万{{ retailCalc.commissionRateWan }}佣金+{{ retailCalc.minCommission }}元起(免5){{ isCurrentETF ? '+ETF免印花税' : '+0.05%印花税' }}</span>
               </div>
 
               <div class="calc-kpi-item loss-kpi">
@@ -1464,6 +1533,8 @@ const tradeDecision = computed(() => {
   const bias10 = (ma10 && ma10 > 0) ? +(((px - ma10) / ma10) * 100).toFixed(2) : 0.0
   const kdjJ = ind?.kdj?.j
 
+  const turnover = currentStock.value.turnover || 0.0
+
   // 3. 筹码物理结构 (真实有效支撑与阻力)
   const profitRatio = chips?.profit_ratio ?? (chg >= 0 ? 65.0 : 35.0)
   const trappedRatio = chips?.trapped_ratio ?? +(100.0 - profitRatio).toFixed(1)
@@ -1487,18 +1558,25 @@ const tradeDecision = computed(() => {
     (kdjJ !== undefined && kdjJ !== null && kdjJ < 5) || 
     (profitRatio <= 10.0 && bias5 <= (bp.oversoldBias * 0.75) && chg > 0)
 
-  // B. 破位阴跌禁区 (MA5/MA10 死叉向下且处于均线下，或高位重度套牢破位且非超跌)
-  const isDowntrendBroken = !isExtremeOversold && Boolean(
+  // 爆发放量 / 强动能吞噬判定 (科技短线大阳线突破，即便套牢盘高也属于启动而非阴跌)
+  const isExplosiveAbsorption = (turnover >= 5.0 || Number(currentStock.value.amount || 0) > 1000) && chg >= 2.0 && px >= (ma5 || px * 0.99)
+
+  // B. 破位阴跌禁区 (MA5/MA10 死叉向下且处于均线下，或高位重度套牢破位且非超跌，且无放量动能吞噬)
+  const isDowntrendBroken = !isExtremeOversold && !isExplosiveAbsorption && Boolean(
     (ma10 && px < ma10 && ma5 && ma5 <= ma10) ||
-    (trappedRatio >= 68.0 && (!ma5 || px < ma5)) ||
+    (trappedRatio >= 68.0 && (!ma5 || px < ma5) && turnover < 4.0) ||
     (ind?.ma?.arrangement === 'bearish' && (!ma20 || px < ma20))
   )
 
-  // C. 主升浪动量加速区 (站上 MA5/MA10 多头排列、获利盘高且筹码集中、突破阻力或真空加速)
+  // C. 主升浪动量加速区 (站上 MA5/MA10 多头排列、获利盘高且筹码集中、或者爆量换手暴力吞噬解放前高)
   const isStrongMomentum = !isDowntrendBroken && Boolean(
-    px >= (ma5 || px) &&
-    (ma10 ? (ma5 && ma5 >= ma10 && px >= ma10) : true) &&
-    ((profitRatio >= 70.0 && conc70 <= 14.0) || (trappedRatio <= 25.0 && chg >= 1.0)) &&
+    px >= (ma5 || px * 0.99) &&
+    (ma10 ? px >= ma10 * 0.995 : true) &&
+    (
+      ((profitRatio >= 70.0 && conc70 <= 14.0) || (trappedRatio <= 25.0 && chg >= 1.0)) ||
+      // 🔥 彻底颠覆：科技短线爆量吃套牢，放量换手分歧转一致的主升启动！
+      (turnover >= 5.5 && chg >= 2.0)
+    ) &&
     (chg >= 0.5 || (res ? px >= res.price * 0.99 : true))
   )
 
@@ -1515,7 +1593,6 @@ const tradeDecision = computed(() => {
   let regimeLabel = '箱体震荡中枢'
 
   // 判断是否属于低波大盘蓝筹/高股息标的 (如银行、公用事业、ETF)
-  const turnover = currentStock.value.turnover || 0.0
   const isLowVolStock = atrPct <= 2.0 || (turnover > 0 && turnover < 0.6) || isCurrentETF.value
 
   if (isExtremeOversold) {
@@ -1555,6 +1632,8 @@ const tradeDecision = computed(() => {
     reason: string
     isTrailing: boolean
     targetPrice: number
+    extendedPrice?: number
+    extendedDistancePct?: number
     trailingStopPrice?: number
     phase?: 1 | 2
     activationPrice?: number
@@ -1601,13 +1680,16 @@ const tradeDecision = computed(() => {
 
     const bounceTarget = (ma5 && ma5 > px) ? ma5 : (ma10 && ma10 > px ? ma10 : +(px + 0.8 * atrVal).toFixed(prec))
     const bouncePx = +(Math.min(px + 1.2 * atrVal, bounceTarget)).toFixed(prec)
+    const extDownPx = +(Math.max(bouncePx + 0.8 * atrVal, ma10 || bouncePx + 1.0 * atrVal)).toFixed(prec)
     sellPoint = {
       price: bouncePx,
       distancePct: +(((bouncePx - px) / px) * 100).toFixed(2),
       label: '反抽短期均线减仓点',
-      reason: `破位通道中的脉冲反抽属于弱势解套波。若盘中反抽触及短期均线压制位 (¥${bouncePx.toFixed(prec)})，持仓者建议果断借机减仓避险。`,
+      reason: `【目标一·反抽减仓 ¥${bouncePx.toFixed(prec)}】破位通道脉冲反抽属于弱势解套波，触及短期均线建议果断借机减半避险；【目标二·极限反抽 ¥${extDownPx.toFixed(prec)}】次级均线压力位。`,
       isTrailing: false,
-      targetPrice: bouncePx
+      targetPrice: bouncePx,
+      extendedPrice: extDownPx,
+      extendedDistancePct: +(((extDownPx - px) / px) * 100).toFixed(2)
     }
 
     const stopPx = +(px - Math.max(0.01, bp.stopLossAtrK * atrVal)).toFixed(prec)
@@ -1673,17 +1755,18 @@ const tradeDecision = computed(() => {
     // 波段预期上行目标价：基于真实有效 ATR 波动推演，低波蓝筹目标适度致密，高弹性标的充分舒展
     const targetAtrMultiple = isLowVolStock ? (isPhase2 ? 1.8 : 1.5) : (isPhase2 ? 2.3 : 1.8)
     const projectedTargetPx = +(px + targetAtrMultiple * atrVal).toFixed(prec)
+    const extTargetPx = +(projectedTargetPx + (isLowVolStock ? 1.0 : 1.6) * atrVal).toFixed(prec)
 
     if (isPhase2) {
       // 阶段 2：已脱离成本区，加载紧身移动止盈线，随新高逐日爬升
       trailingStopPx = +(Math.max(ma5 ? ma5 * 0.995 : px - bp.trailingAtrK * atrVal, px - bp.trailingAtrK * atrVal)).toFixed(prec)
       sellLabel = `波段目标止盈 (阶段2·紧身锁利)`
-      sellReason = `已确认脱离成本区，进入【阶段2·紧身移动跟踪止盈】。波段预期目标位看至 ¥${projectedTargetPx.toFixed(prec)}；底仓以动态移动止盈线 (¥${trailingStopPx.toFixed(prec)}) 为防守基准，盘中不破 MA5 坚决持股待涨让利润充分奔跑，彻底杜绝主升浪过早卖飞！`
+      sellReason = `已确认脱离成本区，进入【阶段2·紧身移动跟踪止盈】。【目标一·波段锁定 ¥${projectedTargetPx.toFixed(prec)}】；【目标二·扩展主升 ¥${extTargetPx.toFixed(prec)}】让利润充分奔跑；底仓以动态移动止盈线 (¥${trailingStopPx.toFixed(prec)}) 为防守基准。`
     } else {
       // 阶段 1：建仓/蓄势初期，防范早盘微小毛刺假摔，执行初始宽防守
       trailingStopPx = +(Math.max(ma5 ? ma5 * 0.985 : px - bp.initialStopK * atrVal, px - bp.initialStopK * atrVal)).toFixed(prec)
       sellLabel = `波段目标止盈 (阶段1·防洗盘)`
-      sellReason = `处于多头介入/蓄势初期，防范开盘微小毛刺假摔。维持 ${bp.initialStopK}×ATR 弹性防洗盘底线 (¥${trailingStopPx.toFixed(prec)})，波段预期目标位看至 ¥${projectedTargetPx.toFixed(prec)}；待浮盈突破 ¥${activationPrice.toFixed(prec)} (+${(bp.profitTriggerK * atrPct).toFixed(1)}%) 确认脱离成本区后，系统将自动升级为紧身移动止盈。`
+      sellReason = `处于多头蓄势初期。【目标一·基准锁定 ¥${projectedTargetPx.toFixed(prec)}】；【目标二·扩展主升 ¥${extTargetPx.toFixed(prec)}】；维持 ${bp.initialStopK}×ATR 弹性防洗盘底线 (¥${trailingStopPx.toFixed(prec)})，浮盈脱离成本区后将自动升级为紧身移动止盈。`
     }
 
     sellPoint = {
@@ -1693,6 +1776,8 @@ const tradeDecision = computed(() => {
       reason: sellReason,
       isTrailing: true,
       targetPrice: projectedTargetPx,
+      extendedPrice: extTargetPx,
+      extendedDistancePct: +(((extTargetPx - px) / px) * 100).toFixed(2),
       trailingStopPrice: trailingStopPx,
       phase,
       activationPrice
@@ -1738,13 +1823,16 @@ const tradeDecision = computed(() => {
 
     const pullTarget = (res && res.price > px) ? res.price : +(px + 1.8 * atrVal).toFixed(prec)
     const sellPx = +pullTarget.toFixed(prec)
+    const extPullPx = +(Math.max(sellPx + 1.2 * atrVal, res && res.price > sellPx ? res.price : sellPx + 1.5 * atrVal)).toFixed(prec)
     sellPoint = {
       price: sellPx,
       distancePct: +(((sellPx - px) / px) * 100).toFixed(2),
       label: '上方阻力密集区减仓点',
-      reason: `逼近上方首要密集筹码阻力区 (¥${sellPx.toFixed(prec)})，此处可能面临保本解套抛压，建议逢冲高分批减仓兑现，落袋为安。`,
+      reason: `【目标一·首道阻力减仓 ¥${sellPx.toFixed(prec)}】逼近首要筹码阻力区，冲高先部分减仓落袋；【目标二·突破扩展 ¥${extPullPx.toFixed(prec)}】若放量冲破第一阻力，剩余筹码博弈主升浪扩展位。`,
       isTrailing: false,
-      targetPrice: sellPx
+      targetPrice: sellPx,
+      extendedPrice: extPullPx,
+      extendedDistancePct: +(((extPullPx - px) / px) * 100).toFixed(2)
     }
 
     const stopPx = +(supAnchor - bp.stopLossAtrK * atrVal).toFixed(prec)
@@ -1782,13 +1870,16 @@ const tradeDecision = computed(() => {
     }
 
     const sellPx = +(ma5 || px + 1.0 * atrVal).toFixed(prec)
+    const extOversoldPx = +(Math.max(sellPx + 1.2 * atrVal, ma10 || sellPx + 1.5 * atrVal)).toFixed(prec)
     sellPoint = {
       price: sellPx,
       distancePct: +(((sellPx - px) / px) * 100).toFixed(2),
       label: 'MA5 均线压制减仓点',
-      reason: `超跌反抽第一道强压制在 MA5 均线 (¥${sellPx.toFixed(prec)})。小资金抢反弹讲求快进快出，触及短期阻力位必须坚决逢高止盈兑现。`,
+      reason: `【目标一·保底减仓 ¥${sellPx.toFixed(prec)}】超跌反抽第一阻力在 MA5 均线，小资金快进快出触及必须先减半锁定利润；【目标二·扩展博弈 ¥${extOversoldPx.toFixed(prec)}】剩余半仓博弈 MA10/深跌反弹 0.382 黄金扩展位！`,
       isTrailing: false,
-      targetPrice: sellPx
+      targetPrice: sellPx,
+      extendedPrice: extOversoldPx,
+      extendedDistancePct: +(((extOversoldPx - px) / px) * 100).toFixed(2)
     }
 
     const stopPx = +(Math.min(px, low || px) - 0.4 * atrVal).toFixed(prec)
@@ -1837,13 +1928,16 @@ const tradeDecision = computed(() => {
     }
 
     const sellPx = +boxHigh.toFixed(prec)
+    const extBoxPx = +(boxHigh + 1.0 * atrVal).toFixed(prec)
     sellPoint = {
       price: sellPx,
       distancePct: +(((sellPx - px) / px) * 100).toFixed(2),
       label: '箱体上轨止盈减仓点',
-      reason: `触及震荡箱体上轨阻力区 (¥${sellPx.toFixed(prec)})，上沿抛压沉重，小资金恪守高抛纪律，逢高分批落袋为安。`,
+      reason: `【目标一·箱顶高抛 ¥${sellPx.toFixed(prec)}】触及震荡箱体上轨阻力区，先部分高抛落袋为安；【目标二·真突破扩展 ¥${extBoxPx.toFixed(prec)}】若放量打穿箱顶阻力，博弈箱体向上突破浪！`,
       isTrailing: false,
-      targetPrice: sellPx
+      targetPrice: sellPx,
+      extendedPrice: extBoxPx,
+      extendedDistancePct: +(((extBoxPx - px) / px) * 100).toFixed(2)
     }
 
     const stopPx = +(boxLow - 0.5 * atrVal).toFixed(prec)
@@ -1856,34 +1950,63 @@ const tradeDecision = computed(() => {
   }
 
   // ---------------------------------------------------------------------------
-  // 6. 统一科学盈亏比推演 (Unified Real Risk-Reward Ratio)
-  // 入场参考基准：若今天有可执行买点，按买点价格作为基准成本；否则按当前市价 px
-  // 预期上涨空间：目标价 targetPrice - 入场基准
-  // 承担下行风险：入场基准 - 止损价 stopPrice
+  // 6. 统一全流程扣费真实盈亏比推演 (Unified Net Risk-Reward Engine)
+  // 统一扣除：用户券商佣金万0.876、最低0.5元起收(免5)、ETF免印花税(个股0.05%)
   // ---------------------------------------------------------------------------
-  const entryBaseline = (hasBuySignal && buyPoint.price !== null) ? buyPoint.price : px
-  const targetPx = (sellPoint.targetPrice !== undefined && sellPoint.targetPrice > 0)
+  function calcFrictionNetRR(entryVal: number, targetVal: number, stopVal: number): number {
+    if (entryVal <= 0 || stopVal >= entryVal || targetVal <= entryVal) return 0.5
+    // 以小资金标准测试仓位 (1000股) 进行真实扣费测算
+    const testShares = 1000
+    const bVal = testShares * entryVal
+    const tVal = testShares * targetVal
+    const sVal = testShares * stopVal
+    const buyComm = Math.max(0.5, (bVal * 0.876) / 10000)
+    const targetComm = Math.max(0.5, (tVal * 0.876) / 10000)
+    const stopComm = Math.max(0.5, (sVal * 0.876) / 10000)
+    const targetStamp = isCurrentETF.value ? 0 : (tVal * 0.05) / 100
+    const stopStamp = isCurrentETF.value ? 0 : (sVal * 0.05) / 100
+    const netGain = Math.max(0, (tVal - bVal) - buyComm - targetComm - targetStamp)
+    const netLoss = Math.max(0.01, (bVal - sVal) + buyComm + stopComm + stopStamp)
+    return +(netGain / netLoss).toFixed(2)
+  }
+
+  const entryPlan = (hasBuySignal && buyPoint.price !== null) ? buyPoint.price : px
+  const baseTargetPx = (sellPoint.targetPrice !== undefined && sellPoint.targetPrice > 0)
     ? sellPoint.targetPrice
     : (sellPoint.price !== null ? sellPoint.price : px + 1.5 * atrVal)
+  const extTargetPx = sellPoint.extendedPrice || baseTargetPx
+  // 综合期望收益点位 (60% 仓位保底减仓 + 40% 仓位扩展博弈)
+  const blendedTargetPx = +(baseTargetPx * 0.6 + extTargetPx * 0.4).toFixed(prec)
   const stopLossPx = stopLossPoint.price
 
+  // 1) 实时现价开仓扣费净盈亏比 (Real-time Execution Net RR)
+  let realtimeRR = 0.5
   if (regime === 'DOWNWARD_TREND') {
-    riskRewardRatio = 0.5
+    realtimeRR = 0.5
   } else {
-    const upsideGain = Math.max(0.005, targetPx - entryBaseline)
-    const downsideRisk = Math.max(0.005, entryBaseline - stopLossPx)
-    riskRewardRatio = +(upsideGain / downsideRisk).toFixed(2)
+    realtimeRR = calcFrictionNetRR(px, baseTargetPx, stopLossPx)
   }
+
+  // 2) 计划挂单低吸扣费净盈亏比 (Planned Setup Net RR)
+  let plannedRR = realtimeRR
+  const hasPlannedEntry = Boolean(hasBuySignal && buyPoint.price !== null && Math.abs(px - buyPoint.price) / px >= 0.008)
+  if (hasPlannedEntry && regime !== 'DOWNWARD_TREND') {
+    plannedRR = calcFrictionNetRR(entryPlan, blendedTargetPx, stopLossPx)
+  }
+
+  riskRewardRatio = realtimeRR
 
   let rrSubtitle = ''
   if (regime === 'DOWNWARD_TREND') {
     rrSubtitle = '下行破位通道·严禁盲目开仓'
+  } else if (hasPlannedEntry) {
+    rrSubtitle = `现价追高扣费盈亏比 ${realtimeRR}:1 (空间受挤压) · 挂单 ¥${entryPlan.toFixed(prec)} 计划扣费盈亏比达 ${plannedRR}:1`
   } else if (!hasBuySignal) {
-    rrSubtitle = `半空中无买点·追高盈亏比不足 (${riskRewardRatio}:1) · 建议等待回踩挂单`
-  } else if (riskRewardRatio >= 2.0) {
-    rrSubtitle = `黄金盈亏比 · 冒 1 份风险博 ${riskRewardRatio} 份收益`
+    rrSubtitle = `半空中无买点·追高盈亏比不足 (${realtimeRR}:1) · 建议等待回踩挂单`
+  } else if (realtimeRR >= 2.0) {
+    rrSubtitle = `黄金盈亏比 · 冒 1 份风险博 ${realtimeRR} 份收益`
   } else {
-    rrSubtitle = `常规盈亏比 · 冒 1 份风险博 ${riskRewardRatio} 份收益`
+    rrSubtitle = `常规盈亏比 · 冒 1 份风险博 ${realtimeRR} 份收益`
   }
 
   return {
@@ -1899,6 +2022,9 @@ const tradeDecision = computed(() => {
     sellPoint,
     stopLossPoint,
     riskRewardRatio,
+    realtimeRR,
+    plannedRR,
+    hasPlannedEntry,
     rrSubtitle,
     atrVal,
     atrPct
@@ -1908,15 +2034,18 @@ const tradeDecision = computed(() => {
 // =========================================================================
 // 小资金单笔风险预算与整手仓位试算器 & 一票否决负面清单审查
 // =========================================================================
+const calcEntryMode = ref<'realtime' | 'planned'>('realtime')
+
 const retailCalc = ref({
   totalCapital: 100000,
   maxRiskPct: 2.0,
+  maxPositionCapPct: 40,    // 单标的最高建议仓位硬上限 40% (杜绝 100% 满仓自杀)
   entryPrice: 0,
   targetPrice: 0,
   stopLossPrice: 0,
-  commissionRateWan: 2.5,
+  commissionRateWan: 0.876, // 用户专享券商佣金: 万0.876
   stampDutyPct: 0.05,
-  minCommission: 5.0
+  minCommission: 0.5        // 免5，0.5元起收
 })
 
 function syncCalcPricesWithDecision() {
@@ -1925,14 +2054,28 @@ function syncCalcPricesWithDecision() {
   const td = tradeDecision.value
 
   if (td) {
-    retailCalc.value.entryPrice = (td.hasBuySignal && td.buyPoint.price !== null) ? +td.buyPoint.price.toFixed(prec) : +px.toFixed(prec)
-    retailCalc.value.targetPrice = +(td.sellPoint.targetPrice || td.sellPoint.price || (px + 1.5 * td.atrVal)).toFixed(prec)
-    retailCalc.value.stopLossPrice = +(td.stopLossPoint.price || (px - 1.0 * td.atrVal)).toFixed(prec)
+    if (calcEntryMode.value === 'planned' && td.hasBuySignal && td.buyPoint.price !== null) {
+      retailCalc.value.entryPrice = +td.buyPoint.price.toFixed(prec)
+      retailCalc.value.targetPrice = +(td.sellPoint.targetPrice || td.sellPoint.price || (px + 1.5 * td.atrVal)).toFixed(prec)
+      retailCalc.value.stopLossPrice = +(td.stopLossPoint.price || (px - 1.0 * td.atrVal)).toFixed(prec)
+    } else {
+      // 默认实时市价基准：杜绝脱离市价的空中楼阁推演
+      retailCalc.value.entryPrice = +px.toFixed(prec)
+      retailCalc.value.targetPrice = +(td.sellPoint.targetPrice || td.sellPoint.price || (px + 1.5 * td.atrVal)).toFixed(prec)
+      retailCalc.value.stopLossPrice = +(td.stopLossPoint.price || (px - 1.0 * td.atrVal)).toFixed(prec)
+    }
   } else {
     retailCalc.value.entryPrice = +px.toFixed(prec)
     retailCalc.value.targetPrice = +(px * 1.05).toFixed(prec)
     retailCalc.value.stopLossPrice = +(px * 0.97).toFixed(prec)
   }
+}
+
+function onEntryModeChange(mode?: any) {
+  if (mode === 'realtime' || mode === 'planned') {
+    calcEntryMode.value = mode
+  }
+  syncCalcPricesWithDecision()
 }
 
 watch(
@@ -1964,6 +2107,19 @@ const maxRiskDollars = computed(() => {
   return (retailCalc.value.totalCapital * retailCalc.value.maxRiskPct) / 100
 })
 
+const calcMaxCapShares = computed(() => {
+  const ep = calcEntryPx.value
+  if (ep <= 0) return 0
+  const capPct = (retailCalc.value.maxPositionCapPct || 40) / 100
+  return Math.floor((retailCalc.value.totalCapital * capPct) / ep / 100) * 100
+})
+
+const calcFirstStageShares = computed(() => {
+  const ep = calcEntryPx.value
+  if (ep <= 0) return 0
+  return Math.floor((retailCalc.value.totalCapital * 0.20) / ep / 100) * 100
+})
+
 const calcShares = computed(() => {
   const ep = calcEntryPx.value
   const sp = calcStopPx.value
@@ -1971,7 +2127,8 @@ const calcShares = computed(() => {
   const perShareRisk = Math.max(0.01, ep - sp)
   const maxSharesByRisk = Math.floor(maxRiskDollars.value / perShareRisk / 100) * 100
   const maxSharesByCash = Math.floor(retailCalc.value.totalCapital / ep / 100) * 100
-  return Math.max(0, Math.min(maxSharesByRisk, maxSharesByCash))
+  // 核心风控：取风险预算股数、总资金股数、单标的硬上限(40%)股数的三者最小值！
+  return Math.max(0, Math.min(maxSharesByRisk, maxSharesByCash, calcMaxCapShares.value))
 })
 
 const calcLots = computed(() => Math.floor(calcShares.value / 100))
@@ -1992,7 +2149,7 @@ const calcNetLoss = computed(() => {
   const stopVal = shares * sp
   const buyComm = Math.max(retailCalc.value.minCommission, (buyVal * retailCalc.value.commissionRateWan) / 10000)
   const stopComm = Math.max(retailCalc.value.minCommission, (stopVal * retailCalc.value.commissionRateWan) / 10000)
-  const stopStamp = (stopVal * retailCalc.value.stampDutyPct) / 100
+  const stopStamp = isCurrentETF.value ? 0 : (stopVal * retailCalc.value.stampDutyPct) / 100
   return +((buyVal - stopVal) + buyComm + stopComm + stopStamp).toFixed(2)
 })
 
@@ -2005,7 +2162,7 @@ const calcNetGain = computed(() => {
   const targetVal = shares * tp
   const buyComm = Math.max(retailCalc.value.minCommission, (buyVal * retailCalc.value.commissionRateWan) / 10000)
   const targetComm = Math.max(retailCalc.value.minCommission, (targetVal * retailCalc.value.commissionRateWan) / 10000)
-  const targetStamp = (targetVal * retailCalc.value.stampDutyPct) / 100
+  const targetStamp = isCurrentETF.value ? 0 : (targetVal * retailCalc.value.stampDutyPct) / 100
   return +((targetVal - buyVal) - buyComm - targetComm - targetStamp).toFixed(2)
 })
 
@@ -2038,92 +2195,186 @@ function applyCalculatorToPaper() {
   ElMessage.success(`已将试算整手仓位 ${calcShares.value} 股带入模拟盘下单窗口`)
 }
 
-// 一票否决审查清单
+// 一票否决审查清单 —— 彻底颠覆为【动能对冲 + 弹性自适应 + 小资金进攻性审查系统】
 const vetoItems = computed(() => {
   const px = currentStock.value.price || 10.0
   const high = currentStock.value.high || px
   const low = currentStock.value.low || px
   const open = currentStock.value.open || px
   const chg = currentStock.value.change || 0.0
+  const turnover = currentStock.value.turnover || 1.5
   const chips = currentChips.value
   const ind = currentIndicators.value
-
-  // 1. 日内冲高回落长上影线
-  const upperShadow = high - Math.max(open, px)
-  const candleRange = high - low
-  const hasUpperShadow = candleRange > 0 && upperShadow > candleRange * 0.45 && (high - px) / px >= 0.025
-  const shadowVeto = {
-    id: 'upper_shadow',
-    label: '日内冲高回落长上影线',
-    vetoed: Boolean(hasUpperShadow),
-    detail: hasUpperShadow
-      ? `今日盘中高见 ¥${high.toFixed(2)} 后大幅跳水回落，上影线承压超过全天振幅 45%，主力冲高派发嫌疑极大`
-      : '日内价格运行平稳，实体饱满，无恶性冲高跳水回落上影线'
-  }
-
-  // 2. 短线操盘线破位与动能衰竭 (针对大 A 超短/波段资金，采用 MA5 攻击线 + MA10 操盘线灵敏双防守，并融合负乖离超跌保护)
   const bp = boardProfile.value
+
+  const profitRatio = chips?.profit_ratio ?? (chg >= 0 ? 65.0 : 35.0)
+  const trappedRatio = chips?.trapped_ratio ?? (chg < 0 ? 70.0 : 30.0)
   const ma5 = ind?.ma?.ma5
   const ma10 = ind?.ma?.ma10
   const ma20 = ind?.ma?.ma20
+  const bias5 = (ma5 && ma5 > 0) ? +(((px - ma5) / ma5) * 100).toFixed(2) : 0.0
   const kdjJ = ind?.kdj?.j
 
-  // 计算 5日负乖离率 BIAS5
-  const bias5 = ma5 && ma5 > 0 ? ((px - ma5) / ma5) * 100 : 0.0
+  // -------------------------------------------------------------------------
+  // 1. 影线审查：彻底颠覆死板上影线，区分【高位竭尽派发】与【低位仙人指路/放量试盘】
+  // -------------------------------------------------------------------------
+  const upperShadow = high - Math.max(open, px)
+  const candleRange = high - low
+  const hasUpperShadow = candleRange > 0 && upperShadow > candleRange * 0.42 && (high - px) / px >= 0.025
 
-  // 1) 是否处于极端超跌反弹区 (结合所属板块极限负乖离阈值 bp.oversoldBias 或 KDJ J值超卖至 5 以下)
-  // 在此状态下极易爆发绝地反抽，不盲目杀跌一票否决，而是提示超跌博弈区
-  const isExtremeOversold = bias5 <= bp.oversoldBias || (kdjJ !== undefined && kdjJ !== null && kdjJ < 5)
+  // 是否处于高位加速过热期 (5日乖离率过大 或 获利盘极高时的高位长上影 = 真正的出货派发)
+  const isOverheatedClimax = bias5 >= bp.biasThreshold || (profitRatio >= 85.0 && chg < 2.0)
+  // 是否属于中低位放量试盘 / 仙人指路 (处于非高位且换手活跃，主力投石问路测试抛压)
+  const isXianRenZhiLu = hasUpperShadow && !isOverheatedClimax && turnover >= 3.0
 
-  // 2) 短线空头破位判定：
-  // 当有 MA10 时，现价跌破操盘线 MA10 且短线死叉 (ma5 <= ma10)，或现价同时被 MA5 和 MA10 双重压制
-  // 当无 MA10 时，跌破 MA5 且 px < ma20
-  const isShortTermBroken = ma10
-    ? Boolean((ma5 && px < ma10 && ma5 <= ma10) || (ma5 && px < ma5 && px < ma10))
-    : Boolean(ma5 && px < ma5 && (ma20 ? px < ma20 : true))
+  let shadowVetoed = false
+  let shadowStatusText = '合规通过'
+  let shadowIsExempted = false
+  let shadowDetail = ''
 
-  // 3) 最终否决逻辑：短线破位 且 非极端超跌反弹形态
-  const isTrendVetoed = isShortTermBroken && !isExtremeOversold
-
-  let trendDetail = ''
-  if (isTrendVetoed) {
-    const ma10Text = ma10 ? `操盘线 MA10(¥${ma10.toFixed(2)})` : `攻击线 MA5(¥${(ma5 || px).toFixed(2)})`
-    trendDetail = `现价 (¥${px.toFixed(2)}) 跌破短期核心${ma10Text}，且 MA5/MA10 死叉向下空头压制；小资金无时间成本优势，拒绝在短线破位通道中盲目硬扛`
-  } else if (isShortTermBroken && isExtremeOversold) {
-    trendDetail = `现价 (¥${px.toFixed(2)}) 虽跌破短期均线，但 5日负乖离达到 ${bias5.toFixed(1)}% (低于${bp.shortName}超跌阈值 ${bp.oversoldBias}%)，处于空头衰竭的超跌反抽窗口，未触发绝对否决，但仅限轻仓试错`
+  if (hasUpperShadow && isOverheatedClimax) {
+    shadowVetoed = true
+    shadowStatusText = '一票否决'
+    shadowDetail = `今日冲高 ¥${high.toFixed(2)} 后大幅跳水，处于 5日均线乖离高位 (+${bias5.toFixed(1)}%)，属于典型【高位加速竭尽派发】，大阴线与长上影出货风险极高，严防接盘！`
+  } else if (isXianRenZhiLu) {
+    shadowVetoed = false
+    shadowStatusText = '仙人指路豁免'
+    shadowIsExempted = true
+    shadowDetail = `今日冲高 ¥${high.toFixed(2)} 虽有回落，但处于中低位且换手达 ${turnover.toFixed(1)}%，属于主力向上测试抛压的【仙人指路·放量试盘】；豁免一票否决，重点观察次日分时平开或高开弱转强反包！`
+  } else if (hasUpperShadow) {
+    shadowVetoed = true
+    shadowStatusText = '一票否决'
+    shadowDetail = `日内冲高 ¥${high.toFixed(2)} 回落形成长上影，且缺乏增量资金承接，短线抛压未消，日内不宜盲目入场。`
   } else {
+    shadowVetoed = false
+    shadowStatusText = '合规通过'
+    shadowDetail = '日内K线实体结构饱满，无恶性高位冲高跳水回落长上影线，筹码承接良好。'
+  }
+
+  const shadowVeto = {
+    id: 'upper_shadow',
+    label: '影线与试盘审查 (高位派发 vs 仙人指路)',
+    vetoed: shadowVetoed,
+    statusText: shadowStatusText,
+    isExempted: shadowIsExempted,
+    detail: shadowDetail
+  }
+
+  // -------------------------------------------------------------------------
+  // 2. 均线与操盘线破位：彻底颠覆死板均线，区分【放量真破位】与【缩量假摔/龙回头伏击】
+  // -------------------------------------------------------------------------
+  const isExtremeOversold = bias5 <= bp.oversoldBias || (kdjJ !== undefined && kdjJ !== null && kdjJ < 5)
+  const isPriceBelowMA10 = ma10 ? px < ma10 : (ma5 ? px < ma5 : false)
+  const isBearishCross = ma5 && ma10 ? ma5 <= ma10 : false
+
+  // 假摔/龙回头特征：虽破均线，但成交量极度萎缩 (地量洗盘) 或 紧邻 MA20/核心支撑峰
+  const isLowVolWashout = isPriceBelowMA10 && (turnover > 0 && turnover < 2.5) && Math.abs(chg) < 3.0
+  const isNearMA20Support = ma20 && px >= ma20 * 0.985 && px <= ma20 * 1.025
+
+  let trendVetoed = false
+  let trendStatusText = '合规通过'
+  let trendIsExempted = false
+  let trendDetail = ''
+
+  if (isExtremeOversold) {
+    trendVetoed = false
+    trendStatusText = '超跌观察'
+    trendIsExempted = true
+    trendDetail = `现价虽处均线下，但 5日负乖离深达 ${bias5.toFixed(1)}% (低于超跌线 ${bp.oversoldBias}%)，空头动能衰竭进入绝地反抽区，豁免破位否决。`
+  } else if (isPriceBelowMA10 && isBearishCross && !isLowVolWashout && !isNearMA20Support) {
+    trendVetoed = true
+    trendStatusText = '一票否决'
+    const ma10Text = ma10 ? `MA10 操盘线 (¥${ma10.toFixed(2)})` : `MA5 攻击线 (¥${(ma5 || px).toFixed(2)})`
+    trendDetail = `放量跌破核心${ma10Text}且均线空头死叉发散，空头处于主动进攻期；小资金严守纪律，绝不在放量破位通道中盲目硬扛。`
+  } else if (isPriceBelowMA10 && (isLowVolWashout || isNearMA20Support)) {
+    trendVetoed = false
+    trendStatusText = '假摔洗盘豁免'
+    trendIsExempted = true
+    trendDetail = `现价 (¥${px.toFixed(2)}) 虽下破短期均线，但呈现极度缩量洗盘特征(换手仅 ${turnover.toFixed(1)}%)，紧靠 MA20/生命线强支撑，判定为诱空假摔，豁免否决，提供龙回头二波低吸观察机会！`
+  } else {
+    trendVetoed = false
+    trendStatusText = '合规通过'
     const defendMa = ma10 ? `MA10 操盘线 (¥${ma10.toFixed(2)})` : `MA5 攻击线 (¥${(ma5 || px).toFixed(2)})`
-    trendDetail = `站稳短期${defendMa}之上，均线多头排列或缩量良性回踩，短线主升/波段动能完好`
+    trendDetail = `站稳短期${defendMa}之上，均线多头排列或缩量良性回踩，短线主升/波段动能完好。`
   }
 
   const trendVeto = {
     id: 'short_trend_break',
-    label: '短线操盘线破位 (MA5/MA10 空头压制)',
-    vetoed: isTrendVetoed,
+    label: '操盘线破位审查 (放量破位 vs 假摔诱空)',
+    vetoed: trendVetoed,
+    statusText: trendStatusText,
+    isExempted: trendIsExempted,
     detail: trendDetail
   }
 
-  // 3. 上方套牢盘严重压制
-  const trappedRatio = chips?.trapped_ratio ?? (chg < 0 ? 70.0 : 30.0)
+  // -------------------------------------------------------------------------
+  // 3. 筹码与套牢盘审查：彻底颠覆静态套牢死律，区分【无量弱抽】与【爆量吞噬/分歧转一致】
+  // -------------------------------------------------------------------------
   const isHeavyTrapped = trappedRatio >= 68.0
-  const trappedVeto = {
-    id: 'heavy_trapped',
-    label: '高位沉重套牢盘压制 (>68%)',
-    vetoed: isHeavyTrapped,
-    detail: isHeavyTrapped
-      ? `上方套牢盘高达 ${trappedRatio.toFixed(1)}%，全员深套，每一次脉冲式反弹均面临巨大保本割肉解套抛压`
-      : `获利盘充足，上方套牢盘仅 ${trappedRatio.toFixed(1)}%，筹码结构健康，阻力较轻`
+  // 动态增量吞噬判定：换手率充分 (科技股短线换手 >= 5.5%) 或 放量大涨 (涨幅 >= 2.0%)
+  const isVolumeAbsorbing = turnover >= 5.5 || chg >= 2.0
+
+  let trappedVetoed = false
+  let trappedStatusText = '合规通过'
+  let trappedIsExempted = false
+  let trappedDetail = ''
+
+  if (isHeavyTrapped && isVolumeAbsorbing) {
+    trappedVetoed = false
+    trappedStatusText = '爆量吞噬豁免'
+    trappedIsExempted = true
+    trappedDetail = `上方套牢盘虽达 ${trappedRatio.toFixed(1)}%，但今日放量换手达 ${turnover.toFixed(1)}%，主力正以绝对增量资金暴力吞噬历史套牢盘！属于科技短线分歧转一致的高爆发突破阶段，破除教条否决！`
+  } else if (isHeavyTrapped && !isVolumeAbsorbing) {
+    trappedVetoed = true
+    trappedStatusText = '一票否决'
+    trappedDetail = `上方套牢盘高达 ${trappedRatio.toFixed(1)}%，但成交量与换手平平(仅 ${turnover.toFixed(1)}%)，缺乏增量资金强行翻山，极易遭遇解套盘砸盘反噬，坚决禁止开仓。`
+  } else {
+    trappedVetoed = false
+    trappedStatusText = '合规通过'
+    trappedDetail = `获利盘充足，上方套牢盘仅 ${trappedRatio.toFixed(1)}%，无密集解套抛盘压制，阻力最小路径清晰。`
   }
 
-  // 4. 净盈亏比低于实战红线
-  const isBadRR = calcRealRR.value < 1.5
+  const trappedVeto = {
+    id: 'heavy_trapped',
+    label: '筹码动能审查 (爆量吞噬 vs 缩量骗炮)',
+    vetoed: trappedVetoed,
+    statusText: trappedStatusText,
+    isExempted: trappedIsExempted,
+    detail: trappedDetail
+  }
+
+  // -------------------------------------------------------------------------
+  // 4. 小资金非对称赔率审查：彻底颠覆死板 5% 假及格线，识别【真正风险收益倒挂】
+  // -------------------------------------------------------------------------
+  const isTrueRRSqueezed = calcRealRR.value > 0 && calcRealRR.value < 1.25
+
+  let rrVetoed = false
+  let rrStatusText = '合规通过'
+  let rrIsExempted = false
+  let rrDetail = ''
+
+  if (isTrueRRSqueezed) {
+    rrVetoed = true
+    rrStatusText = '一票否决'
+    rrDetail = `实测扣费净盈亏比仅 ${calcRealRR.value}:1 (低于硬门槛 1.25:1)，上方空间受阻而下方止损过宽，属于小资金严禁参与的【非对称赔率倒挂陷阱】。`
+  } else if (calcRealRR.value >= 2.0) {
+    rrVetoed = false
+    rrStatusText = '优质赔率'
+    rrIsExempted = true
+    rrDetail = `实测净盈亏比达 ${calcRealRR.value}:1，以极窄试错止损博取大幅主升弹性，完美符合小资金“高赔率暴利”核心法则！`
+  } else {
+    rrVetoed = false
+    rrStatusText = '合规通过'
+    rrDetail = `实测净盈亏比 ${calcRealRR.value}:1，博弈空间与交易成本匹配，风险收益比处于合格实战区间。`
+  }
+
   const rrVeto = {
     id: 'bad_rr',
-    label: '净盈亏比低于实战及格线 (1.5:1)',
-    vetoed: isBadRR,
-    detail: isBadRR
-      ? `扣费实测净盈亏比仅 ${calcRealRR.value}:1，博弈空间狭窄，潜在盈利无法覆盖试错止损成本与交易磨损`
-      : `净盈亏比达到 ${calcRealRR.value}:1，符合小资金赔率优先、高盈亏比波段交易原则`
+    label: '实战赔率审查 (非对称赔率 vs 空间倒挂)',
+    vetoed: rrVetoed,
+    statusText: rrStatusText,
+    isExempted: rrIsExempted,
+    detail: rrDetail
   }
 
   return [shadowVeto, trendVeto, trappedVeto, rrVeto]
@@ -2132,24 +2383,194 @@ const vetoItems = computed(() => {
 const hasAnyVeto = computed(() => vetoItems.value.some(v => v.vetoed))
 const vetoTriggeredCount = computed(() => vetoItems.value.filter(v => v.vetoed).length)
 
-// 交易时效与操作风格画像
+// 交易时效与操作风格画像 (融合豁免战术画像)
 const tradeTimeHorizon = computed(() => {
   if (hasAnyVeto.value || tradeDecision.value?.regime === 'DOWNWARD_TREND') return '⛔ 观望空仓防守 (0天，禁止盲目开仓)'
+  const xianRen = vetoItems.value.find(v => v.id === 'upper_shadow' && (v as any).isExempted)
+  if (xianRen) return '⚡ 仙人指路反包 (观察次日 1~2 天弱转强)'
+  const volumeAbsorb = vetoItems.value.find(v => v.id === 'heavy_trapped' && (v as any).isExempted)
+  if (volumeAbsorb) return '🔥 爆量吞噬主升 (建议持有 2~4 天分歧加速)'
+  const fakeWashout = vetoItems.value.find(v => v.id === 'short_trend_break' && (v as any).isExempted)
+  if (fakeWashout) return '🎯 龙回头二波伏击 (建议持有 3~5 天反弹浪)'
   if (tradeDecision.value?.regime === 'STRONG_MOMENTUM') return '🚀 强势主升浪加速 (移动跟踪止盈·让利润奔跑)'
-  if (calcRealRR.value >= 2.5) return '🚀 攻击型主升波段 (建议持有 3~5 个交易日)'
+  if (calcRealRR.value >= 2.0) return '🚀 攻击型主升波段 (建议持有 3~5 个交易日)'
   return '🛡️ 防守型回踩低吸 (建议持有 5~8 个交易日)'
 })
 
 const tradeStrategyCategory = computed(() => {
   if (hasAnyVeto.value || tradeDecision.value?.regime === 'DOWNWARD_TREND') return '破位禁区·严守回撤风控'
+  const volumeAbsorb = vetoItems.value.find(v => v.id === 'heavy_trapped' && (v as any).isExempted)
+  if (volumeAbsorb) return '爆量吃套牢·分歧转一致主升'
+  const xianRen = vetoItems.value.find(v => v.id === 'upper_shadow' && (v as any).isExempted)
+  if (xianRen) return '仙人指路·博弈次日反包'
+  const fakeWashout = vetoItems.value.find(v => v.id === 'short_trend_break' && (v as any).isExempted)
+  if (fakeWashout) return '缩量假摔·龙回头低吸'
   if (tradeDecision.value?.regime === 'STRONG_MOMENTUM') return '主升动量·移动跟踪止盈'
   if (tradeDecision.value?.signalType === 'breakout_buy') return '突破追强·顺势动量主升'
   if (tradeDecision.value?.signalType === 'buy') return '支撑低吸·缩量企稳伏击'
   return '波段博弈·网格逢低布局'
 })
 
+const calcStopLossPct = computed(() => {
+  const ep = calcEntryPx.value
+  const sp = calcStopPx.value
+  if (ep <= 0) return '0.0'
+  return (((sp - ep) / ep) * 100).toFixed(1)
+})
+
 const tradeDisciplineLine = computed(() => {
-  return `破位 ¥${calcStopPx.value.toFixed(isCurrentETF.value ? 3 : 2)} 坚决离场 (单笔亏损严控 ¥${calcNetLoss.value.toFixed(0)})`
+  const pctStr = calcStopLossPct.value
+  const sign = Number(pctStr) > 0 ? '+' : ''
+  return `破位 ¥${calcStopPx.value.toFixed(isCurrentETF.value ? 3 : 2)} 坚决离场 (个股最大容忍回撤 ${sign}${pctStr}%)`
+})
+
+// 🎯 算法量化建仓决策指引：解答“要不要开仓”与“值不值得开仓”
+const entryAdvice = computed(() => {
+  // 1. 一票否决负面清单硬风控
+  if (hasAnyVeto.value) {
+    const vetoedList = vetoItems.value.filter(v => v.vetoed)
+    const vetoNames = vetoedList.map(v => v.label.split('(')[0].trim()).join('、')
+    return {
+      actionText: '⛔ 坚决不开仓',
+      actionTagType: 'danger',
+      worthText: '❌ 严重不值博 (胜率/赔率双输)',
+      worthTagType: 'danger',
+      shouldEnter: false,
+      isWorth: false,
+      detail: `触发【${vetoNames}】硬性风控红线！形态处于下行通道、高位恶性套牢压顶或赔率严重倒挂，逆势做多极易遭遇灭顶之灾，小资金首要铁律是保全本金，耐心空仓防守！`
+    }
+  }
+
+  // 2. 资金与 1 手最小交易门槛风控
+  if (calcShares.value < 100) {
+    return {
+      actionText: '⚠️ 暂不开仓 (不足1手)',
+      actionTagType: 'warning',
+      worthText: '🚫 风险预算受限 (超单笔上限)',
+      worthTagType: 'info',
+      shouldEnter: false,
+      isWorth: false,
+      detail: `按账户本金与单笔最大容忍亏损 ${retailCalc.value.maxRiskPct}% 计算，无法在风控阈值内买入 1 手 (当前单价 ¥${calcEntryPx.value.toFixed(isCurrentETF.value ? 3 : 2)})。强行开仓将打破单笔亏损纪律，建议调高本金或选择单价更亲民的标的。`
+    }
+  }
+
+  // 3. 特殊战术动能豁免（仙人指路、爆量吞噬、假摔龙回头）
+  const volumeAbsorb = vetoItems.value.find(v => v.id === 'heavy_trapped' && (v as any).isExempted)
+  const xianRen = vetoItems.value.find(v => v.id === 'upper_shadow' && (v as any).isExempted)
+  const fakeWashout = vetoItems.value.find(v => v.id === 'short_trend_break' && (v as any).isExempted)
+
+  const rr = calcRealRR.value
+  const td = tradeDecision.value
+  const hasSignal = !!td?.hasBuySignal
+
+  // 4. 净盈亏比极度倒挂 (< 1.25:1)
+  if (rr < 1.25) {
+    if (td?.hasPlannedEntry && (td?.plannedRR || 0) >= 1.5) {
+      return {
+        actionText: '⏳ 拒绝追高·限价挂单埋伏',
+        actionTagType: 'warning',
+        worthText: `现价倒挂 (${rr}:1) | 挂单优质 (${td.plannedRR}:1)`,
+        worthTagType: 'warning',
+        shouldEnter: false,
+        isWorth: false,
+        detail: `标的虽有波段潜力，但当前实时现价已脱离安全防守点，市价追高扣费盈亏比仅 ${rr}:1 (空间严重不对称，典型的赚小钱亏大钱陷阱)！建议切换试算器为【挂单计划】，在 ¥${td.buyPoint.price?.toFixed(isCurrentETF.value ? 3 : 2)} 耐心挂单埋伏 (挂单扣费盈亏比达 ${td.plannedRR}:1)。首笔底仓建议严控在 20% (${calcFirstStageShares.value}手)，单标的总持仓严禁超过 ${retailCalc.value.maxPositionCapPct}%，绝不可满仓打入！`
+      }
+    }
+    return {
+      actionText: '🚫 放弃开仓 (赔率倒挂)',
+      actionTagType: 'danger',
+      worthText: `❌ 极不划算 (扣费盈亏比 ${rr}:1)`,
+      worthTagType: 'danger',
+      shouldEnter: false,
+      isWorth: false,
+      detail: `实测扣费净盈亏比仅 ${rr}:1 (低于 1.25:1 及格底线)。向上空间受阻，向下止损过宽，属于典型的“冒 1 元风险博几毛钱薄利”，小资金严禁参与风险收益不对称交易！`
+    }
+  }
+
+  // 5. 战术豁免行情
+  if (volumeAbsorb) {
+    return {
+      actionText: '🔥 建议建仓 (爆量吞噬主力吸筹)',
+      actionTagType: 'success',
+      worthText: rr >= 2.0 ? `🏆 极度值得 (高赔率 ${rr}:1)` : `✅ 值得博弈 (盈亏比 ${rr}:1)`,
+      worthTagType: 'success',
+      shouldEnter: true,
+      isWorth: true,
+      detail: `主力资金爆量对倒吃掉高位套牢盘，分歧转一致主升预期明确。净盈亏比 ${rr}:1，建议按首仓 20% (${calcFirstStageShares.value}手) 果断试探建仓，突破再加仓，单标的严控在 ${retailCalc.value.maxPositionCapPct}% (${calcLots.value}手) 以内，跌破 ¥${calcStopPx.value.toFixed(isCurrentETF.value ? 3 : 2)} 止损。`
+    }
+  }
+
+  if (xianRen) {
+    return {
+      actionText: '⚡ 观察建仓 (仙人指路放量试盘)',
+      actionTagType: 'primary',
+      worthText: rr >= 1.8 ? `💎 值得博弈 (赔率 ${rr}:1)` : `⚖️ 适度试错 (盈亏比 ${rr}:1)`,
+      worthTagType: 'primary',
+      shouldEnter: true,
+      isWorth: true,
+      detail: `长上影线属于主力放量试探上方抛压，洗盘吸筹特征明确。次日若早盘 15 分钟弱转强反包，建议跟随试探建仓 ${calcFirstStageShares.value}手 (20%)，博弈短线主升浪。`
+    }
+  }
+
+  if (fakeWashout) {
+    return {
+      actionText: '🎯 低吸建仓 (龙回头假摔企稳)',
+      actionTagType: 'success',
+      worthText: `💎 值得开仓 (低吸高赔率 ${rr}:1)`,
+      worthTagType: 'success',
+      shouldEnter: true,
+      isWorth: true,
+      detail: `短期均线假破位但量能断崖式萎缩，洗盘完毕已现止跌底分型。当前处于极窄止损支撑位，盈亏比达 ${rr}:1，小资金胜率极佳，首仓建议打入 20% (${calcFirstStageShares.value}手)。`
+    }
+  }
+
+  // 6. 标准形态判断
+  if (rr >= 2.5) {
+    return {
+      actionText: hasSignal ? '🚀 果断建仓 (量化共振买点)' : '🎯 逢低建仓 (高赔率击球区)',
+      actionTagType: 'success',
+      worthText: `🏆 极度值得 (极佳赔率 ${rr}:1)`,
+      worthTagType: 'success',
+      shouldEnter: true,
+      isWorth: true,
+      detail: `负面清单全绿通过，扣费净盈亏比高达 ${rr}:1！向上主升空间充裕且防守止损仅 ${calcStopLossPct.value}%。建议按【首笔底仓 20% (${calcFirstStageShares.value}手)】坚决建仓，单标的仓位上限锁定 ${retailCalc.value.maxPositionCapPct}% (${calcLots.value}手)，切勿盲目满仓！`
+    }
+  }
+
+  if (rr >= 2.0) {
+    return {
+      actionText: hasSignal ? '✅ 建议建仓 (右侧买点成立)' : '👀 择机建仓 (等待回踩确认)',
+      actionTagType: 'success',
+      worthText: `💎 非常值得 (优良赔率 ${rr}:1)`,
+      worthTagType: 'success',
+      shouldEnter: hasSignal,
+      isWorth: true,
+      detail: `实测净盈亏比达 ${rr}:1，风险收益比优良。${hasSignal ? `系统右侧买点已触发，建议按首笔底仓 20% (${calcFirstStageShares.value}手) 分批建仓，单标的总持仓严控在 ${retailCalc.value.maxPositionCapPct}% (${calcLots.value}手) 以内。` : `当前价格处于区间中上沿，若盘中回踩 ¥${calcEntryPx.value.toFixed(isCurrentETF.value ? 3 : 2)} 支撑位可果断低吸。`}`
+    }
+  }
+
+  if (rr >= 1.5) {
+    return {
+      actionText: hasSignal ? '⚖️ 可以开仓 (轻仓防守试错)' : '⏳ 暂缓开仓 (等待更优击球点)',
+      actionTagType: hasSignal ? 'primary' : 'warning',
+      worthText: `⚖️ 适度博弈 (及格赔率 ${rr}:1)`,
+      worthTagType: 'warning',
+      shouldEnter: hasSignal,
+      isWorth: true,
+      detail: `净盈亏比 ${rr}:1 达到实战及格线，但利润空间尚未完全拉开。${hasSignal ? `若看好题材热度，建议控制在 15%~20% (${calcFirstStageShares.value}手) 试探性参与，带好止损。` : `当前日内缺乏确定性催化信号，建议观望等待回踩或更佳击球点。`}`
+    }
+  }
+
+  // 1.25 <= rr < 1.5
+  return {
+    actionText: '⏳ 暂缓开仓 (性价比较低)',
+    actionTagType: 'info',
+    worthText: `⚠️ 勉强及格/不建议重仓 (${rr}:1)`,
+    worthTagType: 'info',
+    shouldEnter: false,
+    isWorth: false,
+    detail: `净盈亏比 ${rr}:1 刚过底线，扣除滑点摩擦后安全垫较薄。小资金应当追求非对称暴利机会，建议观望或寻找更高赔率标的。`
+  }
 })
 
 // 核心池胶囊高亮判断
@@ -4851,13 +5272,54 @@ onUnmounted(() => {
           font-weight: 500;
         }
 
-        .rr-val {
-          font-size: 18px;
-          font-weight: 800;
-          color: #101828;
+        .rr-dual-display {
+          display: flex;
+          align-items: baseline;
+          justify-content: flex-end;
+          gap: 6px;
+          margin-top: 2px;
 
-          &.rr-great {
-            color: #059669;
+          .rr-track-item {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 4px;
+
+            .rr-track-title {
+              font-size: 10.5px;
+              color: #64748b;
+              font-weight: 600;
+
+              &.plan {
+                color: #0284c7;
+              }
+            }
+          }
+
+          .rr-track-divider {
+            color: #cbd5e1;
+            font-size: 12px;
+          }
+
+          .rr-val {
+            font-size: 17px;
+            font-weight: 800;
+            color: #101828;
+
+            &.rr-great {
+              color: #059669;
+            }
+            &.rr-fair {
+              color: #d97706;
+            }
+            &.rr-poor {
+              color: #dc2626;
+            }
+          }
+
+          .rr-val-plan {
+            font-size: 15px;
+            font-weight: 800;
+            color: #0284c7;
           }
         }
 
@@ -5060,6 +5522,16 @@ onUnmounted(() => {
             border-radius: 4px;
             font-family: inherit;
           }
+
+          &.extended-tag {
+            font-size: 11px;
+            font-weight: 700;
+            color: #0284c7;
+            background: rgba(2, 132, 199, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: inherit;
+          }
         }
       }
 
@@ -5203,6 +5675,22 @@ onUnmounted(() => {
           }
         }
 
+        &.is-purple {
+          background: rgba(139, 92, 246, 0.06);
+          border-color: rgba(139, 92, 246, 0.25);
+
+          .vi-dot {
+            background: #8b5cf6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+          }
+          .vi-status-text {
+            color: #7c3aed;
+          }
+          .vi-label {
+            color: #6d28d9;
+          }
+        }
+
         .vi-status-badge {
           display: flex;
           align-items: center;
@@ -5264,6 +5752,126 @@ onUnmounted(() => {
         .pm-v {
           color: #101828;
           text-align: right;
+        }
+
+        &.pm-advice-row {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 6px;
+          padding: 8px 10px;
+          margin-top: 2px;
+          border-radius: 6px;
+          transition: all 0.2s ease;
+
+          &.is-recommended {
+            background: rgba(16, 185, 129, 0.05);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+
+            .pm-advice-detail {
+              border-left-color: #10b981;
+            }
+          }
+
+          &.is-rejected {
+            background: rgba(239, 68, 68, 0.05);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+
+            .pm-advice-detail {
+              border-left-color: #ef4444;
+            }
+          }
+
+          &.is-cautious {
+            background: rgba(245, 158, 11, 0.05);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+
+            .pm-advice-detail {
+              border-left-color: #f59e0b;
+            }
+          }
+
+          .pm-advice-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+
+            .pm-k {
+              color: #1e293b;
+              font-size: 12px;
+              font-weight: 700;
+            }
+
+            .pm-advice-badges {
+              display: flex;
+              align-items: center;
+              gap: 6px;
+              flex-wrap: wrap;
+
+              .advice-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                padding: 2px 7px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 600;
+
+                .chip-label {
+                  opacity: 0.75;
+                  font-size: 10px;
+                }
+
+                .chip-val {
+                  font-weight: 700;
+                }
+
+                &.chip-danger {
+                  background: rgba(239, 68, 68, 0.12);
+                  color: #dc2626;
+                  border: 1px solid rgba(239, 68, 68, 0.25);
+                }
+                &.chip-success {
+                  background: rgba(16, 185, 129, 0.12);
+                  color: #059669;
+                  border: 1px solid rgba(16, 185, 129, 0.25);
+                }
+                &.chip-warning {
+                  background: rgba(245, 158, 11, 0.12);
+                  color: #d97706;
+                  border: 1px solid rgba(245, 158, 11, 0.25);
+                }
+                &.chip-primary {
+                  background: rgba(59, 130, 246, 0.12);
+                  color: #2563eb;
+                  border: 1px solid rgba(59, 130, 246, 0.25);
+                }
+                &.chip-info {
+                  background: #f1f5f9;
+                  color: #475467;
+                  border: 1px solid #cbd5e1;
+                }
+              }
+            }
+          }
+
+          .pm-advice-detail {
+            font-size: 11px;
+            line-height: 1.45;
+            color: #475467;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 5px 8px;
+            border-radius: 4px;
+            border-left: 2px solid #94a3b8;
+            text-align: left;
+
+            .detail-label {
+              font-weight: 700;
+              color: #334155;
+              margin-right: 4px;
+            }
+          }
         }
       }
     }
