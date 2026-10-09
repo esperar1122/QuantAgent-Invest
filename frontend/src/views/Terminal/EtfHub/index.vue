@@ -10,19 +10,45 @@
         </div>
       </div>
 
+      <!-- 核心雷达 vs 全市场库 模式切换控制器 -->
+      <div class="mode-switcher">
+        <button 
+          class="mode-switch-btn" 
+          :class="{ active: activeMode === 'radar' }" 
+          @click="switchMode('radar')"
+        >
+          <span class="m-icon">🔥</span>
+          <span class="m-title">核心热门雷达</span>
+          <span class="m-pill">41只 · 5秒跳动</span>
+        </button>
+        <button 
+          class="mode-switch-btn" 
+          :class="{ active: activeMode === 'market' }" 
+          @click="switchMode('market')"
+        >
+          <span class="m-icon">🌐</span>
+          <span class="m-title">全市场 ETF 库</span>
+          <span class="m-pill highlight">{{ marketTotal > 0 ? `${marketTotal} 只` : '1000+ 只 · 分页检索' }}</span>
+        </button>
+      </div>
+
       <div class="ribbon-actions">
         <!-- 自动刷新计时器提示 -->
-        <span class="refresh-indicator tabular-nums">
+        <span v-if="activeMode === 'radar'" class="refresh-indicator tabular-nums">
           <span class="refresh-dot"></span>
           实盘自动轮询 · {{ autoRefreshCounter }}s
+        </span>
+        <span v-else class="refresh-indicator tabular-nums">
+          <span class="refresh-dot market-dot"></span>
+          全市场盘口 · 25s切片缓存
         </span>
 
         <!-- 手动刷新按钮 -->
         <el-button 
           size="small" 
           class="action-btn" 
-          :loading="loading" 
-          @click="fetchData(true)"
+          :loading="activeMode === 'radar' ? loading : marketLoading" 
+          @click="activeMode === 'radar' ? fetchData(true) : fetchMarketData(true)"
         >
           <el-icon><RefreshRight /></el-icon>
           <span>立即刷新</span>
@@ -30,8 +56,10 @@
       </div>
     </div>
 
-    <!-- 2. 全景宏观 KPI 指征栏 -->
-    <div class="etf-macro-strip" v-loading="loading && !etfItems.length">
+    <!-- ==================== 模式 1：核心热门雷达 (41只·极速高频) ==================== -->
+    <template v-if="activeMode === 'radar'">
+      <!-- 2. 全景宏观 KPI 指征栏 -->
+      <div class="etf-macro-strip" v-loading="loading && !etfItems.length">
       <!-- KPI 1: 市场涨跌分布 -->
       <div class="macro-card">
         <div class="card-label">标的涨跌分布</div>
@@ -344,6 +372,288 @@
         </el-table-column>
       </el-table>
     </div>
+    </template>
+
+    <!-- ========================================================================= -->
+    <!-- 模式 2：全市场 ETF 库 (1000+只·分页全景·行业分类) -->
+    <!-- ========================================================================= -->
+    <template v-else-if="activeMode === 'market'">
+      <!-- 分类与检索控制条 -->
+      <div class="filter-controls-row">
+        <!-- 赛道分类标签页 -->
+        <div class="category-tabs market-cat-tabs">
+          <button
+            v-for="cat in marketCategoryTabs"
+            :key="cat.id"
+            class="cat-tab-btn"
+            :class="{ active: marketCategory === cat.id }"
+            @click="onSelectMarketCategory(cat.id)"
+          >
+            <span class="cat-name">{{ cat.name }}</span>
+            <span class="cat-count tabular-nums">{{ cat.count }}</span>
+          </button>
+        </div>
+
+        <!-- 搜索与排序 -->
+        <div class="filter-actions">
+          <el-input
+            v-model="marketKeyword"
+            placeholder="搜索全市场 1000+ ETF (代码/名称，如 512000、医疗、黄金)..."
+            :prefix-icon="Search"
+            clearable
+            size="small"
+            class="etf-search-input market-search-input"
+            @clear="onMarketSearch"
+            @keyup.enter="onMarketSearch"
+          />
+
+          <el-select 
+            v-model="marketSortBy" 
+            size="small" 
+            class="sort-select" 
+            placeholder="排序方式"
+            @change="onMarketSortChange"
+          >
+            <el-option label="按成交额降序 (流动性优先) ▾" value="amount_desc" />
+            <el-option label="按成交额升序 ▴" value="amount_asc" />
+            <el-option label="按涨跌幅降序 (领涨榜) ▾" value="pct_desc" />
+            <el-option label="按涨跌幅升序 (超跌榜) ▴" value="pct_asc" />
+            <el-option label="按现价降序 ▾" value="price_desc" />
+            <el-option label="按换手率降序 ▾" value="turnover_desc" />
+          </el-select>
+
+          <div class="view-mode-toggle">
+            <button 
+              class="toggle-btn" 
+              :class="{ active: marketViewMode === 'table' }" 
+              @click="marketViewMode = 'table'" 
+              title="密集表格视图"
+            >
+              <el-icon><List /></el-icon>
+            </button>
+            <button 
+              class="toggle-btn" 
+              :class="{ active: marketViewMode === 'grid' }" 
+              @click="marketViewMode = 'grid'" 
+              title="卡片网格视图"
+            >
+              <el-icon><Menu /></el-icon>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 表格视图 -->
+      <div v-if="marketViewMode === 'table'" class="etf-table-container" v-loading="marketLoading">
+        <el-table 
+          :data="marketItems" 
+          style="width: 100%" 
+          class="terminal-dense-table market-table"
+          @row-click="(row) => navToResearch(row.code)"
+        >
+          <el-table-column label="代码" width="105">
+            <template #default="{ row }">
+              <span class="font-mono font-bold text-primary">{{ row.code }}</span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="基金名称" min-width="170">
+            <template #default="{ row }">
+              <div class="table-name-wrap">
+                <span class="table-fund-name font-bold">{{ row.name }}</span>
+                <span class="market-pill small">{{ row.code.startsWith('15') || row.code.startsWith('16') ? 'SZ' : 'SH' }}</span>
+              </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="赛道分类" width="115">
+            <template #default="{ row }">
+              <span class="category-tag-pill" :class="row.category">
+                {{ row.category_name }}
+              </span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="现价 (¥)" width="115" align="right">
+            <template #default="{ row }">
+              <span 
+                class="font-mono font-bold tabular-nums"
+                :class="row.pct_chg >= 0 ? 'color-up' : 'color-down'"
+              >
+                {{ Number(row.price).toFixed(3) }}
+              </span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="涨跌幅" width="115" align="right">
+            <template #default="{ row }">
+              <span 
+                class="font-mono font-bold tabular-nums"
+                :class="row.pct_chg >= 0 ? 'color-up' : 'color-down'"
+              >
+                {{ row.pct_chg >= 0 ? '+' : '' }}{{ Number(row.pct_chg).toFixed(2) }}%
+              </span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="涨跌额" width="100" align="right">
+            <template #default="{ row }">
+              <span 
+                class="font-mono tabular-nums"
+                :class="row.change >= 0 ? 'color-up' : 'color-down'"
+              >
+                {{ row.change >= 0 ? '+' : '' }}{{ Number(row.change).toFixed(3) }}
+              </span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="成交额" width="120" align="right">
+            <template #default="{ row }">
+              <span class="font-mono tabular-nums font-bold">
+                {{ row.amount >= 1 ? `${Number(row.amount).toFixed(2)} 亿` : `${(Number(row.amount) * 10000).toFixed(0)} 万` }}
+              </span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="换手率" width="100" align="right">
+            <template #default="{ row }">
+              <span class="font-mono tabular-nums">{{ Number(row.turnover_rate).toFixed(2) }}%</span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="日内最高/最低" width="150" align="right">
+            <template #default="{ row }">
+              <span class="font-mono tabular-nums text-muted small">
+                {{ Number(row.high).toFixed(3) }} / {{ Number(row.low).toFixed(3) }}
+              </span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="投研操作" width="180" align="center" fixed="right">
+            <template #default="{ row }">
+              <div class="table-actions-cell" @click.stop>
+                <el-button 
+                  size="small" 
+                  type="primary" 
+                  link
+                  @click="navToResearch(row.code)"
+                >
+                  分时 / K线 ↗
+                </el-button>
+                <el-button 
+                  size="small" 
+                  link
+                  :type="isFavorited(row.code) ? 'warning' : 'default'"
+                  @click="toggleFavorite(row)"
+                >
+                  {{ isFavorited(row.code) ? '★ 已选' : '☆ 自选' }}
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <!-- 网格卡片视图 -->
+      <div v-else class="etf-cards-grid" v-loading="marketLoading">
+        <div 
+          v-for="etf in marketItems" 
+          :key="etf.code" 
+          class="etf-card"
+          :class="{ 'is-up': etf.pct_chg > 0, 'is-down': etf.pct_chg < 0 }"
+          @click="navToResearch(etf.code)"
+        >
+          <div class="card-head">
+            <div class="identity-cluster">
+              <span class="etf-name" :title="etf.name">{{ etf.name }}</span>
+              <div class="sub-codes">
+                <span class="etf-code font-mono">{{ etf.code }}</span>
+                <span class="market-pill">{{ etf.code.startsWith('15') || etf.code.startsWith('16') ? 'SZ' : 'SH' }}</span>
+                <span class="category-pill">{{ etf.category_name }}</span>
+              </div>
+            </div>
+            <span class="category-tag-pill" :class="etf.category">{{ etf.category_name }}</span>
+          </div>
+
+          <div class="price-display-cluster">
+            <span 
+              class="main-price tabular-nums font-mono"
+              :class="etf.pct_chg >= 0 ? 'color-up' : 'color-down'"
+            >
+              ¥{{ Number(etf.price).toFixed(3) }}
+            </span>
+
+            <div 
+              class="chg-badge tabular-nums font-mono"
+              :class="etf.pct_chg >= 0 ? 'badge-up' : 'badge-down'"
+            >
+              <span class="arrow">{{ etf.pct_chg >= 0 ? '▲' : '▼' }}</span>
+              <span class="val">{{ etf.pct_chg >= 0 ? '+' : '' }}{{ Number(etf.pct_chg).toFixed(2) }}%</span>
+              <span class="sub-change-amt" v-if="etf.change !== undefined">({{ etf.change >= 0 ? '+' : '' }}{{ Number(etf.change).toFixed(3) }})</span>
+            </div>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-col">
+              <span class="lbl">成交额</span>
+              <span class="val tabular-nums">{{ etf.amount >= 1 ? `${Number(etf.amount).toFixed(2)}亿` : `${(Number(etf.amount) * 10000).toFixed(0)}万` }}</span>
+            </div>
+            <div class="stat-col">
+              <span class="lbl">成交量</span>
+              <span class="val tabular-nums">{{ (Number(etf.volume) / 10000).toFixed(1) }}万手</span>
+            </div>
+            <div class="stat-col">
+              <span class="lbl">换手率</span>
+              <span class="val tabular-nums">{{ Number(etf.turnover_rate).toFixed(2) }}%</span>
+            </div>
+          </div>
+
+          <div class="card-footer-actions" @click.stop>
+            <el-button 
+              size="small" 
+              type="primary" 
+              class="research-btn"
+              @click="navToResearch(etf.code)"
+            >
+              <el-icon><TrendCharts /></el-icon>
+              <span>深度投研 ↗</span>
+            </el-button>
+            <el-button 
+              size="small" 
+              class="fav-btn"
+              :class="{ 'is-fav': isFavorited(etf.code) }"
+              @click="toggleFavorite(etf)"
+            >
+              <el-icon><StarFilled v-if="isFavorited(etf.code)" /><Star v-else /></el-icon>
+              <span>{{ isFavorited(etf.code) ? '已自选' : '加自选' }}</span>
+            </el-button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 空状态提示 -->
+      <div v-if="marketItems.length === 0 && !marketLoading" class="empty-state">
+        <el-empty description="全市场库中未匹配到相关 ETF，请尝试其他关键词或分类" />
+      </div>
+
+      <!-- 分页工具栏 -->
+      <div class="market-pagination-bar" v-if="marketTotal > 0">
+        <span class="pagination-info">
+          全市场共 <strong>{{ marketTotal }}</strong> 只场内标的 · 当前第 {{ marketPage }} / {{ Math.ceil(marketTotal / marketPageSize) || 1 }} 页
+        </span>
+        <el-pagination
+          v-model:current-page="marketPage"
+          v-model:page-size="marketPageSize"
+          :page-sizes="[20, 30, 50, 100]"
+          :total="marketTotal"
+          background
+          size="small"
+          layout="sizes, prev, pager, next, jumper"
+          @current-change="onMarketPageChange"
+          @size-change="onMarketSizeChange"
+        />
+      </div>
+    </template>
   </div>
 </template>
 
@@ -366,6 +676,10 @@ import { useFavoritesStore } from '@/stores/favorites'
 const router = useRouter()
 const favoritesStore = useFavoritesStore()
 
+// 模式切换：radar=核心热门雷达(41只), market=全市场ETF库(1000+只)
+const activeMode = ref<'radar' | 'market'>('radar')
+
+// --- 模式 1：核心热门雷达状态 ---
 const loading = ref(false)
 const viewMode = ref<'grid' | 'table'>('grid')
 const currentCategory = ref<string>('all')
@@ -450,6 +764,96 @@ const filteredItems = computed(() => {
   return list
 })
 
+// --- 模式 2：全市场 ETF 库状态与逻辑 ---
+const marketLoading = ref(false)
+const marketPage = ref(1)
+const marketPageSize = ref(30)
+const marketCategory = ref('all')
+const marketKeyword = ref('')
+const marketSortBy = ref('amount_desc')
+const marketTotal = ref(0)
+const marketItems = ref<any[]>([])
+const marketViewMode = ref<'table' | 'grid'>('table')
+const marketCategoryCounts = ref<Record<string, number>>({
+  all: 0,
+  broad: 0,
+  tech: 0,
+  industry: 0,
+  macro: 0,
+  thematic: 0,
+  bond_money: 0
+})
+
+const marketCategoryTabs = computed(() => [
+  { id: 'all', name: '全部全量', count: marketCategoryCounts.value.all || marketTotal.value },
+  { id: 'broad', name: '核心宽基', count: marketCategoryCounts.value.broad || 0 },
+  { id: 'tech', name: '硬核科技', count: marketCategoryCounts.value.tech || 0 },
+  { id: 'industry', name: '制造周期', count: marketCategoryCounts.value.industry || 0 },
+  { id: 'macro', name: '大类跨境', count: marketCategoryCounts.value.macro || 0 },
+  { id: 'thematic', name: '特色主题', count: marketCategoryCounts.value.thematic || 0 },
+  { id: 'bond_money', name: '固收货币', count: marketCategoryCounts.value.bond_money || 0 }
+])
+
+function switchMode(mode: 'radar' | 'market') {
+  activeMode.value = mode
+  if (mode === 'market' && marketItems.value.length === 0) {
+    fetchMarketData()
+  }
+}
+
+async function fetchMarketData(force = false) {
+  marketLoading.value = true
+  try {
+    const res = await stocksApi.getEtfMarketList({
+      page: marketPage.value,
+      page_size: marketPageSize.value,
+      category: marketCategory.value,
+      keyword: marketKeyword.value.trim(),
+      sort_by: marketSortBy.value,
+      force_refresh: force
+    })
+    const d = (res as any)?.data || res
+    if (d) {
+      marketTotal.value = d.total || 0
+      marketItems.value = d.items || []
+      if (d.category_counts) {
+        marketCategoryCounts.value = d.category_counts
+      }
+    }
+  } catch (err) {
+    console.error('获取全市场ETF列表异常:', err)
+  } finally {
+    marketLoading.value = false
+  }
+}
+
+function onSelectMarketCategory(catId: string) {
+  marketCategory.value = catId
+  marketPage.value = 1
+  fetchMarketData()
+}
+
+function onMarketSearch() {
+  marketPage.value = 1
+  fetchMarketData()
+}
+
+function onMarketSortChange() {
+  marketPage.value = 1
+  fetchMarketData()
+}
+
+function onMarketPageChange(p: number) {
+  marketPage.value = p
+  fetchMarketData()
+}
+
+function onMarketSizeChange(newSize: number) {
+  marketPageSize.value = newSize
+  marketPage.value = 1
+  fetchMarketData()
+}
+
 function getRatioPercent(count: number = 0): number {
   const total = summary.value.total_count || 1
   return Math.round((count / total) * 100)
@@ -487,12 +891,14 @@ onMounted(() => {
   favoritesStore.fetchFavorites()
   fetchData()
 
-  // 倒计时与轮询
+  // 倒计时与轮询 (仅在雷达模式下生效)
   counterTimer = setInterval(() => {
-    if (autoRefreshCounter.value > 1) {
-      autoRefreshCounter.value--
-    } else {
-      fetchData()
+    if (activeMode.value === 'radar') {
+      if (autoRefreshCounter.value > 1) {
+        autoRefreshCounter.value--
+      } else {
+        fetchData()
+      }
     }
   }, 1000)
 })
@@ -559,6 +965,72 @@ onUnmounted(() => {
     }
   }
 
+  // 模式切换控制器
+  .mode-switcher {
+    display: flex;
+    align-items: center;
+    background: #f2f4f7;
+    padding: 3px;
+    border-radius: 8px;
+    gap: 4px;
+
+    .mode-switch-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: #475467;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+      .m-icon {
+        font-size: 14px;
+      }
+
+      .m-title {
+        font-size: 13px;
+      }
+
+      .m-pill {
+        font-size: 11px;
+        padding: 1px 7px;
+        border-radius: 10px;
+        background: #e4e7ec;
+        color: #344054;
+        font-family: inherit;
+        font-weight: 500;
+
+        &.highlight {
+          background: #eff8ff;
+          color: #175cd3;
+          font-weight: 600;
+        }
+      }
+
+      &.active {
+        background: #ffffff;
+        color: #175cd3;
+        font-weight: 600;
+        box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1);
+
+        .m-pill {
+          background: #eff8ff;
+          color: #175cd3;
+        }
+      }
+
+      &:hover:not(.active) {
+        background: #eaecf0;
+        color: #1d2939;
+      }
+    }
+  }
+
   .ribbon-actions {
     display: flex;
     align-items: center;
@@ -577,6 +1049,10 @@ onUnmounted(() => {
         height: 6px;
         border-radius: 50%;
         background: #039855;
+
+        &.market-dot {
+          background: #175cd3;
+        }
       }
     }
 
@@ -1204,6 +1680,69 @@ onUnmounted(() => {
   background-color: #ffffff;
   border: 1px solid #e4e7ec;
   border-radius: 6px;
+}
+
+// 7. 全市场库专属样式
+.category-tag-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+
+  &.broad {
+    background: rgba(23, 92, 211, 0.08);
+    color: #175cd3;
+  }
+  &.tech {
+    background: rgba(127, 86, 217, 0.1);
+    color: #6941c6;
+  }
+  &.industry {
+    background: rgba(247, 144, 9, 0.1);
+    color: #b54708;
+  }
+  &.macro {
+    background: rgba(3, 152, 85, 0.08);
+    color: #039855;
+  }
+  &.thematic {
+    background: rgba(238, 70, 188, 0.08);
+    color: #c11574;
+  }
+  &.bond_money {
+    background: rgba(102, 112, 133, 0.1);
+    color: #344054;
+  }
+}
+
+.market-pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background-color: #ffffff;
+  border: 1px solid #e4e7ec;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  margin-top: 4px;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  .pagination-info {
+    font-size: 13px;
+    color: #475467;
+
+    strong {
+      color: #175cd3;
+      font-weight: 700;
+    }
+  }
+}
+
+.market-search-input {
+  min-width: 320px;
 }
 
 // 通用金融色彩与排版工具类

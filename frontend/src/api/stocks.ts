@@ -130,6 +130,23 @@ export const stocksApi = {
   },
 
   /**
+   * 全市场 1000+ 场内 ETF 库检索、筛选、排序与分页查询
+   */
+  async getEtfMarketList(params: {
+    page?: number
+    page_size?: number
+    category?: string
+    keyword?: string
+    sort_by?: string
+    force_refresh?: boolean
+  }) {
+    return ApiClient.get<any>(
+      '/api/stocks/etf/market-list',
+      params
+    )
+  },
+
+  /**
    * 获取标的真实机构研报与评级画像（双轨混合模式）
    */
   async getInstitutionRatings(symbol: string, price?: number) {

@@ -2564,6 +2564,32 @@ async def get_etf_market_overview(
     return ok(data=data)
 
 
+@router.get("/etf/market-list", response_model=dict)
+async def get_etf_market_list(
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(30, ge=10, le=100, description="每页条数"),
+    category: str = Query("all", description="分类ID: all, broad, tech, industry, macro, thematic, bond_money"),
+    keyword: str = Query("", description="搜索关键词（代码或名称）"),
+    sort_by: str = Query("amount_desc", description="排序方式: amount_desc, amount_asc, pct_desc, pct_asc, price_desc, turnover_desc"),
+    force_refresh: bool = Query(False, description="是否强制刷新"),
+    current_user: Optional[dict] = Depends(get_optional_current_user)
+):
+    """
+    全市场 1000+ 场内 ETF 库（分页查询、赛道分类、多维度排序与极速检索）
+    """
+    from app.services.etf_service import fetch_all_market_etfs_paged
+    data = await asyncio.to_thread(
+        fetch_all_market_etfs_paged,
+        page=page,
+        page_size=page_size,
+        category=category,
+        keyword=keyword,
+        sort_by=sort_by,
+        force_refresh=force_refresh
+    )
+    return ok(data=data)
+
+
 @router.get("/market/indices", response_model=dict)
 async def get_market_indices(
     force_refresh: bool = Query(False, description="是否强制刷新"),

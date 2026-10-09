@@ -7,6 +7,8 @@
 import logging
 import time
 import urllib.request
+import json
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -204,3 +206,172 @@ def fetch_all_etf_market_overview(force_refresh: bool = False) -> Dict[str, Any]
     _CACHE_DATA = result
     _CACHE_TIMESTAMP = now
     return result
+
+
+# =========================================================================
+# 🌐 全市场 1000+ ETF 库检索、筛选与分页服务 (Full Market ETF Library)
+# =========================================================================
+_MARKET_CACHE_DATA: Optional[List[Dict[str, Any]]] = None
+_MARKET_CACHE_TIMESTAMP: float = 0.0
+_MARKET_CACHE_TTL_SECONDS: float = 25.0
+
+
+def classify_etf(name: str, code: str) -> tuple[str, str]:
+    """
+    根据 ETF 名称与代码特征智能识别赛道类别
+    返回 (category_id, category_name)
+    """
+    if any(k in name for k in ['债', '添益', '日利', '货币', '短融', '存单', '金债']):
+        return ('bond_money', '固收货币')
+    if any(k in name for k in ['300', '500', '1000', '50', 'A500', 'A50', '综指', '创业板', '科创50', '科创100', '双创', '中证A', '中证100', '2000', '上证', '深证', '核心', '大盘', '小盘', '中盘', '800']):
+        return ('broad', '核心宽基')
+    if any(k in name for k in ['芯片', '半导体', '人工智能', 'AI', '算力', '通信', '5G', '软件', '信创', '计算机', '互联网', '游戏', '传媒', '机器人', '电子', '储能', '科技', '数字', '新质', '信息', '网络', '消费电子']):
+        return ('tech', '硬核科技')
+    if any(k in name for k in ['电池', '光伏', '军工', '汽车', '医药', '医疗', '创新药', '中药', '白酒', '酒', '食品', '农业', '养殖', '煤炭', '有色', '金属', '钢铁', '稀土', '化工', '电力', '机械', '材料', '环保', '交通', '运输', '航空', '地产', '家电', '消费', '新能源']):
+        return ('industry', '制造周期')
+    if any(k in name for k in ['黄金', '银', '原油', '纳斯达克', '标普', '恒生', '港股', '德国', '日经', '银行', '证券', '券商', '红利', '金融', '商品', '国企', '央企', '低波', '跨境', '海外', '亚太', '美股']):
+        return ('macro', '大类跨境')
+    return ('thematic', '特色主题')
+
+
+def fetch_all_market_etfs_raw() -> List[Dict[str, Any]]:
+    """
+    并发抓取全市场 1000+ 只场内 ETF 最新实时行情
+    """
+    def fetch_page(p: int):
+        url = f"http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page={p}&num=100&sort=amount&asc=0&node=etf_hq_fund"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return json.loads(r.read().decode("gbk", errors="ignore"))
+
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        # 抓取前 12 页 (涵盖前 1200 只主流高活跃流动性 ETF 标的)
+        results = list(ex.map(fetch_page, range(1, 13)))
+
+    raw_items = [it for p in results for it in p]
+    parsed_items = []
+    seen_codes = set()
+
+    for it in raw_items:
+        code = str(it.get("code") or "")
+        if not code or code in seen_codes:
+            continue
+        seen_codes.add(code)
+
+        name = str(it.get("name") or "")
+        try:
+            px = float(it.get("trade") or 0.0)
+            chg = float(it.get("pricechange") or 0.0)
+            pct = float(it.get("changepercent") or 0.0)
+            amt_raw = float(it.get("amount") or 0.0)
+            amt_yi = round(amt_raw / 1e8, 2)
+            vol = float(it.get("volume") or 0.0)
+            turnover = float(it.get("turnoverratio") or 0.0)
+            high = float(it.get("high") or px)
+            low = float(it.get("low") or px)
+            open_p = float(it.get("open") or px)
+            prev_close = float(it.get("settlement") or round(px - chg, 3))
+        except Exception:
+            continue
+
+        cat_id, cat_name = classify_etf(name, code)
+        symbol = f"sh{code}" if code.startswith(("51", "56", "58", "50", "52", "55")) else f"sz{code}"
+
+        parsed_items.append({
+            "code": code,
+            "symbol": symbol,
+            "name": name,
+            "price": round(px, 3),
+            "change": round(chg, 3),
+            "change_percent": round(pct, 2),
+            "pct_chg": round(pct, 2),
+            "amount": amt_yi,
+            "volume": vol,
+            "turnover_rate": round(turnover, 2),
+            "high": round(high, 3),
+            "low": round(low, 3),
+            "open": round(open_p, 3),
+            "prev_close": round(prev_close, 3),
+            "category": cat_id,
+            "category_name": cat_name,
+            "is_up": chg >= 0
+        })
+
+    return parsed_items
+
+
+def fetch_all_market_etfs_paged(
+    page: int = 1,
+    page_size: int = 30,
+    category: str = "all",
+    keyword: str = "",
+    sort_by: str = "amount_desc",
+    force_refresh: bool = False
+) -> Dict[str, Any]:
+    """
+    全市场 1000+ ETF 库检索、筛选、排序与分页服务
+    """
+    global _MARKET_CACHE_DATA, _MARKET_CACHE_TIMESTAMP
+
+    now = time.time()
+    if force_refresh or _MARKET_CACHE_DATA is None or (now - _MARKET_CACHE_TIMESTAMP) > _MARKET_CACHE_TTL_SECONDS:
+        try:
+            items = fetch_all_market_etfs_raw()
+            if items:
+                _MARKET_CACHE_DATA = items
+                _MARKET_CACHE_TIMESTAMP = now
+        except Exception as e:
+            logger.warning(f"拉取全市场ETF失败: {e}")
+            if _MARKET_CACHE_DATA is None:
+                _MARKET_CACHE_DATA = []
+
+    all_list = list(_MARKET_CACHE_DATA or [])
+
+    # 统计分类计数
+    category_counts = {
+        "all": len(all_list),
+        "broad": sum(1 for it in all_list if it["category"] == "broad"),
+        "tech": sum(1 for it in all_list if it["category"] == "tech"),
+        "industry": sum(1 for it in all_list if it["category"] == "industry"),
+        "macro": sum(1 for it in all_list if it["category"] == "macro"),
+        "thematic": sum(1 for it in all_list if it["category"] == "thematic"),
+        "bond_money": sum(1 for it in all_list if it["category"] == "bond_money"),
+    }
+
+    # 1. 赛道分类筛选
+    filtered = all_list
+    if category and category != "all":
+        filtered = [it for it in filtered if it["category"] == category]
+
+    # 2. 关键词检索 (支持代码或名称模糊匹配)
+    if keyword and keyword.strip():
+        kw = keyword.strip().lower()
+        filtered = [it for it in filtered if kw in it["code"].lower() or kw in it["name"].lower()]
+
+    # 3. 多维度排序
+    if sort_by == "pct_desc":
+        filtered.sort(key=lambda x: x["pct_chg"], reverse=True)
+    elif sort_by == "pct_asc":
+        filtered.sort(key=lambda x: x["pct_chg"])
+    elif sort_by == "price_desc":
+        filtered.sort(key=lambda x: x["price"], reverse=True)
+    elif sort_by == "turnover_desc":
+        filtered.sort(key=lambda x: x["turnover_rate"], reverse=True)
+    elif sort_by == "amount_asc":
+        filtered.sort(key=lambda x: x["amount"])
+    else:  # amount_desc (默认按成交额降序，最符合流动性选基习惯)
+        filtered.sort(key=lambda x: x["amount"], reverse=True)
+
+    total = len(filtered)
+    start_idx = max(0, (page - 1) * page_size)
+    end_idx = start_idx + page_size
+    paged_items = filtered[start_idx:end_idx]
+
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "category_counts": category_counts,
+        "items": paged_items
+    }
+
