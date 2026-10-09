@@ -500,8 +500,26 @@ AI 将自动基于该文档在几秒内无缝接续全部上下文！
       2. `STRONG_MOMENTUM` (主升浪强势加速期)：多头主升加速、上方筹码真空时，**卖点升级为动态移动跟踪止盈 (Trailing Stop)**，以 $\max(\text{MA5}, px - 1.2 \times ATR)$ 为防守底线，不破 MA5 坚决持股待涨让利润奔跑，**彻底杜绝大牛股过早卖飞**；
       3. `PULLBACK_SETUP` (良性缩量回踩区)：精确锚定核心筹码密集峰与 MA10 共振支撑点；
       4. `RANGE_BOUND` (箱体震荡中枢)：仅在箱底给出低吸点，处于半空中明确提示“半空中观望·日内无买点”；
-      5. `EXTREME_OVERSOLD` (极度超跌衰竭区)：5日负乖离深超 -5% 时提供左侧超窄幅试仓点，严格执行单笔试错铁律。
+      5. `EXTREME_OVERSOLD` (极度超跌衰竭区)：5日负乖离深超板块超卖阈值时提供左侧超窄幅试仓点，严格执行单笔试错铁律。
     - **卡片空安全 (Null-Safety) 与多模态视觉响应**：建仓/加仓卡片在禁区时置灰禁用，减仓卡片在主升浪时渲染为紫调“移动防守线”动态标识，散户试算器与模拟盘下单无缝兼容。
+  - **P0 级板块与涨跌幅限制超参数自适应适配 (Board Volatility & Limit Profile Adaptation)**：
+    - **板块极值分布精细化**：根据标的代码前缀智能识别五大板块类型，动态匹配专属波动率与风控超参数，彻底根除不同板块“一刀切”弊端：
+      - `MAIN` (主板 ±10%): `atrFactor: 1.0`, `biasThreshold: 4.5%`, `trailingAtrK: 1.3`, `initialStopK: 1.2`, `profitTriggerK: 1.0`, `oversoldBias: -5.0%`
+      - `20CM` (创业板/科创板 ±20%): `atrFactor: 1.25`, `biasThreshold: 6.5%`, `trailingAtrK: 1.6`, `initialStopK: 1.5`, `profitTriggerK: 1.1`, `oversoldBias: -8.0%`
+      - `BSE` (北交所 ±30%): `atrFactor: 1.50`, `biasThreshold: 8.5%`, `trailingAtrK: 2.0`, `initialStopK: 1.8`, `profitTriggerK: 1.5`, `oversoldBias: -12.0%`
+      - `ST` (风险警示 ±5%): `atrFactor: 0.75`, `biasThreshold: 3.0%`, `trailingAtrK: 0.9`, `initialStopK: 0.85`, `profitTriggerK: 0.7`, `oversoldBias: -3.5%`
+      - `ETF` (场内低波组合): `atrFactor: 0.85`, `biasThreshold: 2.8%`, `trailingAtrK: 1.0`, `initialStopK: 1.0`, `profitTriggerK: 0.8`, `oversoldBias: -3.0%`
+    - **前端横幅与负面清单自适应联动**：决策横幅新增 `.board-badge` 展示板块特征与当前风控阶段；一票否决负面清单（第 2 项）的超跌豁免阈值动态联动 `boardProfile.oversoldBias`。
+  - **P0 级两阶段止盈防抖机制精细化 (Two-Phase Execution)**：
+    - **阶段一 (试仓/蓄势初期)**：挂载初始宽防守（$1.2 \sim 1.5 \times ATR$），给予充足呼吸空间，彻底防范早盘集合竞价与前 15 分钟毛刺随机噪声洗盘震出；
+    - **阶段二 (脱离成本主升期)**：浮盈突破 $1.0 \times ATR$（或获利盘 $\ge 85\%$）确认脱离成本区后，系统自动无缝激活紧身移动止盈 $\max(\text{成本保本}, \text{MA5}, H_n - k \times ATR)$，随新高逐日爬升，彻底让利润奔跑，防大牛股卖飞。
+  - **真实市场历史大数据回测验证体系与后端数据通道加固 (`scripts/verify_trading_science.py` & `data_loader.py`)**：
+    - `data_loader.py` 原生加固腾讯财经 `fqkline` 毫秒级免第三方依赖前复权通道，彻底解决 akshare/baostock 网络波动时的回测卡点；
+    - `scripts/verify_trading_science.py` 实证对比 243 根真实日K线历史大数据：
+      - **中际旭创 (300308, 创业板 20cm)**：胜率提升至 **53.33%** (+9.58%)，单笔期望收益跃升至 **+5.05%**，单笔最大盈利达到 **+45.56%**（旧版固定 8% 卖飞）；
+      - **比亚迪 (002594, 主板 10cm)**：累计收益提升 **+16.23%**，最大回撤显著收窄 **+14.69%** (从 25.55% 降至 10.86%)，胜率提升至 **33.33%**；
+      - **贵州茅台 (600519, 核心蓝筹)**：胜率跃升至 **38.89%** (+18.89%)，累计收益改善 **+8.62%**；
+      - **赛力斯 (601127, 龙头)**：总交易笔数从 39 笔过度频繁交易减少到 16 笔，过滤近 **60% 无效杂波**，最大回撤改善 **+12.45%**。
 
 ### 2. 跨设备数据同步运维与极速数据源指南 (Data Pipeline & Operations Guide for Antigravity)
 

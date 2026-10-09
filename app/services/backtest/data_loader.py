@@ -87,5 +87,41 @@ def load_backtest_data(
     except Exception as e:
         logger.error(f"❌ BaoStock 获取历史数据失败: {e}")
 
-    # 若在线获取均受网络限制，生成基准参考合成走势
+    # 3. 终极备用：腾讯财经极速 fqkline 通道 (无需第三方包，毫秒级响应，前复权)
+    try:
+        import urllib.request
+        import json
+        market = "sh" if clean_sym.startswith(("60", "68", "51", "56", "58", "000")) else "sz"
+        tx_sym = f"{market}{clean_sym}"
+        url = f"http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={tx_sym},day,,,640,qfq"
+        req = urllib.request.urlopen(url, timeout=5)
+        raw_json = json.loads(req.read().decode("utf-8"))
+        kline_data = raw_json.get("data", {}).get(tx_sym, {})
+        klines = kline_data.get("qfqday", kline_data.get("day", []))
+        if klines and len(klines) >= 10:
+            rows = []
+            for k in klines:
+                rows.append({
+                    "date": str(k[0]),
+                    "open": float(k[1]),
+                    "close": float(k[2]),
+                    "high": float(k[3]),
+                    "low": float(k[4]),
+                    "volume": float(k[5]),
+                })
+            res_df = pd.DataFrame(rows)
+            # 过滤起止日期
+            if start_date:
+                s_fmt = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]}" if len(start_date) == 8 else start_date
+                res_df = res_df[res_df["date"] >= s_fmt]
+            if end_date:
+                e_fmt = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:]}" if len(end_date) == 8 else end_date
+                res_df = res_df[res_df["date"] <= e_fmt]
+            res_df = res_df.sort_values("date").reset_index(drop=True)
+            if len(res_df) >= 10:
+                return res_df
+    except Exception as e:
+        logger.error(f"❌ 腾讯 fqkline 获取历史数据失败: {e}")
+
+    # 若在线获取均受网络限制，抛出异常
     raise ValueError(f"无法获取股票 {clean_sym} 的历史日K线数据，请检查网络或股票代码是否正确")

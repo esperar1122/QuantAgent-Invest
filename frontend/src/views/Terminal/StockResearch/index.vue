@@ -184,6 +184,12 @@
           <div class="engine-badge">
             <span class="pulse-indicator"></span>
             ATR 自适应量化决策 · {{ tradeDecision.regimeLabel }}
+            <span 
+              class="board-badge" 
+              :style="{ color: boardProfile.badgeColor, background: boardProfile.badgeBg, borderColor: boardProfile.badgeColor }"
+            >
+              {{ boardProfile.shortName }} · {{ tradeDecision.sellPoint.isTrailing ? (`阶段${tradeDecision.sellPoint.phase || 1}移动止盈`) : (`${boardProfile.limitPct}%限制`) }}
+            </span>
           </div>
           <div class="signal-title-wrap">
             <span class="signal-title">{{ tradeDecision.signalTitle }}</span>
@@ -301,7 +307,7 @@
         <div class="point-card sell-card" :class="{ 'is-trailing': tradeDecision.sellPoint.isTrailing }">
           <div class="card-head">
             <div class="point-badge sell" :class="{ 'trailing': tradeDecision.sellPoint.isTrailing }">
-              {{ tradeDecision.sellPoint.isTrailing ? '移动止盈 (防卖飞)' : '减仓点 (止盈)' }}
+              {{ tradeDecision.sellPoint.isTrailing ? (`移动止盈 (阶段${tradeDecision.sellPoint.phase || 1})`) : '减仓点 (止盈)' }}
             </div>
             <span class="point-action-status">{{ tradeDecision.sellPoint.label }}</span>
           </div>
@@ -309,7 +315,7 @@
             <template v-if="tradeDecision.sellPoint.isTrailing && tradeDecision.sellPoint.price !== null">
               <span class="price-val tabular-nums">¥{{ tradeDecision.sellPoint.price.toFixed(isCurrentETF ? 3 : 2) }}</span>
               <span class="dist-val trailing-tag">
-                防守线 ({{ tradeDecision.sellPoint.distancePct }}%)
+                {{ tradeDecision.sellPoint.phase === 2 ? '紧身锁利线' : '防洗盘底线' }} ({{ tradeDecision.sellPoint.distancePct }}%)
               </span>
             </template>
             <template v-else-if="tradeDecision.sellPoint.price !== null">
@@ -1324,6 +1330,115 @@ const isCurrentETF = computed(() => {
   )
 })
 
+// 🎯 板块与涨跌幅限制自适应超参数配置体系 (Board & Price Limit Adaptive Profile)
+const boardProfile = computed(() => {
+  const code = currentStock.value.code.toLowerCase().replace(/^(sh|sz|bj)/, '')
+  const name = currentStock.value.name || ''
+  const board = currentStock.value.board || ''
+  const isSt = name.includes('ST')
+
+  if (isSt) {
+    return {
+      type: 'ST',
+      name: 'ST风险板块 (±5%)',
+      shortName: 'ST 5%',
+      limitPct: 5,
+      atrFactor: 0.75,          // 最大单日仅5%，ATR标尺收窄至0.75x
+      biasThreshold: 3.0,       // 5日乖离率 > 3% 即属严重超买急拉
+      trailingAtrK: 0.9,        // 阶段二移动止盈缓冲收紧为 0.9x ATR
+      initialStopK: 0.85,       // 阶段一初始防洗盘宽防守
+      profitTriggerK: 0.7,      // 阶段二激活阈值
+      stopLossAtrK: 0.45,       // 支撑缓冲
+      oversoldBias: -3.5,       // 负乖离 -3.5% 即达极限超卖
+      badgeColor: '#f59e0b',
+      badgeBg: 'rgba(245, 158, 11, 0.1)'
+    }
+  }
+  if (code.startsWith('8') || code.startsWith('4') || code.startsWith('920') || board.includes('北交所')) {
+    return {
+      type: 'BSE',
+      name: '北交所 (±30%)',
+      shortName: '北交所 30%',
+      limitPct: 30,
+      atrFactor: 1.50,          // 30cm极高弹性，日内洗盘剧烈，ATR防抖标尺放宽至1.50x
+      biasThreshold: 8.5,       // 5日乖离率 > 8.5% 才是过热加速
+      trailingAtrK: 2.0,        // 阶段二移动止盈缓冲 2.0x ATR，防洗盘震出
+      initialStopK: 1.8,        // 阶段一初始防抖宽防守 1.8x ATR
+      profitTriggerK: 1.5,      // 阶段二激活阈值 (需脱离 1.5x ATR 成本区)
+      stopLossAtrK: 1.0,        // 支撑缓冲
+      oversoldBias: -12.0,      // 负乖离深达 -12% 才是极限超跌
+      badgeColor: '#ec4899',
+      badgeBg: 'rgba(236, 72, 153, 0.1)'
+    }
+  }
+  if (code.startsWith('688') || code.startsWith('689') || board.includes('科创板')) {
+    return {
+      type: 'STAR',
+      name: '科创板 (±20%)',
+      shortName: '科创板 20%',
+      limitPct: 20,
+      atrFactor: 1.25,          // 20cm弹性，ATR放宽至 1.25x
+      biasThreshold: 6.5,       // 5日乖离率 > 6.5% 属主升过热
+      trailingAtrK: 1.6,        // 阶段二移动止盈缓冲 1.6x ATR
+      initialStopK: 1.5,        // 阶段一初始宽防守 1.5x ATR (防20cm早盘下影线洗盘假动作)
+      profitTriggerK: 1.1,      // 阶段二激活阈值 (浮盈脱离 1.1x ATR 成本区)
+      stopLossAtrK: 0.8,        // 支撑缓冲
+      oversoldBias: -8.0,       // 负乖离 -8.0% 触发极限超跌保护
+      badgeColor: '#8b5cf6',
+      badgeBg: 'rgba(139, 92, 246, 0.1)'
+    }
+  }
+  if (code.startsWith('300') || code.startsWith('301') || board.includes('创业板')) {
+    return {
+      type: 'CHINEXT',
+      name: '创业板 (±20%)',
+      shortName: '创业板 20%',
+      limitPct: 20,
+      atrFactor: 1.25,          // 20cm弹性，ATR放宽至 1.25x
+      biasThreshold: 6.5,       // 5日乖离率 > 6.5% 属主升过热
+      trailingAtrK: 1.6,        // 阶段二移动止盈缓冲 1.6x ATR
+      initialStopK: 1.5,        // 阶段一初始宽防守 1.5x ATR
+      profitTriggerK: 1.1,      // 阶段二激活阈值
+      stopLossAtrK: 0.8,        // 支撑缓冲
+      oversoldBias: -8.0,       // 负乖离 -8.0% 触发极限超跌保护
+      badgeColor: '#3b82f6',
+      badgeBg: 'rgba(59, 130, 246, 0.1)'
+    }
+  }
+  if (isCurrentETF.value) {
+    return {
+      type: 'ETF',
+      name: '场内宽基/行业ETF',
+      shortName: 'ETF一篮子',
+      limitPct: 10,
+      atrFactor: 0.85,          // 一篮子组合消除个股特异风险，波动致密，标尺收紧至 0.85x
+      biasThreshold: 2.8,       // 5日乖离 > 2.8% 即属显著超买
+      trailingAtrK: 1.0,        // 移动止盈缓冲紧贴 1.0x ATR
+      initialStopK: 1.0,        // 阶段一初始防守 1.0x ATR
+      profitTriggerK: 0.8,      // 阶段二激活阈值
+      stopLossAtrK: 0.45,       // 支撑缓冲
+      oversoldBias: -3.0,       // 负乖离 -3.0% 触发超卖反弹
+      badgeColor: '#10b981',
+      badgeBg: 'rgba(16, 185, 129, 0.1)'
+    }
+  }
+  return {
+    type: 'MAIN',
+    name: '主板常规标的 (±10%)',
+    shortName: '主板 10%',
+    limitPct: 10,
+    atrFactor: 1.0,           // 10cm标准基准标尺 1.0x
+    biasThreshold: 4.5,       // 5日乖离 > 4.5% 属急拉偏离
+    trailingAtrK: 1.3,        // 阶段二移动止盈缓冲 1.3x ATR
+    initialStopK: 1.2,        // 阶段一初始宽防守 1.2x ATR
+    profitTriggerK: 1.0,      // 阶段二激活阈值 (浮盈脱离 1.0x ATR 成本区)
+    stopLossAtrK: 0.6,        // 支撑缓冲
+    oversoldBias: -5.0,       // 负乖离 -5.0% 触发极限超跌
+    badgeColor: '#6366f1',
+    badgeBg: 'rgba(99, 102, 241, 0.1)'
+  }
+})
+
 // ⚡ ATR 动态波动率自适应决策引擎与五大量价生命周期点位推演
 const tradeDecision = computed(() => {
   if (isCurrentIndex.value) return null
@@ -1335,11 +1450,13 @@ const tradeDecision = computed(() => {
   const chips = currentChips.value
   const ind = currentIndicators.value
   const prec = isCurrentETF.value ? 3 : 2
+  const bp = boardProfile.value
 
-  // 1. 动态波动率标尺 (ATR14 自适应)：告别固定百分比，根据标的真实波动幅度建立弹性度量衡
+  // 1. 动态波动率标尺：基准 ATR 经板块系数 bp.atrFactor 弹性缩放，彻底告别固定常数
   const rawAtr = ind?.atr?.atr14
   const dailyRange = Math.max(0.001, (high > low) ? (high - low) : px * (isCurrentETF.value ? 0.012 : 0.03))
-  const atrVal = (rawAtr && rawAtr > 0) ? rawAtr : Math.max(dailyRange, px * (isCurrentETF.value ? 0.01 : 0.025))
+  const baseAtr = (rawAtr && rawAtr > 0) ? rawAtr : Math.max(dailyRange, px * (isCurrentETF.value ? 0.01 : 0.025))
+  const atrVal = +(baseAtr * bp.atrFactor).toFixed(prec)
   const atrPct = +((atrVal / px) * 100).toFixed(2)
 
   // 2. 均线与短线动能数据
@@ -1364,8 +1481,8 @@ const tradeDecision = computed(() => {
   const res = validResistances[0]
 
   // 4. 判定短线量价五大生命周期状态机 (Market Regime State Machine)
-  // A. 极端超跌衰竭 (BIAS5 <= -5% 或 KDJ J < 5 或 极度深套且日内企稳)
-  const isExtremeOversold = bias5 <= -5.0 || (kdjJ !== undefined && kdjJ !== null && kdjJ < 5) || (profitRatio <= 12.0 && chg > 0)
+  // A. 极端超跌衰竭 (结合板块极限负乖离阈值 bp.oversoldBias 或 KDJ J < 5)
+  const isExtremeOversold = bias5 <= bp.oversoldBias || (kdjJ !== undefined && kdjJ !== null && kdjJ < 5) || (profitRatio <= 12.0 && chg > 0)
 
   // B. 破位阴跌禁区 (MA5/MA10 死叉向下且处于均线下，或高位重度套牢破位且非超跌)
   const isDowntrendBroken = !isExtremeOversold && Boolean(
@@ -1408,7 +1525,7 @@ const tradeDecision = computed(() => {
     regimeLabel = '良性缩量回踩企稳区'
   }
 
-  // 5. 根据状态机推演四大买卖点 (严守：破位绝不硬给买点，主升浪坚决移动止盈防卖飞)
+  // 5. 根据状态机推演四大买卖点 (严守：破位绝不硬给买点，主升浪两阶段移动止盈防卖飞)
   let buyPoint: {
     price: number | null
     distancePct: number | null
@@ -1431,6 +1548,8 @@ const tradeDecision = computed(() => {
     reason: string
     isTrailing: boolean
     targetPrice: number
+    phase?: 1 | 2
+    activationPrice?: number
   }
 
   let stopLossPoint: {
@@ -1483,7 +1602,7 @@ const tradeDecision = computed(() => {
       targetPrice: bouncePx
     }
 
-    const stopPx = +(px - Math.max(0.01, 0.6 * atrVal)).toFixed(prec)
+    const stopPx = +(px - Math.max(0.01, bp.stopLossAtrK * atrVal)).toFixed(prec)
     stopLossPoint = {
       price: stopPx,
       distancePct: +(((stopPx - px) / px) * 100).toFixed(2),
@@ -1494,15 +1613,19 @@ const tradeDecision = computed(() => {
 
   } else if (regime === 'STRONG_MOMENTUM') {
     // -------------------------------------------------------------------------
-    // 状态 2：主升浪强势加速期 -> 坚决不给死靶子卖点，采用动态移动跟踪止盈，防卖飞！
+    // 状态 2：主升浪强势加速期 -> 两阶段止盈防抖机制精细化 (Two-Phase Execution)
+    // 阶段1: 浮盈未拉开时采用 bp.initialStopK (防早盘假摔洗盘)
+    // 阶段2: 浮盈脱离成本区后激活 bp.trailingAtrK 紧身移动止盈 (防卖飞)
     // -------------------------------------------------------------------------
-    hasBuySignal = bias5 <= 4.0
+    const isStretched = bias5 > bp.biasThreshold
+    hasBuySignal = !isStretched
     signalType = hasBuySignal ? 'breakout_buy' : 'trailing_hold'
-    signalTitle = hasBuySignal ? '🚀 触发放量主升浪·顺势突破买点' : '🚀 强势主升浪加速·移动止盈持股待涨'
-    summaryReason = `均线多头排列，获利盘高达 ${profitRatio.toFixed(1)}%，上方进入筹码真空加速通道。坚决不设固定阻力价卖飞大牛股，采用 MA5 动态跟踪移动止盈策略！`
-    intradayWarning = bias5 > 5.5 ? `⚠️【乖离率偏高提示】：当前 5日均线乖离率达到 +${bias5.toFixed(1)}%，盘中急拉追高盈亏比偏低，严禁冲动追高，建议挂单等待回踩 MA5 介入。` : null
+    signalTitle = hasBuySignal ? `🚀 触发${bp.shortName}放量主升·顺势突破买点` : `🚀 强势主升浪加速·两阶段移动止盈`
+    summaryReason = `均线多头排列，获利盘高达 ${profitRatio.toFixed(1)}%，上方进入筹码真空加速通道。自适应加载${bp.name}专属动态参数，坚决不设固定死价格阻力，实行两阶段移动止盈！`
+    intradayWarning = bias5 > (bp.biasThreshold * 1.3)
+      ? `⚠️【${bp.shortName}乖离率偏高提示】：当前 5日均线乖离率达到 +${bias5.toFixed(1)}% (高于该板块安全阈值 +${bp.biasThreshold}%)，盘中急拉追高盈亏比偏低，严禁冲动追高！`
+      : null
 
-    const isStretched = bias5 > 4.0
     const buyPx = isStretched
       ? +(Math.max(ma5 || px * 0.98, px - 1.0 * atrVal)).toFixed(prec)
       : +(Math.max(ma5 || px * 0.99, px - 0.4 * atrVal)).toFixed(prec)
@@ -1510,7 +1633,7 @@ const tradeDecision = computed(() => {
     buyPoint = {
       price: buyPx,
       distancePct: +(((buyPx - px) / px) * 100).toFixed(2),
-      label: isStretched ? '回踩 MA5 激进挂单点 (盘中不追)' : 'MA5 强势回踩承接买点',
+      label: isStretched ? `回踩 MA5 激进挂单点 (${bp.shortName}不追高)` : 'MA5 强势回踩承接买点',
       reason: isStretched
         ? `现价脱离均线乖离偏大 (+${bias5.toFixed(1)}%)，市价追高极易吃日内回撤。建议挂单在 MA5 攻击线 (¥${buyPx.toFixed(prec)}) 附近，等待分时缩量回踩低吸。`
         : `主升浪多头结构饱满，上方无历史套牢盘。以 MA5 攻击线 (¥${(ma5 || buyPx).toFixed(prec)}) 为核心依托，分时回踩企稳即可逢低试仓，享受主升加速。`,
@@ -1525,24 +1648,48 @@ const tradeDecision = computed(() => {
       reason: `主升浪顺势加码逻辑：盘中放量打穿前高/分时阻力线 (¥${nextBreakPx.toFixed(prec)}) 且大单持续流入时，表明主力进攻意愿坚决，可顺势加码享受连阳脉冲。`
     }
 
-    // 动态移动跟踪止盈线 (Trailing Stop)：MAX(MA5, 现价 - 1.2 * ATR)
-    const trailingStopPx = +(Math.max(ma5 ? ma5 * 0.995 : px - 1.2 * atrVal, px - 1.3 * atrVal)).toFixed(prec)
-    const projectedTargetPx = +(px + 2.5 * atrVal).toFixed(prec)
+    // 两阶段移动止盈状态判定：
+    // 若现价较 MA5/短线成本拉开超过 bp.profitTriggerK * atrVal，或获利盘 >= 85%，进入【阶段2·紧身跟踪】；
+    // 否则属于【阶段1·建仓防洗盘蓄势期】。
+    const profitDistanceAtr = ma5 ? (px - ma5) / Math.max(0.001, atrVal) : 0.5
+    const isPhase2 = profitDistanceAtr >= bp.profitTriggerK || profitRatio >= 85.0
+    const phase: 1 | 2 = isPhase2 ? 2 : 1
+    const activationPrice = +(px + Math.max(0.01, bp.profitTriggerK - profitDistanceAtr) * atrVal).toFixed(prec)
+
+    let trailingStopPx: number
+    let sellLabel: string
+    let sellReason: string
+
+    if (isPhase2) {
+      // 阶段 2：已脱离成本区，加载紧身移动止盈线，随新高逐日爬升
+      trailingStopPx = +(Math.max(ma5 ? ma5 * 0.995 : px - bp.trailingAtrK * atrVal, px - bp.trailingAtrK * atrVal)).toFixed(prec)
+      sellLabel = `🚀 两阶段移动止盈 (阶段2·紧身跟踪让利润奔跑)`
+      sellReason = `已确认脱离成本区，进入【阶段2·紧身移动跟踪止盈】！根据${bp.name}波动极值特性，动态加载 ${bp.trailingAtrK}×ATR (¥${trailingStopPx.toFixed(prec)}) 与 MA5 双重锁利线。盘中不破 MA5 坚决持股待涨让利润充分奔跑，彻底杜绝大牛股在洗盘中过早卖飞！`
+    } else {
+      // 阶段 1：建仓/蓄势初期，防范早盘15分钟微小毛刺假摔，执行初始宽防守，暂不收紧
+      trailingStopPx = +(Math.max(ma5 ? ma5 * 0.985 : px - bp.initialStopK * atrVal, px - bp.initialStopK * atrVal)).toFixed(prec)
+      sellLabel = `🛡️ 两阶段移动止盈 (阶段1·防洗盘宽防守)`
+      sellReason = `处于主升浪介入/蓄势初期，防范开盘微小毛刺假摔。执行【阶段1·防抖宽防守】：维持 ${bp.name} 的 ${bp.initialStopK}×ATR 弹性防抖垫 (¥${trailingStopPx.toFixed(prec)})，盘中不被假摔震出；待浮盈突破 ¥${activationPrice.toFixed(prec)} (+${(bp.profitTriggerK * atrPct).toFixed(1)}%) 确认脱离成本区后，系统将自动升级为【阶段2·紧身移动止盈】。`
+    }
+
+    const projectedTargetPx = +(px + (isPhase2 ? 2.5 : 2.0) * atrVal).toFixed(prec)
     sellPoint = {
       price: trailingStopPx,
       distancePct: +(((trailingStopPx - px) / px) * 100).toFixed(2),
-      label: '🚀 动态移动跟踪止盈 (不设死价格·防卖飞)',
-      reason: `处于强势主升浪动能通道，上方筹码真空无阻力，坚决不预设固定目标价避免大牛股‘卖飞’！以 MA5 攻击线 (¥${(ma5 || trailingStopPx).toFixed(prec)}) 与 ATR 移动跟踪线 (¥${trailingStopPx.toFixed(prec)}) 为防守底线：盘中不破 MA5 坚决持股让利润奔跑；若有效收跌破跟踪线则阶梯止盈锁利。`,
+      label: sellLabel,
+      reason: sellReason,
       isTrailing: true,
-      targetPrice: projectedTargetPx
+      targetPrice: projectedTargetPx,
+      phase,
+      activationPrice
     }
 
-    const strongStopPx = +(ma10 ? Math.min(ma10, px - 1.2 * atrVal) : px - 1.5 * atrVal).toFixed(prec)
+    const strongStopPx = +(ma10 ? Math.min(ma10, px - bp.initialStopK * atrVal) : px - bp.initialStopK * atrVal).toFixed(prec)
     stopLossPoint = {
       price: strongStopPx,
       distancePct: +(((strongStopPx - px) / px) * 100).toFixed(2),
-      label: '操盘线 MA10 动态硬防守',
-      reason: `主升浪强势标的的生命线锚定在 MA10 操盘线 (¥${strongStopPx.toFixed(prec)})，若跌破该位置意味着本轮波段加速浪宣告终结，必须无条件离场保护本金与已有浮盈。`
+      label: `操盘线 MA10 防守 (${bp.shortName}阶段1宽防守)`,
+      reason: `主升浪强势标的的生命线锚定在 MA10 操盘线 (¥${strongStopPx.toFixed(prec)}) 与 ${bp.initialStopK}×ATR 弹性极限位，若跌破该位置意味着本轮加速浪终结，必须无条件离场保护本金。`
     }
 
     riskRewardRatio = Math.max(1.8, +(Math.max(2.2 * atrVal, px * 0.08) / Math.max(0.01, px - strongStopPx)).toFixed(2))
@@ -1588,12 +1735,12 @@ const tradeDecision = computed(() => {
       targetPrice: sellPx
     }
 
-    const stopPx = +(supAnchor - 0.5 * atrVal).toFixed(prec)
+    const stopPx = +(supAnchor - bp.stopLossAtrK * atrVal).toFixed(prec)
     stopLossPoint = {
       price: stopPx,
       distancePct: +(((stopPx - px) / px) * 100).toFixed(2),
-      label: '支撑破位止损线 (0.5×ATR 缓冲)',
-      reason: `以核心筹码支撑下方加挂 0.5×ATR 动态防抖缓冲垫 (¥${stopPx.toFixed(prec)}) 为极限防守线，既防止主力盘中假摔洗盘，又能在真正破位时果断止损。`
+      label: `支撑破位止损线 (${bp.stopLossAtrK}×ATR 缓冲)`,
+      reason: `以核心筹码支撑下方根据${bp.name}特性加挂 ${bp.stopLossAtrK}×ATR 动态防抖缓冲垫 (¥${stopPx.toFixed(prec)}) 为极限防守线，既防止主力假摔洗盘，又能在真正破位时果断止损。`
     }
 
     riskRewardRatio = Math.max(1.2, +(Math.max(0.01, sellPx - px) / Math.max(0.01, px - stopPx)).toFixed(2))
@@ -1604,8 +1751,8 @@ const tradeDecision = computed(() => {
     // -------------------------------------------------------------------------
     hasBuySignal = true
     signalType = 'buy'
-    signalTitle = '🌟 触发极度超跌反抽试仓信号'
-    summaryReason = `5日负乖离率深达 ${bias5.toFixed(1)}% (严重超卖)，做空动能宣泄殆尽，极易触发脉冲式技术性绝地反抽，适合极轻仓位左侧试探。`
+    signalTitle = `🌟 触发${bp.shortName}极度超跌反抽试仓信号`
+    summaryReason = `5日负乖离率深达 ${bias5.toFixed(1)}% (已达${bp.shortName}极限超跌阈值 ${bp.oversoldBias}%)，做空动能宣泄殆尽，极易触发脉冲式技术性绝地反抽，适合极轻仓位左侧试探。`
     intradayWarning = `⚠️【超跌博弈提示】：属于左侧抢反弹高风险操作，严格执行单笔试错铁律，见好就收，绝不可中途加仓放大风险！`
 
     const buyPx = +(Math.min(px, low || px)).toFixed(prec)
@@ -1686,7 +1833,7 @@ const tradeDecision = computed(() => {
       price: sellPx,
       distancePct: +(((sellPx - px) / px) * 100).toFixed(2),
       label: '箱体上轨止盈减仓点',
-      reason: `触及震荡箱体上轨套牢区 (¥${sellPx.toFixed(prec)})，上沿抛压沉重，小资金恪守网格高抛纪律，逢高分批落袋为安。`,
+      reason: `触及震荡箱体上轨套劳区 (¥${sellPx.toFixed(prec)})，上沿抛压沉重，小资金恪守网格高抛纪律，逢高分批落袋为安。`,
       isTrailing: false,
       targetPrice: sellPx
     }
@@ -1889,6 +2036,7 @@ const vetoItems = computed(() => {
   }
 
   // 2. 短线操盘线破位与动能衰竭 (针对大 A 超短/波段资金，采用 MA5 攻击线 + MA10 操盘线灵敏双防守，并融合负乖离超跌保护)
+  const bp = boardProfile.value
   const ma5 = ind?.ma?.ma5
   const ma10 = ind?.ma?.ma10
   const ma20 = ind?.ma?.ma20
@@ -1897,9 +2045,9 @@ const vetoItems = computed(() => {
   // 计算 5日负乖离率 BIAS5
   const bias5 = ma5 && ma5 > 0 ? ((px - ma5) / ma5) * 100 : 0.0
 
-  // 1) 是否处于极端超跌反弹区 (5日负乖离深超 -5% 或 KDJ J值超卖至 5 以下)
+  // 1) 是否处于极端超跌反弹区 (结合所属板块极限负乖离阈值 bp.oversoldBias 或 KDJ J值超卖至 5 以下)
   // 在此状态下极易爆发绝地反抽，不盲目杀跌一票否决，而是提示超跌博弈区
-  const isExtremeOversold = bias5 <= -5.0 || (kdjJ !== undefined && kdjJ !== null && kdjJ < 5)
+  const isExtremeOversold = bias5 <= bp.oversoldBias || (kdjJ !== undefined && kdjJ !== null && kdjJ < 5)
 
   // 2) 短线空头破位判定：
   // 当有 MA10 时，现价跌破操盘线 MA10 且短线死叉 (ma5 <= ma10)，或现价同时被 MA5 和 MA10 双重压制
@@ -1916,7 +2064,7 @@ const vetoItems = computed(() => {
     const ma10Text = ma10 ? `操盘线 MA10(¥${ma10.toFixed(2)})` : `攻击线 MA5(¥${(ma5 || px).toFixed(2)})`
     trendDetail = `现价 (¥${px.toFixed(2)}) 跌破短期核心${ma10Text}，且 MA5/MA10 死叉向下空头压制；小资金无时间成本优势，拒绝在短线破位通道中盲目硬扛`
   } else if (isShortTermBroken && isExtremeOversold) {
-    trendDetail = `现价 (¥${px.toFixed(2)}) 虽跌破短期均线，但 5日负乖离达到 ${bias5.toFixed(1)}% (极度超卖)，处于空头衰竭的超跌反抽窗口，未触发绝对否决，但仅限轻仓试错`
+    trendDetail = `现价 (¥${px.toFixed(2)}) 虽跌破短期均线，但 5日负乖离达到 ${bias5.toFixed(1)}% (低于${bp.shortName}超跌阈值 ${bp.oversoldBias}%)，处于空头衰竭的超跌反抽窗口，未触发绝对否决，但仅限轻仓试错`
   } else {
     const defendMa = ma10 ? `MA10 操盘线 (¥${ma10.toFixed(2)})` : `MA5 攻击线 (¥${(ma5 || px).toFixed(2)})`
     trendDetail = `站稳短期${defendMa}之上，均线多头排列或缩量良性回踩，短线主升/波段动能完好`
@@ -4615,6 +4763,19 @@ onUnmounted(() => {
           height: 8px;
           border-radius: 50%;
           animation: pulseDot 2s infinite ease-in-out;
+        }
+
+        .board-badge {
+          font-size: 10px;
+          font-weight: 700;
+          padding: 1px 6px;
+          border-radius: 4px;
+          border: 1px solid currentColor;
+          margin-left: 6px;
+          display: inline-flex;
+          align-items: center;
+          line-height: 1.4;
+          text-transform: none;
         }
       }
 
