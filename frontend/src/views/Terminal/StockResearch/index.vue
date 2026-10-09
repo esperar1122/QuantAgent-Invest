@@ -1563,17 +1563,45 @@ const vetoItems = computed(() => {
       : '日内价格运行平稳，实体饱满，无恶性冲高跳水回落上影线'
   }
 
-  // 2. 跌破生命线单边下行
-  const ma20 = ind?.ma?.ma20
+  // 2. 短线操盘线破位与动能衰竭 (针对大 A 超短/波段资金，采用 MA5 攻击线 + MA10 操盘线灵敏双防守，并融合负乖离超跌保护)
   const ma5 = ind?.ma?.ma5
-  const isBelowMa20 = Boolean(ma20 && px < ma20 && (ma5 ? ma5 < ma20 : true))
+  const ma10 = ind?.ma?.ma10
+  const ma20 = ind?.ma?.ma20
+  const kdjJ = ind?.kdj?.j
+
+  // 计算 5日负乖离率 BIAS5
+  const bias5 = ma5 && ma5 > 0 ? ((px - ma5) / ma5) * 100 : 0.0
+
+  // 1) 是否处于极端超跌反弹区 (5日负乖离深超 -5% 或 KDJ J值超卖至 5 以下)
+  // 在此状态下极易爆发绝地反抽，不盲目杀跌一票否决，而是提示超跌博弈区
+  const isExtremeOversold = bias5 <= -5.0 || (kdjJ !== undefined && kdjJ !== null && kdjJ < 5)
+
+  // 2) 短线空头破位判定：
+  // 当有 MA10 时，现价跌破操盘线 MA10 且短线死叉 (ma5 <= ma10)，或现价同时被 MA5 和 MA10 双重压制
+  // 当无 MA10 时，跌破 MA5 且 px < ma20
+  const isShortTermBroken = ma10
+    ? Boolean((ma5 && px < ma10 && ma5 <= ma10) || (ma5 && px < ma5 && px < ma10))
+    : Boolean(ma5 && px < ma5 && (ma20 ? px < ma20 : true))
+
+  // 3) 最终否决逻辑：短线破位 且 非极端超跌反弹形态
+  const isTrendVetoed = isShortTermBroken && !isExtremeOversold
+
+  let trendDetail = ''
+  if (isTrendVetoed) {
+    const ma10Text = ma10 ? `操盘线 MA10(¥${ma10.toFixed(2)})` : `攻击线 MA5(¥${(ma5 || px).toFixed(2)})`
+    trendDetail = `现价 (¥${px.toFixed(2)}) 跌破短期核心${ma10Text}，且 MA5/MA10 死叉向下空头压制；小资金无时间成本优势，拒绝在短线破位通道中盲目硬扛`
+  } else if (isShortTermBroken && isExtremeOversold) {
+    trendDetail = `现价 (¥${px.toFixed(2)}) 虽跌破短期均线，但 5日负乖离达到 ${bias5.toFixed(1)}% (极度超卖)，处于空头衰竭的超跌反抽窗口，未触发绝对否决，但仅限轻仓试错`
+  } else {
+    const defendMa = ma10 ? `MA10 操盘线 (¥${ma10.toFixed(2)})` : `MA5 攻击线 (¥${(ma5 || px).toFixed(2)})`
+    trendDetail = `站稳短期${defendMa}之上，均线多头排列或缩量良性回踩，短线主升/波段动能完好`
+  }
+
   const trendVeto = {
-    id: 'ma20_break',
-    label: '跌破 MA20 趋势生命线',
-    vetoed: isBelowMa20,
-    detail: isBelowMa20
-      ? `现价 (¥${px.toFixed(2)}) 处于 MA20 (¥${(ma20 || 0).toFixed(2)}) 之下且均线死叉下行，处于单边弱势空头通道`
-      : `站稳 MA20 趋势生命线 (¥${(ma20 || px).toFixed(2)}) 之上，均线多头排列或回踩企稳`
+    id: 'short_trend_break',
+    label: '短线操盘线破位 (MA5/MA10 空头压制)',
+    vetoed: isTrendVetoed,
+    detail: trendDetail
   }
 
   // 3. 上方套牢盘严重压制
