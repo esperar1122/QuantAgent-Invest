@@ -307,21 +307,18 @@
         <div class="point-card sell-card" :class="{ 'is-trailing': tradeDecision.sellPoint.isTrailing }">
           <div class="card-head">
             <div class="point-badge sell" :class="{ 'trailing': tradeDecision.sellPoint.isTrailing }">
-              {{ tradeDecision.sellPoint.isTrailing ? (`移动止盈 (阶段${tradeDecision.sellPoint.phase || 1})`) : '减仓点 (止盈)' }}
+              {{ tradeDecision.sellPoint.isTrailing ? (`目标止盈 (阶段${tradeDecision.sellPoint.phase || 1})`) : '减仓点 (止盈)' }}
             </div>
             <span class="point-action-status">{{ tradeDecision.sellPoint.label }}</span>
           </div>
           <div class="card-price-row">
-            <template v-if="tradeDecision.sellPoint.isTrailing && tradeDecision.sellPoint.price !== null">
-              <span class="price-val tabular-nums">¥{{ tradeDecision.sellPoint.price.toFixed(isCurrentETF ? 3 : 2) }}</span>
-              <span class="dist-val trailing-tag">
-                {{ tradeDecision.sellPoint.phase === 2 ? '紧身锁利线' : '防洗盘底线' }} ({{ tradeDecision.sellPoint.distancePct }}%)
-              </span>
-            </template>
-            <template v-else-if="tradeDecision.sellPoint.price !== null">
+            <template v-if="tradeDecision.sellPoint.price !== null">
               <span class="price-val tabular-nums">¥{{ tradeDecision.sellPoint.price.toFixed(isCurrentETF ? 3 : 2) }}</span>
               <span class="dist-val tabular-nums color-up">
                 {{ (tradeDecision.sellPoint.distancePct || 0) >= 0 ? '+' : '' }}{{ tradeDecision.sellPoint.distancePct }}%
+              </span>
+              <span class="dist-val trailing-tag" v-if="tradeDecision.sellPoint.isTrailing && tradeDecision.sellPoint.trailingStopPrice">
+                防守线 ¥{{ tradeDecision.sellPoint.trailingStopPrice.toFixed(isCurrentETF ? 3 : 2) }}
               </span>
             </template>
             <template v-else>
@@ -1511,6 +1508,10 @@ const tradeDecision = computed(() => {
   let regime: RegimeType = 'RANGE_BOUND'
   let regimeLabel = '箱体震荡中枢'
 
+  // 判断是否属于低波大盘蓝筹/高股息标的 (如银行、公用事业、ETF)
+  const turnover = currentStock.value.turnover || 0.0
+  const isLowVolStock = atrPct <= 2.0 || (turnover > 0 && turnover < 0.6) || isCurrentETF.value
+
   if (isExtremeOversold) {
     regime = 'EXTREME_OVERSOLD'
     regimeLabel = '极度超跌衰竭区'
@@ -1519,7 +1520,7 @@ const tradeDecision = computed(() => {
     regimeLabel = '破位阴跌防守禁区'
   } else if (isStrongMomentum) {
     regime = 'STRONG_MOMENTUM'
-    regimeLabel = '主升浪强势加速期'
+    regimeLabel = isLowVolStock ? '稳健多头趋势波段' : '主升浪强势加速期'
   } else if (isPullbackSetup) {
     regime = 'PULLBACK_SETUP'
     regimeLabel = '良性缩量回踩企稳区'
@@ -1548,6 +1549,7 @@ const tradeDecision = computed(() => {
     reason: string
     isTrailing: boolean
     targetPrice: number
+    trailingStopPrice?: number
     phase?: 1 | 2
     activationPrice?: number
   }
@@ -1573,22 +1575,22 @@ const tradeDecision = computed(() => {
     hasBuySignal = false
     signalType = 'trim'
     signalTitle = '⛔ 处于破位防守通道·坚决不给买点'
-    summaryReason = `上方沉淀重度套牢盘 (${trappedRatio.toFixed(1)}%)，短期均线空头死叉向下压制。当前属于高确定性下行波段，小资金绝不逆势接飞刀，根据量化纪律坚决不输出诱导性建仓点！`
+    summaryReason = `上方沉淀重度套牢盘 (${trappedRatio.toFixed(1)}%)，短期均线空头死叉向下压制。当前属于确定性下行通道，小资金恪守量化纪律，坚决不输出诱导性建仓点，耐心空仓观望！`
     intradayWarning = `⚠️【破位防守红线】：当前标的处于均线空头死叉与套牢密集区，日内绝无安全买点！严禁小资金抱侥幸心理盲目抄底。`
 
     buyPoint = {
       price: null,
       distancePct: null,
-      label: '⛔ 破位禁区·暂无安全买点',
-      reason: `短期操盘线已破位向下，且上方套牢盘高达 ${trappedRatio.toFixed(1)}%。小资金无时间成本优势，拒绝在下降通道中左侧盲目猜底，等待右侧均线走平、大单放量企稳后再做评估。`,
+      label: '破位禁区·暂无安全买点',
+      reason: `短期操盘线已破位向下，且上方套牢盘达 ${trappedRatio.toFixed(1)}%。小资金无时间成本优势，拒绝在下行通道中左侧盲目猜底，等待右侧均线走平、资金放量企稳后再做评估。`,
       isActionableToday: false
     }
 
     addPoint = {
       price: null,
       distancePct: null,
-      label: '⛔ 严禁逆势加仓摊平',
-      reason: `下行破位趋势中加仓摊薄成本是短线小资金账户大幅回撤与深套的第一元凶，系统严格封死逆势加仓建议。`
+      label: '空头通道·严禁逆势加仓',
+      reason: `下行破位走势中逆势补仓是导致大幅回撤的主要风险源，严格执行禁止加仓纪律。`
     }
 
     const bounceTarget = (ma5 && ma5 > px) ? ma5 : (ma10 && ma10 > px ? ma10 : +(px + 0.8 * atrVal).toFixed(prec))
@@ -1596,8 +1598,8 @@ const tradeDecision = computed(() => {
     sellPoint = {
       price: bouncePx,
       distancePct: +(((bouncePx - px) / px) * 100).toFixed(2),
-      label: '反抽均线减仓/解套点',
-      reason: `破位通道中的任何脉冲反抽均为弱势诱多解套波。若盘中反抽触及短期均线压制位 (¥${bouncePx.toFixed(prec)})，持仓者应果断借机减仓甚至清仓，拒绝心存幻想。`,
+      label: '反抽短期均线减仓点',
+      reason: `破位通道中的脉冲反抽属于弱势解套波。若盘中反抽触及短期均线压制位 (¥${bouncePx.toFixed(prec)})，持仓者建议果断借机减仓避险。`,
       isTrailing: false,
       targetPrice: bouncePx
     }
@@ -1609,21 +1611,25 @@ const tradeDecision = computed(() => {
       label: '破位下破极限止损线',
       reason: `下方缺乏有效筹码密集峰托底，若进一步下破 ¥${stopPx.toFixed(prec)} 必须无条件离场，严防单边阴跌演化为深度套牢。`
     }
-    riskRewardRatio = 0.5
 
   } else if (regime === 'STRONG_MOMENTUM') {
     // -------------------------------------------------------------------------
-    // 状态 2：主升浪强势加速期 -> 两阶段止盈防抖机制精细化 (Two-Phase Execution)
-    // 阶段1: 浮盈未拉开时采用 bp.initialStopK (防早盘假摔洗盘)
-    // 阶段2: 浮盈脱离成本区后激活 bp.trailingAtrK 紧身移动止盈 (防卖飞)
+    // 状态 2：多头主升 / 稳健趋势波段 -> 两阶段止盈防抖机制精细化 (Two-Phase Execution)
     // -------------------------------------------------------------------------
     const isStretched = bias5 > bp.biasThreshold
     hasBuySignal = !isStretched
     signalType = hasBuySignal ? 'breakout_buy' : 'trailing_hold'
-    signalTitle = hasBuySignal ? `🚀 触发${bp.shortName}放量主升·顺势突破买点` : `🚀 强势主升浪加速·两阶段移动止盈`
-    summaryReason = `均线多头排列，获利盘高达 ${profitRatio.toFixed(1)}%，上方进入筹码真空加速通道。自适应加载${bp.name}专属动态参数，坚决不设固定死价格阻力，实行两阶段移动止盈！`
+    
+    if (isLowVolStock) {
+      signalTitle = hasBuySignal ? `🔵 稳健多头排列·MA5 回踩试仓点` : `🔵 稳健多头波段·两阶段移动跟踪`
+      summaryReason = `均线呈稳步多头排列，日内波动致密可控，持筹结构扎实。适合以 MA5/MA10 为依托进行稳健波段持股，动态跟踪防守线，拒绝盲目追高。`
+    } else {
+      signalTitle = hasBuySignal ? `🚀 触发${bp.shortName}放量多头·顺势突破买点` : `🚀 强势主升浪加速·两阶段移动止盈`
+      summaryReason = `均线多头排列向上发散，获利盘达 ${profitRatio.toFixed(1)}%，上方筹码阻力较小。自适应加载${bp.name}专属动态参数，实行两阶段移动止盈让利润奔跑！`
+    }
+
     intradayWarning = bias5 > (bp.biasThreshold * 1.3)
-      ? `⚠️【${bp.shortName}乖离率偏高提示】：当前 5日均线乖离率达到 +${bias5.toFixed(1)}% (高于该板块安全阈值 +${bp.biasThreshold}%)，盘中急拉追高盈亏比偏低，严禁冲动追高！`
+      ? `⚠️【${bp.shortName}乖离率偏高提示】：当前 5日均线乖离率达到 +${bias5.toFixed(1)}% (高于安全阈值 +${bp.biasThreshold}%)，盘中急拉追高盈亏比偏低，严禁冲动追高！`
       : null
 
     const buyPx = isStretched
@@ -1633,10 +1639,10 @@ const tradeDecision = computed(() => {
     buyPoint = {
       price: buyPx,
       distancePct: +(((buyPx - px) / px) * 100).toFixed(2),
-      label: isStretched ? `回踩 MA5 激进挂单点 (${bp.shortName}不追高)` : 'MA5 强势回踩承接买点',
+      label: isStretched ? 'MA5 均线回踩挂单点 (防急拉追高)' : 'MA5 攻击线回踩买点',
       reason: isStretched
-        ? `现价脱离均线乖离偏大 (+${bias5.toFixed(1)}%)，市价追高极易吃日内回撤。建议挂单在 MA5 攻击线 (¥${buyPx.toFixed(prec)}) 附近，等待分时缩量回踩低吸。`
-        : `主升浪多头结构饱满，上方无历史套牢盘。以 MA5 攻击线 (¥${(ma5 || buyPx).toFixed(prec)}) 为核心依托，分时回踩企稳即可逢低试仓，享受主升加速。`,
+        ? `现价脱离 5日均线乖离偏大 (+${bias5.toFixed(1)}%)，市价追高盈亏比较低。建议挂单在 MA5 攻击线 (¥${buyPx.toFixed(prec)}) 附近，等待分时缩量回踩低吸。`
+        : `均线多头结构良好，上方阻力较小。以 MA5 攻击线 (¥${(ma5 || buyPx).toFixed(prec)}) 为核心依托，分时回踩企稳即可逢低试仓。`,
       isActionableToday: !isStretched
     }
 
@@ -1644,13 +1650,11 @@ const tradeDecision = computed(() => {
     addPoint = {
       price: nextBreakPx,
       distancePct: +(((nextBreakPx - px) / px) * 100).toFixed(2),
-      label: '日内放量突破加仓点',
-      reason: `主升浪顺势加码逻辑：盘中放量打穿前高/分时阻力线 (¥${nextBreakPx.toFixed(prec)}) 且大单持续流入时，表明主力进攻意愿坚决，可顺势加码享受连阳脉冲。`
+      label: '放量突破前高加仓点',
+      reason: `盘中放量打穿前高/分时阻力线 (¥${nextBreakPx.toFixed(prec)}) 且大单持续流入时，表明做多动能持续，可顺势加码。`
     }
 
     // 两阶段移动止盈状态判定：
-    // 若现价较 MA5/短线成本拉开超过 bp.profitTriggerK * atrVal，或获利盘 >= 85%，进入【阶段2·紧身跟踪】；
-    // 否则属于【阶段1·建仓防洗盘蓄势期】。
     const profitDistanceAtr = ma5 ? (px - ma5) / Math.max(0.001, atrVal) : 0.5
     const isPhase2 = profitDistanceAtr >= bp.profitTriggerK || profitRatio >= 85.0
     const phase: 1 | 2 = isPhase2 ? 2 : 1
@@ -1660,26 +1664,30 @@ const tradeDecision = computed(() => {
     let sellLabel: string
     let sellReason: string
 
+    // 波段预期上行目标价：基于真实有效 ATR 波动推演，低波蓝筹目标适度致密，高弹性标的充分舒展
+    const targetAtrMultiple = isLowVolStock ? (isPhase2 ? 1.8 : 1.5) : (isPhase2 ? 2.3 : 1.8)
+    const projectedTargetPx = +(px + targetAtrMultiple * atrVal).toFixed(prec)
+
     if (isPhase2) {
       // 阶段 2：已脱离成本区，加载紧身移动止盈线，随新高逐日爬升
       trailingStopPx = +(Math.max(ma5 ? ma5 * 0.995 : px - bp.trailingAtrK * atrVal, px - bp.trailingAtrK * atrVal)).toFixed(prec)
-      sellLabel = `🚀 两阶段移动止盈 (阶段2·紧身跟踪让利润奔跑)`
-      sellReason = `已确认脱离成本区，进入【阶段2·紧身移动跟踪止盈】！根据${bp.name}波动极值特性，动态加载 ${bp.trailingAtrK}×ATR (¥${trailingStopPx.toFixed(prec)}) 与 MA5 双重锁利线。盘中不破 MA5 坚决持股待涨让利润充分奔跑，彻底杜绝大牛股在洗盘中过早卖飞！`
+      sellLabel = `波段目标止盈 (阶段2·紧身锁利)`
+      sellReason = `已确认脱离成本区，进入【阶段2·紧身移动跟踪止盈】。波段预期目标位看至 ¥${projectedTargetPx.toFixed(prec)}；底仓以动态移动止盈线 (¥${trailingStopPx.toFixed(prec)}) 为防守基准，盘中不破 MA5 坚决持股待涨让利润充分奔跑，彻底杜绝主升浪过早卖飞！`
     } else {
-      // 阶段 1：建仓/蓄势初期，防范早盘15分钟微小毛刺假摔，执行初始宽防守，暂不收紧
+      // 阶段 1：建仓/蓄势初期，防范早盘微小毛刺假摔，执行初始宽防守
       trailingStopPx = +(Math.max(ma5 ? ma5 * 0.985 : px - bp.initialStopK * atrVal, px - bp.initialStopK * atrVal)).toFixed(prec)
-      sellLabel = `🛡️ 两阶段移动止盈 (阶段1·防洗盘宽防守)`
-      sellReason = `处于主升浪介入/蓄势初期，防范开盘微小毛刺假摔。执行【阶段1·防抖宽防守】：维持 ${bp.name} 的 ${bp.initialStopK}×ATR 弹性防抖垫 (¥${trailingStopPx.toFixed(prec)})，盘中不被假摔震出；待浮盈突破 ¥${activationPrice.toFixed(prec)} (+${(bp.profitTriggerK * atrPct).toFixed(1)}%) 确认脱离成本区后，系统将自动升级为【阶段2·紧身移动止盈】。`
+      sellLabel = `波段目标止盈 (阶段1·防洗盘)`
+      sellReason = `处于多头介入/蓄势初期，防范开盘微小毛刺假摔。维持 ${bp.initialStopK}×ATR 弹性防洗盘底线 (¥${trailingStopPx.toFixed(prec)})，波段预期目标位看至 ¥${projectedTargetPx.toFixed(prec)}；待浮盈突破 ¥${activationPrice.toFixed(prec)} (+${(bp.profitTriggerK * atrPct).toFixed(1)}%) 确认脱离成本区后，系统将自动升级为紧身移动止盈。`
     }
 
-    const projectedTargetPx = +(px + (isPhase2 ? 2.5 : 2.0) * atrVal).toFixed(prec)
     sellPoint = {
-      price: trailingStopPx,
-      distancePct: +(((trailingStopPx - px) / px) * 100).toFixed(2),
+      price: projectedTargetPx,
+      distancePct: +(((projectedTargetPx - px) / px) * 100).toFixed(2),
       label: sellLabel,
       reason: sellReason,
       isTrailing: true,
       targetPrice: projectedTargetPx,
+      trailingStopPrice: trailingStopPx,
       phase,
       activationPrice
     }
@@ -1688,11 +1696,9 @@ const tradeDecision = computed(() => {
     stopLossPoint = {
       price: strongStopPx,
       distancePct: +(((strongStopPx - px) / px) * 100).toFixed(2),
-      label: `操盘线 MA10 防守 (${bp.shortName}阶段1宽防守)`,
-      reason: `主升浪强势标的的生命线锚定在 MA10 操盘线 (¥${strongStopPx.toFixed(prec)}) 与 ${bp.initialStopK}×ATR 弹性极限位，若跌破该位置意味着本轮加速浪终结，必须无条件离场保护本金。`
+      label: 'MA10 操盘线防守止损',
+      reason: `多头生命线锚定在 MA10 操盘线 (¥${strongStopPx.toFixed(prec)})，若跌破该位置意味着本轮上行波段终结，必须无条件离场保护本金。`
     }
-
-    riskRewardRatio = Math.max(1.8, +(Math.max(2.2 * atrVal, px * 0.08) / Math.max(0.01, px - strongStopPx)).toFixed(2))
 
   } else if (regime === 'PULLBACK_SETUP') {
     // -------------------------------------------------------------------------
@@ -1705,14 +1711,14 @@ const tradeDecision = computed(() => {
     hasBuySignal = isAtSupport
     signalType = 'buy'
     signalTitle = isAtSupport ? '🟢 触发回踩企稳伏击买入信号' : '⚪ 挂单等待回踩核心支撑点'
-    summaryReason = `标的呈现缩量良性回踩，下方核心密集峰与 MA10 操盘线形成共振支撑防守垫，下行空间被锁死，具备短线波段极佳盈亏比。`
+    summaryReason = `标的呈现缩量良性回踩，下方核心密集峰与 MA10 操盘线形成共振支撑防守垫，下行空间有限，具备较好盈亏比。`
     intradayWarning = isAtSupport ? null : `⚠️【等待回踩】：股价尚未完全回踩至核心支撑带，请保持耐心挂单在 ¥${buyPx.toFixed(prec)} 附近，不宜市价抢跑。`
 
     buyPoint = {
       price: buyPx,
       distancePct: +(((buyPx - px) / px) * 100).toFixed(2),
-      label: isAtSupport ? '核心密集峰/MA10 现价买点' : '核心密集峰回踩低吸点',
-      reason: `标的缩量良性回踩，下方核心筹码密集峰 (¥${buyPx.toFixed(prec)}) 沉淀大量主力真金白银底仓，回踩到位后反弹概率极高，能将试错止损成本锁死在 1~2% 之内。`,
+      label: isAtSupport ? '核心支撑位现价买点' : '核心支撑位回踩低吸点',
+      reason: `标的缩量良性回踩，下方核心筹码密集峰 (¥${buyPx.toFixed(prec)}) 沉淀主力底仓，回踩到位后企稳概率高，能将试错止损成本控制在极小范围内。`,
       isActionableToday: isAtSupport
     }
 
@@ -1720,17 +1726,17 @@ const tradeDecision = computed(() => {
     addPoint = {
       price: addPx,
       distancePct: +(((addPx - px) / px) * 100).toFixed(2),
-      label: '重上 MA5 企稳确认加仓点',
-      reason: `回踩企稳后，当股价再度放量攻克 MA5 攻击线 (¥${addPx.toFixed(prec)})，确认洗盘结束重拾升势，此时右侧加仓确定性最高。`
+      label: '重上 MA5 企稳加仓点',
+      reason: `回踩企稳后，当股价再度放量攻克 MA5 攻击线 (¥${addPx.toFixed(prec)})，确认洗盘结束重拾升势，此时右侧加仓确定性较高。`
     }
 
-    const pullTarget = (res && res.price > px) ? res.price : +(px + 2.0 * atrVal).toFixed(prec)
+    const pullTarget = (res && res.price > px) ? res.price : +(px + 1.8 * atrVal).toFixed(prec)
     const sellPx = +pullTarget.toFixed(prec)
     sellPoint = {
       price: sellPx,
       distancePct: +(((sellPx - px) / px) * 100).toFixed(2),
-      label: '首要套牢峰减仓点',
-      reason: `逼近上方首要密集套牢峰 (¥${sellPx.toFixed(prec)})，此处持筹者保本抛售意愿强烈，建议逢脉冲冲高分批减仓，落袋为安。`,
+      label: '上方阻力密集区减仓点',
+      reason: `逼近上方首要密集筹码阻力区 (¥${sellPx.toFixed(prec)})，此处可能面临保本解套抛压，建议逢冲高分批减仓兑现，落袋为安。`,
       isTrailing: false,
       targetPrice: sellPx
     }
@@ -1739,11 +1745,9 @@ const tradeDecision = computed(() => {
     stopLossPoint = {
       price: stopPx,
       distancePct: +(((stopPx - px) / px) * 100).toFixed(2),
-      label: `支撑破位止损线 (${bp.stopLossAtrK}×ATR 缓冲)`,
-      reason: `以核心筹码支撑下方根据${bp.name}特性加挂 ${bp.stopLossAtrK}×ATR 动态防抖缓冲垫 (¥${stopPx.toFixed(prec)}) 为极限防守线，既防止主力假摔洗盘，又能在真正破位时果断止损。`
+      label: '筹码支撑破位止损线',
+      reason: `以核心筹码支撑下方动态缓冲位 (¥${stopPx.toFixed(prec)}) 为极限防守线，若有效跌破则判定支撑失效，果断止损离场。`
     }
-
-    riskRewardRatio = Math.max(1.2, +(Math.max(0.01, sellPx - px) / Math.max(0.01, px - stopPx)).toFixed(2))
 
   } else if (regime === 'EXTREME_OVERSOLD') {
     // -------------------------------------------------------------------------
@@ -1752,7 +1756,7 @@ const tradeDecision = computed(() => {
     hasBuySignal = true
     signalType = 'buy'
     signalTitle = `🌟 触发${bp.shortName}极度超跌反抽试仓信号`
-    summaryReason = `5日负乖离率深达 ${bias5.toFixed(1)}% (已达${bp.shortName}极限超跌阈值 ${bp.oversoldBias}%)，做空动能宣泄殆尽，极易触发脉冲式技术性绝地反抽，适合极轻仓位左侧试探。`
+    summaryReason = `5日负乖离率深达 ${bias5.toFixed(1)}% (已达超跌阈值 ${bp.oversoldBias}%)，做空动能宣泄殆尽，极易触发脉冲式技术性反抽，适合极轻仓位左侧试探。`
     intradayWarning = `⚠️【超跌博弈提示】：属于左侧抢反弹高风险操作，严格执行单笔试错铁律，见好就收，绝不可中途加仓放大风险！`
 
     const buyPx = +(Math.min(px, low || px)).toFixed(prec)
@@ -1760,7 +1764,7 @@ const tradeDecision = computed(() => {
       price: buyPx,
       distancePct: +(((buyPx - px) / px) * 100).toFixed(2),
       label: '极度超跌绝地反抽试仓点',
-      reason: `指标严重超卖钝化，做空盘释放殆尽。以今日低点 (¥${buyPx.toFixed(prec)}) 附近为依托，轻仓博弈超跌单日长下影线或反抽阳线。`,
+      reason: `指标严重超卖钝化，做空盘释放殆尽。以今日低点 (¥${buyPx.toFixed(prec)}) 附近为依托，轻仓博弈超跌单日反抽。`,
       isActionableToday: true
     }
 
@@ -1768,15 +1772,15 @@ const tradeDecision = computed(() => {
       price: null,
       distancePct: null,
       label: '超跌反弹严禁加仓',
-      reason: `抢超跌反弹属于短线刀口舔血的高风险博弈，严格执行单笔试错纪律，坚决禁止二次加仓扩大风险敞口。`
+      reason: `抢超跌反弹属于高风险试错博弈，严格执行单笔试错纪律，坚决禁止二次加仓扩大风险敞口。`
     }
 
     const sellPx = +(ma5 || px + 1.0 * atrVal).toFixed(prec)
     sellPoint = {
       price: sellPx,
       distancePct: +(((sellPx - px) / px) * 100).toFixed(2),
-      label: 'MA5 压制线快进快出减仓点',
-      reason: `超跌反抽第一道强压制在 MA5 均线 (¥${sellPx.toFixed(prec)})。小资金抢反弹讲求快进快出，触及 MA5 必须坚决逢高止盈兑现，切忌贪战。`,
+      label: 'MA5 均线压制减仓点',
+      reason: `超跌反抽第一道强压制在 MA5 均线 (¥${sellPx.toFixed(prec)})。小资金抢反弹讲求快进快出，触及短期阻力位必须坚决逢高止盈兑现。`,
       isTrailing: false,
       targetPrice: sellPx
     }
@@ -1788,8 +1792,6 @@ const tradeDecision = computed(() => {
       label: '击穿极端低点硬止损',
       reason: `若反抽失败进一步跌破极端低点 (¥${stopPx.toFixed(prec)})，说明空头仍在单边宣泄，试错失败必须立即斩仓出局。`
     }
-
-    riskRewardRatio = Math.max(1.5, +(Math.max(0.01, sellPx - px) / Math.max(0.01, px - stopPx)).toFixed(2))
 
   } else {
     // -------------------------------------------------------------------------
@@ -1833,7 +1835,7 @@ const tradeDecision = computed(() => {
       price: sellPx,
       distancePct: +(((sellPx - px) / px) * 100).toFixed(2),
       label: '箱体上轨止盈减仓点',
-      reason: `触及震荡箱体上轨套劳区 (¥${sellPx.toFixed(prec)})，上沿抛压沉重，小资金恪守网格高抛纪律，逢高分批落袋为安。`,
+      reason: `触及震荡箱体上轨阻力区 (¥${sellPx.toFixed(prec)})，上沿抛压沉重，小资金恪守高抛纪律，逢高分批落袋为安。`,
       isTrailing: false,
       targetPrice: sellPx
     }
@@ -1845,8 +1847,26 @@ const tradeDecision = computed(() => {
       label: '箱底下轨击穿止损线',
       reason: `有效击穿箱底防守线 (¥${stopPx.toFixed(prec)}) 意味着震荡中枢瓦解转为破位下跌，必须果断止损离场。`
     }
+  }
 
-    riskRewardRatio = Math.max(1.0, +(Math.max(0.01, sellPx - px) / Math.max(0.01, px - stopPx)).toFixed(2))
+  // ---------------------------------------------------------------------------
+  // 6. 统一科学盈亏比推演 (Unified Real Risk-Reward Ratio)
+  // 入场参考基准：若今天有可执行买点，按买点价格作为基准成本；否则按当前市价 px
+  // 预期上涨空间：目标价 targetPrice - 入场基准
+  // 承担下行风险：入场基准 - 止损价 stopPrice
+  // ---------------------------------------------------------------------------
+  const entryBaseline = (hasBuySignal && buyPoint.price !== null) ? buyPoint.price : px
+  const targetPx = (sellPoint.targetPrice !== undefined && sellPoint.targetPrice > 0)
+    ? sellPoint.targetPrice
+    : (sellPoint.price !== null ? sellPoint.price : px + 1.5 * atrVal)
+  const stopLossPx = stopLossPoint.price
+
+  if (regime === 'DOWNWARD_TREND') {
+    riskRewardRatio = 0.5
+  } else {
+    const upsideGain = Math.max(0.005, targetPx - entryBaseline)
+    const downsideRisk = Math.max(0.005, entryBaseline - stopLossPx)
+    riskRewardRatio = +(upsideGain / downsideRisk).toFixed(2)
   }
 
   return {
@@ -1884,25 +1904,16 @@ const retailCalc = ref({
 function syncCalcPricesWithDecision() {
   const px = currentStock.value.price || 10.0
   const prec = isCurrentETF.value ? 3 : 2
-  retailCalc.value.entryPrice = +px.toFixed(prec)
-  if (tradeDecision.value) {
-    const td = tradeDecision.value
-    if (td.sellPoint.isTrailing) {
-      retailCalc.value.targetPrice = +(td.sellPoint.targetPrice || (px + 2.5 * td.atrVal)).toFixed(prec)
-    } else if (td.sellPoint.price !== null) {
-      retailCalc.value.targetPrice = +td.sellPoint.price.toFixed(prec)
-    } else {
-      retailCalc.value.targetPrice = +(px + 2.0 * td.atrVal).toFixed(prec)
-    }
+  const td = tradeDecision.value
 
-    if (td.stopLossPoint.price !== null) {
-      retailCalc.value.stopLossPrice = +td.stopLossPoint.price.toFixed(prec)
-    } else {
-      retailCalc.value.stopLossPrice = +(px - 1.0 * td.atrVal).toFixed(prec)
-    }
+  if (td) {
+    retailCalc.value.entryPrice = (td.hasBuySignal && td.buyPoint.price !== null) ? +td.buyPoint.price.toFixed(prec) : +px.toFixed(prec)
+    retailCalc.value.targetPrice = +(td.sellPoint.targetPrice || td.sellPoint.price || (px + 1.5 * td.atrVal)).toFixed(prec)
+    retailCalc.value.stopLossPrice = +(td.stopLossPoint.price || (px - 1.0 * td.atrVal)).toFixed(prec)
   } else {
-    retailCalc.value.targetPrice = +(px * 1.10).toFixed(prec)
-    retailCalc.value.stopLossPrice = +(px * 0.95).toFixed(prec)
+    retailCalc.value.entryPrice = +px.toFixed(prec)
+    retailCalc.value.targetPrice = +(px * 1.05).toFixed(prec)
+    retailCalc.value.stopLossPrice = +(px * 0.97).toFixed(prec)
   }
 }
 
@@ -1921,17 +1932,14 @@ const calcEntryPx = computed(() => {
 const calcTargetPx = computed(() => {
   if (retailCalc.value.targetPrice > 0) return retailCalc.value.targetPrice
   if (tradeDecision.value) {
-    if (tradeDecision.value.sellPoint.isTrailing) {
-      return tradeDecision.value.sellPoint.targetPrice || +(calcEntryPx.value * 1.10).toFixed(2)
-    }
-    return tradeDecision.value.sellPoint.price ?? +(calcEntryPx.value * 1.10).toFixed(2)
+    return tradeDecision.value.sellPoint.targetPrice || tradeDecision.value.sellPoint.price || +(calcEntryPx.value * 1.05).toFixed(2)
   }
-  return +(calcEntryPx.value * 1.10).toFixed(2)
+  return +(calcEntryPx.value * 1.05).toFixed(2)
 })
 
 const calcStopPx = computed(() => {
   if (retailCalc.value.stopLossPrice > 0) return retailCalc.value.stopLossPrice
-  return tradeDecision.value ? (tradeDecision.value.stopLossPoint.price ?? +(calcEntryPx.value * 0.95).toFixed(2)) : +(calcEntryPx.value * 0.95).toFixed(2)
+  return tradeDecision.value ? (tradeDecision.value.stopLossPoint.price ?? +(calcEntryPx.value * 0.97).toFixed(2)) : +(calcEntryPx.value * 0.97).toFixed(2)
 })
 
 const maxRiskDollars = computed(() => {

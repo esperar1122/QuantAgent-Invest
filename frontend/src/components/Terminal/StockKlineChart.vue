@@ -636,7 +636,7 @@
         </div>
       </div>
 
-      <!-- 🔥 骨架扫光层 (当后端离线/未连接且无真实数据时展示，代替 8.27 虚假数据) -->
+      <!-- 🔥 骨架扫光层 (当后端离线/未连接且无真实数据时展示) -->
       <div v-if="isOfflineEmpty" class="kline-skeleton-layer">
         <!-- 骨架扫描背景蜡烛条与网格 -->
         <div class="skeleton-chart-canvas">
@@ -675,7 +675,7 @@
           </div>
           <div class="status-title">投研中台未连接 · 骨架就绪等待数据流</div>
           <div class="status-subtitle">
-            系统已屏蔽 8.27 虚假模拟数据以确保合规真实性，请启动后端服务或检查接口链路
+            请启动后端服务或检查接口链路
           </div>
           <div class="status-action-row">
             <button class="sk-retry-btn" :disabled="loading || timelineLoading" @click="handleManualRetry">
