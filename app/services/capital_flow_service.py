@@ -1,4 +1,4 @@
-﻿"""
+"""
 资金流向与北向资金持股分析服务 (Capital Flow & Northbound Holding Service)
 数据源设计：
 1. 个股大单/超大单/中单/小单日度及多日资金流：新浪财经 MoneyFlow 官方开放接口 (高可用、毫秒级响应、包含2026最新收盘日数据)
@@ -184,7 +184,7 @@ class CapitalFlowService:
         try:
             r = requests.get(url, params=params_quarterly, headers=EASTMONEY_HEADERS, timeout=5)
             data_json = r.json()
-            raw_list = data_json.get("result", {}).get("data", [])
+            raw_list = (data_json.get("result") or {}).get("data", [])
             
             quarterly_items = []
             if raw_list and isinstance(raw_list, list):

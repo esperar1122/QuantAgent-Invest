@@ -1,4 +1,4 @@
-﻿"""
+"""
 股票详情相关API
 - 统一响应包: {success, data, message, timestamp}
 - 所有端点均需鉴权 (Bearer Token)
@@ -1293,7 +1293,7 @@ async def get_technical_indicators(
                 v = float(it.get("volume") or 0.0)
                 it["turnover_rate"] = round((v / total_shares) * 100.0, 3)
 
-    chips_data = calculate_chips_distribution(items, close_val, total_shares=total_shares, realtime_quote=rt_q)
+    chips_data = calculate_chips_distribution(items, close_val, total_shares=total_shares, realtime_quote=rt_q, symbol=code_padded)
     snapshot_data["chips"] = chips_data
 
     return ok({
@@ -1369,10 +1369,25 @@ async def get_stock_chips(
         total_shares=total_shares,
         is_etf=is_etf,
         precision=px_prec,
-        realtime_quote=rt_q
+        realtime_quote=rt_q,
+        symbol=code_padded
     )
     if not chips:
-        raise HTTPException(status_code=500, detail="筹码分布计算失败")
+        logger.warning(f"筹码分布计算结果为空，启用平滑降级数据: {code_padded}")
+        chips = {
+            "histogram": [],
+            "profit_ratio": 50.0,
+            "trapped_ratio": 50.0,
+            "avg_cost": current_px,
+            "concentration_70": 0.0,
+            "concentration_90": 0.0,
+            "cost_range_70": [current_px, current_px],
+            "cost_range_90": [current_px, current_px],
+            "pattern": "数据构建中",
+            "support_levels": [],
+            "resistance_levels": [],
+            "quant_debate": {}
+        }
 
     return ok({
         "code": code_padded,

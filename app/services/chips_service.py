@@ -1,4 +1,4 @@
-﻿"""
+"""
 筹码分布与成本分析计算引擎 (CYQ - Cost Distribution Model)
 基于历史日K线量价与行为金融学深度修正模型：
 1. 涨跌停板换手率折减：一字板/极端无振幅板换手率按 0.4 折减，剔除恐慌/无量封板形成的虚假极端筹码峰
@@ -35,7 +35,8 @@ def calculate_chips_distribution(
     is_etf: Optional[bool] = None,
     precision: Optional[int] = None,
     realtime_quote: Optional[Dict[str, Any]] = None,
-    compensate_ex_dividend: bool = True
+    compensate_ex_dividend: bool = True,
+    symbol: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
     """
     根据历史K线序列计算筹码分布数据（全面升级：行为金融学非对称衰减 + GMM + ATR自适应 + 6大硬核修正规则）
@@ -593,10 +594,23 @@ def calculate_chips_distribution(
                 "stop_loss": stop_loss,
                 "target_price": target_price,
                 "risk_reward_ratio": (
-                    __import__("app.quant_engine", fromlist=["QuantCoreEngine"]).QuantCoreEngine.calc_risk_reward(
-                        {"code": symbol, "is_etf": is_etf},
-                        {"close": current_price, "pct_chg": pct_chg}
-                    ) or round(abs((target_price - current_price) / max(0.01, (current_price - stop_loss))), 2)
+                    (lambda: (
+                        __import__("app.quant_engine", fromlist=["QuantCoreEngine"]).QuantCoreEngine.calc_risk_reward(
+                            {
+                                "code": symbol or (realtime_quote.get("code") if realtime_quote else "") or (kline_items[-1].get("code") if kline_items else ""),
+                                "is_etf": is_etf
+                            },
+                            {
+                                "close": current_price,
+                                "pct_chg": float(
+                                    (realtime_quote.get("pct_chg") or realtime_quote.get("change_percent"))
+                                    if realtime_quote and (realtime_quote.get("pct_chg") is not None or realtime_quote.get("change_percent") is not None)
+                                    else (((current_price - float(df["close"].iloc[-2])) / float(df["close"].iloc[-2]) * 100.0) if len(df) >= 2 and float(df["close"].iloc[-2]) > 0 else 0.0)
+                                )
+                            }
+                        )
+                    ) if True else None)()
+                    or round(abs((target_price - current_price) / max(0.01, (current_price - stop_loss))), 2)
                 )
             }
         }
