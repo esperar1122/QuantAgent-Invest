@@ -608,6 +608,19 @@ AI 将自动基于该文档在几秒内无缝接续全部上下文！
       - `frontend/src/views/StockPool/components/AdvancedFilterPanel.vue`：扩充为 8 大因子卡片（增加：资金面与外资、均线形态趋势、筹码分布结构、风控一票否决）；
       - `frontend/src/views/StockPool/components/StockPoolTable.vue`：新增“量价形态（生命周期胶囊+多头标签）”、“北向持股”独立列，盈亏比支持目标价/止损价提示；
       - 经 `npm run type-check` (`vue-tsc --noEmit`) 验证 0 TypeScript 错误。
+  - **P0 级项目分层架构治理与“胖路由”解耦及死代码清理**：
+    - **系统痛点与反模式诊断**：
+      - 随着项目发展，`app/routers/stocks.py` 严重膨胀至 3470 行（“上帝路由/胖路由”反模式），内部不仅包含 HTTP 控制器，还直接堆叠了 MongoDB 复杂聚合、多数据源回退、技术指标与大盘推演，侵蚀了 Service 职责并加剧了大文件维护与上下文膨胀负担；
+      - 识别并清理了港美股下线后残留的孤儿路由、早期未引用的历史废弃服务以及历史评测日志残留。
+    - **服务层解耦重构 (Layered Architecture Optimization)**：
+      - 新建 [`StockPoolService`](file:///e:/Project/TradingAgents-CN/app/services/stock_pool_service.py)：承接股票池多因子复杂筛选、动态初筛策略联动、MongoDB 全局排序与量化全息画像装配（390行）；
+      - 新建 [`MarketOverviewService`](file:///e:/Project/TradingAgents-CN/app/services/market_overview_service.py)：承接全市场行情与市场宽度统计、细分产业催化逻辑、量化进攻主线动态生成、智能体半小时轮转事件流与缓存管理（816行）；
+      - `app/routers/stocks.py` 实现瘦身，行数从 3470 行大幅降至 1946 行（减少 1520+ 行巨石代码），路由函数回归极薄控制器；
+    - **死代码与冗余环境垃圾清理**：
+      - 彻底移除孤立未挂载路由：`app/routers/multi_market_stocks.py` (285行)；
+      - 彻底移除废弃未调用服务：`app/services/data_consistency_checker.py` (319行) 与 `app/services/analysis_runner.py` (1242行)；
+      - 清理残缺本地虚拟环境 `.venv/`，清理测试残留目录 `eval_results/`、`results/`，清理历史轮转大日志 `logs/*.log.*` (近 90MB)；
+      - 经 Python 模块导入与前端 `npm run type-check` 严格验证，0 错误稳定运行。
 
 ### 2. 跨设备数据同步运维与极速数据源指南 (Data Pipeline & Operations Guide for Antigravity)
 
