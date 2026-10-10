@@ -14,6 +14,9 @@
   - **核心框架**：Python 3.12 / FastAPI (异步高性能 REST API) / Uvicorn
   - **金融数据中台**：腾讯实时行情接口 (qt.gtimg.cn / fqkline)、BaoStock、AKShare、TuShare、MongoDB 缓存层、Redis
   - **量化与AI核心**：
+    - `app/quant_engine/`：无状态高并发 SSOT 纯计算量化算法中枢（QuantCoreEngine，波动率自适应净盈亏比、量价状态机、负面清单一票否决）
+    - `app/agent_engine/`：多智能体自主投研与工作流调度引擎（AgentEngine，原 tradingagents 全面融入升级版，解耦 LLM 路由与多角色协同）
+    - `app/data_sources/`：独立解耦的模块化金融数据源中台（腾讯、新浪、东财、AKShare、BaoStock 标准化抽象与自动降级）
     - `app/services/chips_service.py`：CYQ 筹码分布透视、非对称衰减模型、6 大机构级微观结构修正规则、多空辩论对决台 (Bull vs Bear Debate)
     - `app/services/stock_quote_service.py`：极速毫秒级股票与指数快照、分时走势提取、实时 Level-2 五档盘口
     - `app/services/index_service.py`：重要指数（上证、深成、创业板、科创50等）双通道K线与权重成分股矩阵
@@ -621,6 +624,26 @@ AI 将自动基于该文档在几秒内无缝接续全部上下文！
       - 彻底移除废弃未调用服务：`app/services/data_consistency_checker.py` (319行) 与 `app/services/analysis_runner.py` (1242行)；
       - 清理残缺本地虚拟环境 `.venv/`，清理测试残留目录 `eval_results/`、`results/`，清理历史轮转大日志 `logs/*.log.*` (近 90MB)；
       - 经 Python 模块导入与前端 `npm run type-check` 严格验证，0 错误稳定运行。
+  - **P0 级系统架构一体化重构：TradingAgents 融入为 AgentEngine 与数据源/LLM 模块化解耦 (`app/agent_engine/`, `app/data_sources/`)**：
+    - **重构背景与目标**：
+      - 原项目早期借鉴开源 TradingAgents-CN，但随着个人量化系统与投研终端的深度自研演进，原本根目录下的 `tradingagents/` 文件夹与系统主框架 `app/` 形成冗余割裂（根目录下独立存在旧目录，且散落大量过期 docs、assets 与测试脚本）；
+      - 将 `tradingagents` 彻底融入 `app/`，全局替换历史外源命名为更贴合系统的命名规范；将底层金融数据源（Data Sources）与大语言模型（LLMs）从原本的多智能体深层逻辑中彻底解耦出来，形成独立易扩展的顶层中台模块，方便后续极简接入新数据源或任意国产/开源大模型。
+    - **核心改造内容与成果**：
+      - **智能体引擎整体融入**：将原 `tradingagents` 核心智能体调度与工作流整体迁移融入为 [`app/agent_engine/`](file:///e:/Project/TradingAgents-CN/app/agent_engine/)，全局替换历史 `tradingagents` 命名与依赖路径；
+      - **数据源底层中台独立抽取 (`app/data_sources/`)**：从原智能体深层抓取逻辑中解耦出统一的数据源中台模块，集中收敛腾讯行情、新浪财经、东财 Datacenter、AKShare、BaoStock 等多数据源适配器，并提供统一的标准化行情与量化接口，后续新增数据源只需在此单点挂载；
+      - **LLM 适配层标准化解耦 (`app/agent_engine/llms/`)**：将大模型接入、适配器与 Prompt 规范从原历史结构中剥离，形成统一的模型路由与配置注册中心，支持 DeepSeek、Qwen、OpenAI、SiliconFlow 等极简热插拔；
+      - **根目录大扫除与冗余清理**：彻底删除根目录下原 `tradingagents/` 冗余目录、历史 `assets/` 静态旧图、过期测试脚本与历史文档，使整个项目结构清爽、层次分明、全栈现代化。
+  - **P0 级个股与指数研究终端 500 报错根治与筹码/资金流平滑降级 (`chips_service.py`, `stocks.py`, `capital_flow_service.py`)**：
+    - **线上偶发 Bug 现场**：在“个股与指数研究”界面（`TerminalStockResearch`，`/terminal/stock`）以及用户快速切换/跳转其他路由页面时，前端频繁弹出“服务器内部错误，请稍后重试”的全局拦截器弹窗；
+    - **核心根因溯源**：
+      1. **筹码计算引擎作用域 NameError**：在引入 `QuantCoreEngine.calc_risk_reward` 算子后，[`chips_service.py`](file:///e:/Project/TradingAgents-CN/app/services/chips_service.py) 内部引用了未定义的局部变量 `symbol` 与 `pct_chg`，导致任何个股/指数/ETF 在计算筹码分布时均抛出未捕获异常并返回 `None`；
+      2. **路由层粗暴抛出 HTTP 500**：[`app/routers/stocks.py`](file:///e:/Project/TradingAgents-CN/app/routers/stocks.py) 的 `get_stock_chips` 端点在结果为空时直接 `raise HTTPException(status_code=500)`，触发前端 Axios 全局拦截器报错弹窗。由于首屏并发请求较多，当用户点击跳转时异步请求才返回，导致体感表现为“跳转页面时报错”；
+      3. **资金面非股票标的空指针异常**：[`capital_flow_service.py`](file:///e:/Project/TradingAgents-CN/app/services/capital_flow_service.py) 查询非股票（如指数、ETF）时东财返回 `result: null`，调用 `.get("data", [])` 引发 `AttributeError`。
+    - **修复与容灾强化落地**：
+      - 在 `calculate_chips_distribution` 入参透传 `symbol`，并构建自动三级降级提取与收盘价回溯计算 `pct_chg` 逻辑，根除 `NameError`；
+      - 路由层全面建立计算型容灾降级机制：即使计算未就绪也返回 200 OK 附带基准均价与平滑结构，杜绝以 HTTP 500 打断前端；
+      - 资金流增加空字典防御 `(data_json.get("result") or {}).get("data", [])`；
+      - 实盘全面验证 `sh000001`、`562590`、`600519` 等全部标的秒级 200 OK 渲染，页面跳转顺畅无阻。
 
 ### 2. 跨设备数据同步运维与极速数据源指南 (Data Pipeline & Operations Guide for Antigravity)
 
