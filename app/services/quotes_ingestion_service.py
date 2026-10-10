@@ -357,12 +357,20 @@ class QuotesIngestionService:
         db = get_mongo_db()
         coll = db[self.collection_name]
         try:
-            cursor = coll.find({}, {"trade_date": 1}).sort("trade_date", -1).limit(1)
-            docs = await cursor.to_list(length=1)
-            if not docs:
+            # 统计尚未更新到最新交易日的记录数（防止仅个别记录为最新导致误判全量已更新）
+            stale_count = await coll.count_documents({
+                "$or": [
+                    {"trade_date": {"$lt": str(latest_trade_date)}},
+                    {"trade_date": {"$exists": False}},
+                    {"trade_date": None},
+                    {"trade_date": ""}
+                ]
+            })
+            total_count = await coll.count_documents({})
+            if total_count == 0:
                 return True
-            doc_td = str(docs[0].get("trade_date") or "")
-            return doc_td < str(latest_trade_date)
+            # 如果超过 5% 的标的数据落后于最新交易日，则判定集合陈旧需要补数
+            return stale_count > (total_count * 0.05)
         except Exception:
             return True
 
@@ -406,6 +414,8 @@ class QuotesIngestionService:
                 doc_set["circ_mv"] = q.get("circ_mv")
             if q.get("total_mv") is not None:
                 doc_set["total_mv"] = q.get("total_mv")
+            if q.get("amplitude") is not None:
+                doc_set["amplitude"] = q.get("amplitude")
 
             ops.append(
                 UpdateOne(

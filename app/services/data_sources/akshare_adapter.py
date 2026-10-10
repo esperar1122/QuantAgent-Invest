@@ -279,6 +279,8 @@ class AKShareAdapter(DataSourceAdapter):
             volume_ratio_col = next((c for c in ["量比", "lb", "volume_ratio"] if c in df.columns), None)
             circ_mv_col = next((c for c in ["流通市值", "ltsz", "circ_mv"] if c in df.columns), None)
             total_mv_col = next((c for c in ["总市值", "zsz", "total_mv"] if c in df.columns), None)
+            amplitude_col = next((c for c in ["振幅", "zf", "amplitude"] if c in df.columns), None)
+            zd_col = next((c for c in ["涨跌额", "zd", "change"] if c in df.columns), None)
 
             if not code_col or not price_col:
                 logger.error(f"AKShare {source} 缺少必要列: code={code_col}, price={price_col}, columns={list(df.columns)}")
@@ -322,6 +324,12 @@ class AKShareAdapter(DataSourceAdapter):
                 lb = self._safe_float(row.get(volume_ratio_col)) if volume_ratio_col else None
                 ltsz = self._safe_float(row.get(circ_mv_col)) if circ_mv_col else None
                 zsz = self._safe_float(row.get(total_mv_col)) if total_mv_col else None
+                amp = self._safe_float(row.get(amplitude_col)) if amplitude_col else None
+                zd = self._safe_float(row.get(zd_col)) if zd_col else None
+
+                # 若昨收为空且已知最新价和涨跌额，自动反推精确昨收
+                if pre is None and close is not None and zd is not None:
+                    pre = round(close - zd, 2)
 
                 # 🔥 日志：记录AKShare返回的成交量
                 if code in ["300750", "000001", "600000"]:  # 只记录几个示例股票
@@ -340,6 +348,7 @@ class AKShareAdapter(DataSourceAdapter):
                     "volume_ratio": lb,
                     "circ_mv": ltsz,
                     "total_mv": zsz,
+                    "amplitude": amp,
                 }
 
             logger.info(f"✅ AKShare {source} 获取到 {len(result)} 只股票的实时行情")

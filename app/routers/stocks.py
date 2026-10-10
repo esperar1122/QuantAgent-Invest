@@ -1864,19 +1864,21 @@ async def get_quant_candidate_strategy(db) -> dict:
 
 def _calc_risk_reward_ratio(item: dict, q: dict) -> Optional[float]:
     """
-    测算标的盈亏比 (Risk-Reward Ratio, R:R)
-    1. 优先读取数据库沉淀的真实筹码分布/技术面判别盈亏比
-    2. 若未缓存，基于最新价、高低区间、估值与动量自适应测算合理盈亏比
+    测算标的扣费真实净盈亏比 (Real Friction-Adjusted Risk-Reward Ratio, Net R:R)
+    与单标的研究 (StockResearch)、回测系统及券商实盘交易摩擦模型保持严格同源：
+    1. 动态波动率标尺 (ATR / Volatility)：
+       优先采用真实振幅 (amplitude)，若缺失则根据板块基础波动率 (ETF/主板/双创/北交) 结合换手率动态测算日内真实波幅 ATR。
+    2. 量价动能形态与空间折算：
+       - 突破/放量主升 (pct >= 1.5% 且未极端冲高): 上方弹性空间拉大 (2.2 ATR)，止损设于下轨支撑 (1.1 ATR)；
+       - 日内极端超买冲高 (pct >= 8.0%): 警惕追高被套，向上空间受挤压 (1.2 ATR)，下方止损拉宽 (1.6 ATR)；
+       - 严重破位下行 (pct <= -3.0%): 趋势走坏，反弹空间受限 (0.85 ATR)，向下破位风险大 (1.4 ATR)；
+       - 震荡良性蓄势 (-3.0% < pct < 1.5%): 箱体中枢，向上空间 (1.5 ATR)，向下止损 (1.0 ATR)。
+    3. 基本面估值与质地加成：
+       - 优质低估 (0 < pe <= 30 且 roe >= 8): 给予 1.15x 向上空间估值安全垫加成；
+       - 亏损或极高估值 (pe < 0 或 pe > 80): 给予 0.88x 向上空间惩罚折减。
+    4. 实战券商交易摩擦扣费 (万0.876免5最低0.5元，个股万5印花税，ETF免印花税)：
+       精准扣除双边佣金与卖出印花税，输出真实的实战净盈亏比 (Net R:R)，杜绝任何伪随机数或单日影线毛刺。
     """
-    rrr = q.get("risk_reward_ratio") or item.get("risk_reward_ratio")
-    if rrr is not None:
-        try:
-            val = float(rrr)
-            if val > 0:
-                return round(val, 2)
-        except (ValueError, TypeError):
-            pass
-
     close = q.get("close") if q.get("close") is not None else item.get("close")
     if close is None:
         return None
@@ -1887,37 +1889,118 @@ def _calc_risk_reward_ratio(item: dict, q: dict) -> Optional[float]:
     except (ValueError, TypeError):
         return None
 
-    high = q.get("high") or item.get("high")
-    low = q.get("low") or item.get("low")
-    if high and low:
+    code = str(item.get("code") or q.get("code") or "").strip()
+    code_clean = code.lower().replace("sh", "").replace("sz", "").replace("bj", "")
+    market = str(item.get("market") or q.get("market") or "")
+
+    # 判断是否为 ETF
+    is_etf = (
+        code_clean.startswith(("51", "56", "58", "50", "15", "16"))
+        or market == "ETF"
+        or bool(item.get("is_etf"))
+    )
+
+    # 1. 波动率标尺 (vol_pct & atr)
+    amp = q.get("amplitude") if q.get("amplitude") is not None else item.get("amplitude")
+    vol_pct: Optional[float] = None
+    if amp is not None:
         try:
-            h = float(high)
-            l = float(low)
-            if h > c and c > l:
-                reward = h - c
-                risk = c - l
-                if risk > 0.001:
-                    ratio = reward / risk
-                    return round(max(0.2, min(9.9, ratio)), 2)
+            amp_val = float(amp)
+            if amp_val > 0:
+                # 真实日振幅百分比转换为波动率小数，限制在合理边界 [1.2%, 12.0%]
+                vol_pct = max(0.012, min(0.12, amp_val / 100.0))
         except (ValueError, TypeError):
-            pass
+            vol_pct = None
 
-    # 经典量化支撑阻力估算模型 (基于估值、涨跌偏离与标的哈希权重稳定生成)
-    code_str = str(item.get("code") or q.get("code") or "000001")
-    code_num = sum(ord(ch) for ch in code_str)
-    seed = (code_num % 100) / 100.0
+    if vol_pct is None:
+        # 依据板块基准波动率兜底
+        if is_etf:
+            base_vol = 0.016  # ETF 平均日波动率 1.6%
+        elif market in ["科创板", "创业板"] or code_clean.startswith(("688", "300", "301")):
+            base_vol = 0.045  # 20cm 标的平均日波动率 4.5%
+        elif market == "北交所" or code_clean.startswith(("8", "4", "920")):
+            base_vol = 0.055  # 30cm 标的 5.5%
+        else:
+            base_vol = 0.030  # 主板 3.0%
 
-    pe = q.get("pe") if q.get("pe") is not None else item.get("pe")
+        # 换手率调节波动幅度
+        tr = q.get("turnover_rate") if q.get("turnover_rate") is not None else item.get("turnover_rate")
+        try:
+            tr_val = float(tr) if tr is not None else 2.0
+            if tr_val > 0:
+                vol_pct = base_vol * (0.8 + min(1.5, tr_val / 3.0) * 0.4)
+            else:
+                vol_pct = base_vol
+        except (ValueError, TypeError):
+            vol_pct = base_vol
+
+    atr = c * vol_pct
+
+    # 2. 量价动能形态与空间判定
+    pct_raw = q.get("pct_chg") if q.get("pct_chg") is not None else item.get("pct_chg")
     try:
-        pe_val = float(pe) if pe is not None else 25.0
+        pct = float(pct_raw) if pct_raw is not None else 0.0
     except (ValueError, TypeError):
-        pe_val = 25.0
+        pct = 0.0
 
-    pe_bonus = 1.25 if (0 < pe_val <= 30) else (0.85 if pe_val > 60 else 1.0)
-    base_reward = 0.08 + seed * 0.12   # 预期盈利幅度 8% ~ 20%
-    base_risk = 0.03 + (1.0 - seed) * 0.035  # 潜在止损幅度 3% ~ 6.5%
-    calculated_rrr = (base_reward * pe_bonus) / base_risk
-    return round(max(0.5, min(8.0, calculated_rrr)), 2)
+    if pct >= 8.0:
+        # 日内极端冲高/超买，追高风险极大，向上弹性收窄，止损拉宽防高位反杀
+        target_dist = 1.2 * atr
+        stop_dist = 1.6 * atr
+    elif pct >= 1.5:
+        # 突破/强势主升波段，动能充足，向上弹性充分
+        target_dist = 2.2 * atr
+        stop_dist = 1.1 * atr
+    elif pct <= -3.0:
+        # 破位下行/弱势阴跌，多头受压，向上反弹空间逼仄
+        target_dist = 0.85 * atr
+        stop_dist = 1.4 * atr
+    else:
+        # 震荡横盘/良性蓄势
+        target_dist = 1.5 * atr
+        stop_dist = 1.0 * atr
+
+    # 3. 基本面估值与质地安全垫加成
+    pe_raw = q.get("pe") if q.get("pe") is not None else item.get("pe")
+    roe_raw = item.get("roe") if item.get("roe") is not None else q.get("roe")
+    try:
+        pe_val = float(pe_raw) if pe_raw is not None else None
+    except (ValueError, TypeError):
+        pe_val = None
+    try:
+        roe_val = float(roe_raw) if roe_raw is not None else None
+    except (ValueError, TypeError):
+        roe_val = None
+
+    if pe_val is not None:
+        if 0 < pe_val <= 30 and (roe_val is None or roe_val >= 8.0):
+            target_dist *= 1.15
+        elif pe_val < 0 or pe_val > 80:
+            target_dist *= 0.88
+
+    target_px = c + target_dist
+    stop_px = max(0.01, c - stop_dist)
+
+    # 4. 实战券商交易摩擦扣费测算 (用户专属：万0.876，免5最低0.5元，个股万5印花税，ETF免征)
+    # 以标准 1000 股测算实盘扣费摩擦
+    test_shares = 1000.0
+    b_val = test_shares * c
+    t_val = test_shares * target_px
+    s_val = test_shares * stop_px
+
+    buy_comm = max(0.5, (b_val * 0.876) / 10000.0)
+    target_comm = max(0.5, (t_val * 0.876) / 10000.0)
+    stop_comm = max(0.5, (s_val * 0.876) / 10000.0)
+
+    target_stamp = 0.0 if is_etf else (t_val * 0.05) / 100.0
+    stop_stamp = 0.0 if is_etf else (s_val * 0.05) / 100.0
+
+    net_gain = max(0.0, (t_val - b_val) - buy_comm - target_comm - target_stamp)
+    net_loss = max(0.01, (b_val - s_val) + buy_comm + stop_comm + stop_stamp)
+
+    net_rr = net_gain / net_loss
+    return round(max(0.3, min(6.0, net_rr)), 2)
+
 
 
 @router.get("/pool", response_model=dict)
@@ -2080,6 +2163,10 @@ async def get_stock_pool(
         quote_filter.setdefault("volume_ratio", {})["$gte"] = c_min_vr
     if c_max_vr is not None:
         quote_filter.setdefault("volume_ratio", {})["$lte"] = c_max_vr
+    if c_min_rrr is not None:
+        quote_filter.setdefault("risk_reward_ratio", {})["$gte"] = c_min_rrr
+    if c_max_rrr is not None:
+        quote_filter.setdefault("risk_reward_ratio", {})["$lte"] = c_max_rrr
 
     quote_codes = None
     if quote_filter:
@@ -2180,7 +2267,7 @@ async def get_stock_pool(
     direction = 1 if c_sort_order.lower() == "asc" else -1
     skip = (c_page - 1) * c_page_size
 
-    if c_sort_field in ["close", "pct_chg", "amount", "volume", "turnover_rate", "volume_ratio", "pe", "pb", "total_mv", "circ_mv"]:
+    if c_sort_field in ["close", "pct_chg", "amount", "volume", "turnover_rate", "volume_ratio", "pe", "pb", "total_mv", "circ_mv", "risk_reward_ratio"]:
         # 基于行情与估值数据的全市场排序
         mq_query = {"code": {"$in": quote_codes}} if quote_codes is not None else {}
         cursor = db["market_quotes"].find(mq_query, {"code": 1, c_sort_field: 1}).sort(c_sort_field, direction)
@@ -2196,7 +2283,7 @@ async def get_stock_pool(
     else:
         mongo_sort_field = c_sort_field if c_sort_field in [
             "code", "name", "pe", "pb", "ps", "total_mv", "circ_mv", "turnover_rate",
-            "roe", "net_profit_growth", "revenue_growth", "gross_margin"
+            "roe", "net_profit_growth", "revenue_growth", "gross_margin", "risk_reward_ratio"
         ] else "code"
         cursor = db["stock_basic_info"].find(filter_query, {"_id": 0}).sort(mongo_sort_field, direction).skip(skip).limit(c_page_size)
         items = await cursor.to_list(length=c_page_size)
@@ -2235,8 +2322,8 @@ async def get_stock_pool(
         gross_margin = item.get("gross_margin") if item.get("gross_margin") is not None else q.get("gross_margin")
         risk_reward_ratio = _calc_risk_reward_ratio(item, q)
 
-        # 异步更新到 market_quotes 以便长期索引
-        if risk_reward_ratio is not None and code and q.get("risk_reward_ratio") is None:
+        # 异步更新到 market_quotes 以便长期索引（当比值发生变化时覆写刷新）
+        if risk_reward_ratio is not None and code and q.get("risk_reward_ratio") != risk_reward_ratio:
             try:
                 asyncio.create_task(db["market_quotes"].update_one(
                     {"code": code},
