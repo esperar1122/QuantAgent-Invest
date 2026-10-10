@@ -118,7 +118,6 @@ QuantAgent-Invest/
 │   ├── routers/              # RESTful API 路由模块（筛选、分析、行情、报告等）
 │   ├── services/             # 业务服务层（数据同步、因子计算、分析任务调度）
 │   └── worker/               # 异步计算任务与后台工作进程
-├── assets/                   # 必要的基础静态图标资源
 ├── config/                   # 系统运行时配置文件（logging.toml 等）
 ├── data/                     # 本地数据存储与缓存文件
 ├── docs/                     # 核心架构文档与学习中心本地知识库
