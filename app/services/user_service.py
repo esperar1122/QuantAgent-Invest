@@ -1,4 +1,4 @@
-"""
+﻿"""
 用户服务 - 基于数据库的用户管理
 """
 
@@ -15,7 +15,7 @@ from app.models.user import User, UserCreate, UserUpdate, UserResponse
 
 # 尝试导入日志管理器
 try:
-    from tradingagents.utils.logging_manager import get_logger
+    from app.agent_engine.utils.logging_manager import get_logger
 except ImportError:
     # 如果导入失败，使用标准日志
     import logging

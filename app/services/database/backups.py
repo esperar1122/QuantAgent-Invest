@@ -1,4 +1,4 @@
-"""
+﻿"""
 Backup, import, and export routines extracted from DatabaseService.
 """
 from __future__ import annotations

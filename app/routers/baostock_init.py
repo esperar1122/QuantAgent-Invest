@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 BaoStock初始化API路由
 提供BaoStock数据初始化的RESTful API接口

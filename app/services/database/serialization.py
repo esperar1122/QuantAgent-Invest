@@ -1,4 +1,4 @@
-"""
+﻿"""
 Serialization helpers for MongoDB documents.
 """
 from __future__ import annotations

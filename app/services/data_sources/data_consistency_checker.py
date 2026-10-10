@@ -1,4 +1,4 @@
-"""
+﻿"""
 Minimal stub for DataConsistencyChecker
 - Purpose: eliminate warning and provide no-op consistency checking
 - Behavior: always mark data as consistent and prefer primary source

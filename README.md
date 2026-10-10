@@ -113,25 +113,25 @@
 
 ```text
 QuantAgent-Invest/
-├── app/                      # FastAPI 后端核心应用
-│   ├── core/                 # 系统核心配置、数据库客户端、日志配置
-│   ├── routers/              # RESTful API 路由模块（筛选、分析、行情、报告等）
-│   ├── services/             # 业务服务层（数据同步、因子计算、分析任务调度）
-│   └── worker/               # 异步计算任务与后台工作进程
-├── config/                   # 系统运行时配置文件（logging.toml 等）
+├── app/                      # FastAPI 全栈量化与智能投研核心后端
+│   ├── quant_engine/         # 量化计算核心引擎 (SSOT 筹码分布/技术指标/摩擦盈亏比/多因子打分)
+│   ├── agent_engine/         # 智能体决策核心引擎 (多角色Agent/LangGraph工作流/辩论推演)
+│   ├── data_sources/         # 模块化金融数据源中台 (Tushare/AkShare/BaoStock/东财驱动与缓存)
+│   ├── llm/                  # 模块化大模型中台 (动态客户端/厂商Key适配/多模型网关)
+│   ├── core/                 # 系统核心底座 (DB连接/统一配置/日志系统)
+│   ├── routers/              # RESTful API 路由模块 (筛选/分析/行情/报告/回测等)
+│   ├── services/             # 业务服务层 (股票池筛选/大盘概览/资金流向/回测中心)
+│   └── worker/               # 异步计算任务与后台数据同步调度
+├── config/                   # 系统运行时配置文件 (logging.toml 等)
 ├── data/                     # 本地数据存储与缓存文件
 ├── docs/                     # 核心架构文档与学习中心本地知识库
 │   ├── architecture/         # 系统多层架构设计说明
 │   ├── learning/             # 交互式学习中心配套学术文章
 │   └── paper/                # 核心支撑学术论文与中文导读
-├── frontend/                 # Vue 3 + TypeScript 现代化前端工程
-│   ├── src/views/            # 业务页面（仪表盘、股票筛选、单股研判、报告中心）
+├── frontend/                 # Vue 3 + TypeScript 现代化金融工作台前端
+│   ├── src/views/            # 业务页面 (仪表盘/股票筛选/单股研判/回测中心/报告中心)
 │   └── src/components/       # 可复用组件与金融图表组件
-├── tradingagents/            # 核心算法体系
-│   ├── agents/               # 各角色智能体定义与提示词工程实现
-│   ├── graph/                # 基于 LangGraph 的多智能体工作流与拓扑定义
-│   └── dataflows/            # 金融数据适配器与量化指标计算引擎
-├── utils/                    # 数据基础设施辅助工具
+├── utils/                    # 基础设施辅助工具
 ├── start_dev.ps1             # 本地一键启动脚本
 ├── pyproject.toml            # Python 项目配置
 ├── requirements.txt          # 后端依赖环境列表

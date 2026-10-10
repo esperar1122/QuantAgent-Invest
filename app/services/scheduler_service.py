@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 定时任务管理服务
@@ -18,7 +18,7 @@ from apscheduler.events import (
 )
 
 from app.core.database import get_mongo_db
-from tradingagents.utils.logging_manager import get_logger
+from app.agent_engine.utils.logging_manager import get_logger
 from app.utils.timezone import now_tz
 
 logger = get_logger(__name__)

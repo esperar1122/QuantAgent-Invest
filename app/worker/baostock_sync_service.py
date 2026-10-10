@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 BaoStock数据同步服务
 提供BaoStock数据的批量同步功能，集成到APScheduler调度系统
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from app.core.config import get_settings
 from app.core.database import get_database
 from app.services.historical_data_service import get_historical_data_service
-from tradingagents.dataflows.providers.china.baostock import BaoStockProvider
+from app.data_sources.providers.china.baostock import BaoStockProvider
 
 logger = logging.getLogger(__name__)
 

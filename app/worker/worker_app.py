@@ -1,4 +1,4 @@
-"""
+﻿"""
 QuantAgent-Invest Worker Service
 FastAPI-based worker application with health check and queue consumer
 """

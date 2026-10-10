@@ -1,4 +1,4 @@
-"""
+﻿"""
 缓存管理路由
 提供缓存统计、清理等功能
 """
@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from app.routers.auth_db import get_current_user
 from app.core.response import ok
-from tradingagents.utils.logging_manager import get_logger
+from app.agent_engine.utils.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
@@ -24,7 +24,7 @@ async def get_cache_stats(current_user: dict = Depends(get_current_user)):
         dict: 缓存统计数据
     """
     try:
-        from tradingagents.dataflows.cache import get_cache
+        from app.data_sources.cache import get_cache
         
         cache = get_cache()
         
@@ -68,7 +68,7 @@ async def cleanup_old_cache(
         dict: 清理结果
     """
     try:
-        from tradingagents.dataflows.cache import get_cache
+        from app.data_sources.cache import get_cache
         
         cache = get_cache()
         
@@ -99,7 +99,7 @@ async def clear_all_cache(current_user: dict = Depends(get_current_user)):
         dict: 清理结果
     """
     try:
-        from tradingagents.dataflows.cache import get_cache
+        from app.data_sources.cache import get_cache
 
         cache = get_cache()
 
@@ -132,7 +132,7 @@ async def delete_cache_item(
     删除指定股票的缓存项
     """
     try:
-        from tradingagents.dataflows.cache import get_cache
+        from app.data_sources.cache import get_cache
 
         cache = get_cache()
         deleted_count = 0
@@ -171,7 +171,7 @@ async def get_cache_details(
         dict: 缓存详情列表
     """
     try:
-        from tradingagents.dataflows.cache import get_cache
+        from app.data_sources.cache import get_cache
         
         cache = get_cache()
         
@@ -212,7 +212,7 @@ async def get_cache_backend_info(current_user: dict = Depends(get_current_user))
         dict: 缓存后端配置信息
     """
     try:
-        from tradingagents.dataflows.cache import get_cache
+        from app.data_sources.cache import get_cache
         
         cache = get_cache()
         

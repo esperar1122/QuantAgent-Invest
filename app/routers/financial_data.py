@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 财务数据API路由
 提供财务数据查询和同步管理接口

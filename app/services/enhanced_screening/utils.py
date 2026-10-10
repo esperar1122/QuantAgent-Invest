@@ -1,4 +1,4 @@
-"""
+﻿"""
 Utility helpers for EnhancedScreeningService to separate analysis and conversion logic.
 """
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Utilities for updating analysis task status.
+﻿"""Utilities for updating analysis task status.
 
 Extracted from AnalysisService to reduce file size and improve modularity
 without changing external behavior.

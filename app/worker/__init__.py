@@ -1,2 +1,2 @@
-"""Worker package for analysis and related background jobs."""
+﻿"""Worker package for analysis and related background jobs."""
 

@@ -1,4 +1,4 @@
-"""
+﻿"""
 AKShare数据同步服务
 基于AKShare提供器的统一数据同步方案
 """
@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 from app.core.database import get_mongo_db
 from app.services.historical_data_service import get_historical_data_service
 from app.services.news_data_service import get_news_data_service
-from tradingagents.dataflows.providers.china.akshare import get_akshare_provider
+from app.data_sources.providers.china.akshare import get_akshare_provider
 
 logger = logging.getLogger(__name__)
 

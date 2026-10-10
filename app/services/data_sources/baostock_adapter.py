@@ -1,4 +1,4 @@
-"""
+﻿"""
 BaoStock data source adapter
 """
 from typing import Optional

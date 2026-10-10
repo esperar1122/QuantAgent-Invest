@@ -1,4 +1,4 @@
-"""
+﻿"""
 配置管理服务
 """
 
@@ -19,7 +19,7 @@ from app.models.config import (
     ModelProvider, DataSourceType, DatabaseType, LLMProvider,
     MarketCategory, DataSourceGrouping, ModelCatalog, ModelInfo
 )
-from tradingagents.llm_clients.provider_keys import canonical_aliases, normalize_provider_key
+from app.llm.provider_keys import canonical_aliases, normalize_provider_key
 
 logger = logging.getLogger(__name__)
 
@@ -2910,7 +2910,7 @@ class ConfigService:
     def _get_env_api_key(self, provider_name: str) -> Optional[str]:
         """从环境变量获取API密钥"""
         import os
-        from tradingagents.llm_clients.provider_keys import env_key_for_provider, normalize_provider_key
+        from app.llm.provider_keys import env_key_for_provider, normalize_provider_key
 
         # 环境变量映射表
         env_key_mapping = {

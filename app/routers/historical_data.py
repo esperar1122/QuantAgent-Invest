@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 历史数据查询API
 提供统一的历史K线数据查询接口

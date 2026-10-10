@@ -1,4 +1,4 @@
-"""
+﻿"""
 股票数据同步API路由
 支持单个股票或批量股票的历史数据和财务数据同步
 """
@@ -674,7 +674,7 @@ async def sync_batch_stocks(
                 # 🔥 批量同步基础数据
                 # 注意：基础数据同步服务目前只支持 Tushare 数据源
                 if request.data_source == "tushare":
-                    from tradingagents.dataflows.providers.china.tushare import TushareProvider
+                    from app.data_sources.providers.china.tushare import TushareProvider
 
                     tushare_provider = TushareProvider()
                     if tushare_provider.is_available():

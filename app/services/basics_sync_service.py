@@ -1,4 +1,4 @@
-"""
+﻿"""
 Stock basics synchronization service
 - Fetches A-share stock basic info from Tushare
 - Enriches with latest market cap (total_mv)

@@ -1,4 +1,4 @@
-"""
+﻿"""
 队列服务的辅助函数（与 Redis 操作相关），便于在主服务中做薄委托。
 """
 from __future__ import annotations

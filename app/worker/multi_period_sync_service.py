@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 多周期历史数据同步服务
 支持日线、周线、月线数据的统一同步

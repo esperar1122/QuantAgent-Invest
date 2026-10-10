@@ -91,8 +91,8 @@ dependencies = [
 qianfan = ["qianfan>=0.4.20"]
 
 [project.scripts]
-tradingagents = "main:main"
+quantagent = "main:main"
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*"]
+include = ["app*"]
 exclude = ["tests*", "docs*", "scripts*", "data*", "logs*", "reports*", "results*", "eval_results*", "upstream_contribution*"]

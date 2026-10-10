@@ -1,4 +1,4 @@
-"""
+﻿"""
 股票分析服务
 将现有的TradingAgents分析功能包装成API服务
 """
@@ -17,11 +17,11 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # 初始化TradingAgents日志系统
-from tradingagents.utils.logging_init import init_logging
+from app.agent_engine.utils.logging_init import init_logging
 init_logging()
 
-from tradingagents.graph.trading_graph import TradingAgentsGraph
-from tradingagents.default_config import DEFAULT_CONFIG
+from app.agent_engine.graph.trading_graph import TradingAgentsGraph
+from app.agent_engine.default_config import DEFAULT_CONFIG
 from app.services.simple_analysis_service import create_analysis_config, get_provider_by_model_name
 from app.models.analysis import (
     AnalysisParameters, AnalysisResult, AnalysisTask, AnalysisBatch,
@@ -100,7 +100,7 @@ class AnalysisService:
         """同步执行分析任务（在线程池中运行，带进度跟踪）"""
         try:
             # 在线程中重新初始化日志系统
-            from tradingagents.utils.logging_init import init_logging, get_logger
+            from app.agent_engine.utils.logging_init import init_logging, get_logger
             init_logging()
             thread_logger = get_logger('analysis_thread')
 
@@ -172,7 +172,7 @@ class AnalysisService:
             progress_tracker.update_progress("💰 预估分析成本")
 
             # 根据模型名称动态查找供应商（同步版本）
-            from tradingagents.llm_clients.provider_keys import normalize_provider_key
+            from app.llm.provider_keys import normalize_provider_key
 
             llm_provider = normalize_provider_key(get_provider_by_model_name(quick_model))
 
@@ -303,7 +303,7 @@ class AnalysisService:
                 logger.warning(f"⚠️ 从 MongoDB 读取模型配置失败: {e}，将使用默认参数")
 
             # 根据模型名称动态查找供应商（同步版本）
-            from tradingagents.llm_clients.provider_keys import normalize_provider_key
+            from app.llm.provider_keys import normalize_provider_key
 
             llm_provider = normalize_provider_key(get_provider_by_model_name(quick_model))
 
@@ -675,7 +675,7 @@ class AnalysisService:
                         deep_model_config["reasoning_effort"] = llm_config.reasoning_effort
 
             # 根据模型名称动态查找供应商
-            from tradingagents.llm_clients.provider_keys import normalize_provider_key
+            from app.llm.provider_keys import normalize_provider_key
 
             llm_provider = normalize_provider_key(await get_provider_by_model_name(quick_model))
 

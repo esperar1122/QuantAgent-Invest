@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 财务数据同步服务
 统一管理三数据源的财务数据同步
@@ -11,9 +11,9 @@ from dataclasses import dataclass, field
 
 from app.core.database import get_mongo_db
 from app.services.financial_data_service import get_financial_data_service
-from tradingagents.dataflows.providers.china.tushare import get_tushare_provider
-from tradingagents.dataflows.providers.china.akshare import get_akshare_provider
-from tradingagents.dataflows.providers.china.baostock import get_baostock_provider
+from app.data_sources.providers.china.tushare import get_tushare_provider
+from app.data_sources.providers.china.akshare import get_akshare_provider
+from app.data_sources.providers.china.baostock import get_baostock_provider
 
 logger = logging.getLogger(__name__)
 

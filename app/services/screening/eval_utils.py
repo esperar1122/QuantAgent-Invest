@@ -1,4 +1,4 @@
-"""
+﻿"""
 Utility functions for screening evaluation and DSL parsing.
 Extracted from ScreeningService to separate concerns while keeping API unchanged.
 """

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tushare数据同步服务
 负责将Tushare数据同步到MongoDB标准化集合
 """
@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 import logging
 
-from tradingagents.dataflows.providers.china.tushare import TushareProvider
+from app.data_sources.providers.china.tushare import TushareProvider
 from app.services.stock_data_service import get_stock_data_service
 from app.services.historical_data_service import get_historical_data_service
 from app.services.news_data_service import get_news_data_service

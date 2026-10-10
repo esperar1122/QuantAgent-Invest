@@ -1,0 +1,117 @@
+# 导入基础模块
+get_data_in_range = None
+
+# 导入新闻模块（新路径）
+try:
+    from .news import getNewsData, fetch_top_from_category
+except ImportError:
+    # 向后兼容：尝试从旧路径导入
+    try:
+        from .news.google_news import getNewsData
+    except ImportError:
+        getNewsData = None
+    try:
+        from .news.reddit import fetch_top_from_category
+    except ImportError:
+        fetch_top_from_category = None
+
+# 导入日志模块
+from app.agent_engine.utils.logging_manager import get_logger
+logger = get_logger('agents')
+
+YFinanceUtils = None
+YFINANCE_AVAILABLE = False
+
+# 导入技术指标模块（新路径）
+try:
+    from .technical import StockstatsUtils, STOCKSTATS_AVAILABLE
+except ImportError as e:
+    # 向后兼容：尝试从旧路径导入
+    try:
+        from .technical.stockstats import StockstatsUtils
+        STOCKSTATS_AVAILABLE = True
+    except ImportError as e:
+        logger.warning(f"⚠️ stockstats模块不可用: {e}")
+        StockstatsUtils = None
+        STOCKSTATS_AVAILABLE = False
+
+from .interface import (
+
+    # News and sentiment functions
+    get_finnhub_news,
+    get_finnhub_company_insider_sentiment,
+    get_finnhub_company_insider_transactions,
+    get_google_news,
+    get_reddit_global_news,
+    get_reddit_company_news,
+    # Financial statements functions
+    get_simfin_balance_sheet,
+    get_simfin_cashflow,
+    get_simfin_income_statements,
+    # Technical analysis functions
+    get_stock_stats_indicators_window,
+    get_stockstats_indicator,
+    # Market data functions
+    get_YFin_data_window,
+    get_YFin_data,
+    # Tushare data functions
+    get_china_stock_data_tushare,
+    get_china_stock_fundamentals_tushare,
+    # Unified China data functions (recommended)
+    get_china_stock_data_unified,
+    get_china_stock_info_unified,
+    switch_china_data_source,
+    get_current_china_data_source,
+    # Hong Kong stock functions
+    get_hk_stock_data_unified,
+    get_hk_stock_info_unified,
+    get_stock_data_by_market,
+)
+
+# 统一数据源管理器与基类
+from .base import BaseStockDataProvider
+from .data_source_manager import DataSourceManager, get_data_source_manager
+from .constants import DataSourceCode, DATA_SOURCE_REGISTRY
+from .realtime_metrics import get_pe_pb_with_fallback
+from .cache.mongodb_cache_adapter import get_mongodb_cache_adapter
+
+__all__ = [
+    # 核心数据中台
+    "BaseStockDataProvider",
+    "DataSourceManager",
+    "get_data_source_manager",
+    "DataSourceCode",
+    "DATA_SOURCE_REGISTRY",
+    "get_pe_pb_with_fallback",
+    "get_mongodb_cache_adapter",
+    # News and sentiment functions
+    "get_finnhub_news",
+    "get_finnhub_company_insider_sentiment",
+    "get_finnhub_company_insider_transactions",
+    "get_google_news",
+    "get_reddit_global_news",
+    "get_reddit_company_news",
+    # Financial statements functions
+    "get_simfin_balance_sheet",
+    "get_simfin_cashflow",
+    "get_simfin_income_statements",
+    # Technical analysis functions
+    "get_stock_stats_indicators_window",
+    "get_stockstats_indicator",
+    # Market data functions
+    "get_YFin_data_window",
+    "get_YFin_data",
+    # Tushare data functions
+    "get_china_stock_data_tushare",
+    "get_china_stock_fundamentals_tushare",
+    # Unified China data functions
+    "get_china_stock_data_unified",
+    "get_china_stock_info_unified",
+    "switch_china_data_source",
+    "get_current_china_data_source",
+    # Hong Kong stock functions
+    "get_hk_stock_data_unified",
+    "get_hk_stock_info_unified",
+    "get_stock_data_by_market",
+]
+

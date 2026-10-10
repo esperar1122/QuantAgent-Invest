@@ -1,4 +1,4 @@
-"""
+﻿"""
 简化的股票分析服务
 直接调用现有的 TradingAgents 分析功能
 """
@@ -16,11 +16,11 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # 初始化TradingAgents日志系统
-from tradingagents.utils.logging_init import init_logging
+from app.agent_engine.utils.logging_init import init_logging
 init_logging()
 
-from tradingagents.graph.trading_graph import TradingAgentsGraph
-from tradingagents.default_config import DEFAULT_CONFIG
+from app.agent_engine.graph.trading_graph import TradingAgentsGraph
+from app.agent_engine.default_config import DEFAULT_CONFIG
 from app.models.analysis import (
     AnalysisTask, AnalysisStatus, SingleAnalysisRequest, AnalysisParameters
 )
@@ -35,7 +35,7 @@ from app.services.progress_log_handler import register_analysis_tracker, unregis
 
 # 股票基础信息获取（用于补充显示名称）
 try:
-    from tradingagents.dataflows.data_source_manager import get_data_source_manager
+    from app.data_sources.data_source_manager import get_data_source_manager
     _data_source_manager = get_data_source_manager()
     def _get_stock_info_safe(stock_code: str):
         """获取股票基础信息的安全封装"""
@@ -164,7 +164,7 @@ def get_provider_and_url_by_model_sync(model_name: str) -> dict:
                         backend_url = _get_default_backend_url(provider)
                         logger.warning(f"⚠️ [同步查询] 厂家 {provider} 没有配置 default_base_url，使用硬编码默认值")
 
-                    from tradingagents.llm_clients.provider_keys import normalize_provider_key, default_backend_url
+                    from app.llm.provider_keys import normalize_provider_key, default_backend_url
 
                     provider_key = normalize_provider_key(provider)
                     if provider_key == "qwen" and backend_url == "https://dashscope.aliyuncs.com/api/v1":
@@ -210,7 +210,7 @@ def get_provider_and_url_by_model_sync(model_name: str) -> dict:
                 if api_key:
                     logger.info(f"✅ [同步查询] 使用环境变量的 API Key")
 
-            from tradingagents.llm_clients.provider_keys import normalize_provider_key, default_backend_url
+            from app.llm.provider_keys import normalize_provider_key, default_backend_url
 
             provider_key = normalize_provider_key(provider)
             if provider_key == "qwen" and backend_url == "https://dashscope.aliyuncs.com/api/v1":
@@ -226,7 +226,7 @@ def get_provider_and_url_by_model_sync(model_name: str) -> dict:
             logger.warning(f"⚠️ [同步查询] 无法查询厂家配置: {e}")
 
         # 最后回退到硬编码的默认 URL 和环境变量 API Key
-        from tradingagents.llm_clients.provider_keys import normalize_provider_key
+        from app.llm.provider_keys import normalize_provider_key
 
         provider_key = normalize_provider_key(provider)
         return {
@@ -342,7 +342,7 @@ def _get_env_api_key_for_provider(provider: str) -> str:
     """
     import os
 
-    from tradingagents.llm_clients.provider_keys import env_key_for_provider, normalize_provider_key
+    from app.llm.provider_keys import env_key_for_provider, normalize_provider_key
 
     provider_key = normalize_provider_key(provider)
     env_key_name = env_key_for_provider(provider_key)
@@ -372,7 +372,7 @@ def _get_default_backend_url(provider: str) -> str:
     Returns:
         str: 默认的 backend_url
     """
-    from tradingagents.llm_clients.provider_keys import default_backend_url, normalize_provider_key
+    from app.llm.provider_keys import default_backend_url, normalize_provider_key
 
     provider_key = normalize_provider_key(provider)
     if provider_key == "302ai":
@@ -873,7 +873,7 @@ class SimpleAnalysisService:
 
             # 🔍 验证股票代码是否存在
             logger.info(f"🔍 开始验证股票代码: {stock_code}")
-            from tradingagents.utils.stock_validator import prepare_stock_data_async
+            from app.agent_engine.utils.stock_validator import prepare_stock_data_async
             from datetime import datetime
 
             # 获取市场类型
@@ -1135,7 +1135,7 @@ class SimpleAnalysisService:
         """同步执行分析的具体实现"""
         try:
             # 在线程中重新初始化日志系统
-            from tradingagents.utils.logging_init import init_logging, get_logger
+            from app.agent_engine.utils.logging_init import init_logging, get_logger
             init_logging()
             thread_logger = get_logger('analysis_thread')
 
@@ -1333,7 +1333,7 @@ class SimpleAnalysisService:
 
             # 🔧 智能日期范围处理：获取最近10天的数据，自动处理周末/节假日
             # 这样可以确保即使是周末或节假日，也能获取到最后一个交易日的数据
-            from tradingagents.utils.dataflow_utils import get_trading_date_range
+            from app.agent_engine.utils.dataflow_utils import get_trading_date_range
             data_start_date, data_end_date = get_trading_date_range(analysis_date, lookback_days=10)
 
             logger.info(f"📅 分析目标日期: {analysis_date}")
@@ -2577,7 +2577,7 @@ class SimpleAnalysisService:
                             logger.warning(f"⚠️ 降级提取也失败: {fallback_error}")
 
             # 🔥 根据股票代码推断市场类型
-            from tradingagents.utils.stock_utils import StockUtils
+            from app.agent_engine.utils.stock_utils import StockUtils
             market_info = StockUtils.get_market_info(stock_symbol)
             market_type_map = {
                 "china_a": "A股",
@@ -2593,7 +2593,7 @@ class SimpleAnalysisService:
             try:
                 if market_info.get("market") == "china_a":
                     # A股：使用统一接口获取股票信息
-                    from tradingagents.dataflows.interface import get_china_stock_info_unified
+                    from app.data_sources.interface import get_china_stock_info_unified
                     stock_info = get_china_stock_info_unified(stock_symbol)
                     logger.debug(f"📊 获取股票信息返回: {stock_info[:200] if stock_info else 'None'}...")
 
@@ -2604,7 +2604,7 @@ class SimpleAnalysisService:
                         # 降级方案：尝试直接从数据源管理器获取
                         logger.warning(f"⚠️ 无法从统一接口解析股票名称: {stock_symbol}，尝试降级方案")
                         try:
-                            from tradingagents.dataflows.data_source_manager import get_china_stock_info_unified as get_info_dict
+                            from app.data_sources.data_source_manager import get_china_stock_info_unified as get_info_dict
                             info_dict = get_info_dict(stock_symbol)
                             if info_dict and info_dict.get('name'):
                                 stock_name = info_dict['name']
@@ -2615,7 +2615,7 @@ class SimpleAnalysisService:
                 elif market_info.get("market") == "hong_kong":
                     # 港股：使用改进的港股工具
                     try:
-                        from tradingagents.dataflows.providers.hk.improved_hk import get_hk_company_name_improved
+                        from app.data_sources.providers.hk.improved_hk import get_hk_company_name_improved
                         stock_name = get_hk_company_name_improved(stock_symbol)
                         logger.info(f"📊 获取港股名称: {stock_symbol} -> {stock_name}")
                     except Exception:

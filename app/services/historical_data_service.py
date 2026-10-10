@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 统一历史数据管理服务
 为三数据源提供统一的历史数据存储和查询接口

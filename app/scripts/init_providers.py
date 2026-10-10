@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 初始化大模型厂家数据脚本
 """
@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from app.core.database import init_db, get_mongo_db
 from app.models.config import LLMProvider
-from tradingagents.llm_clients.provider_keys import canonical_aliases
+from app.llm.provider_keys import canonical_aliases
 
 async def init_providers():
     """初始化大模型厂家数据"""

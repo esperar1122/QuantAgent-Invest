@@ -1,4 +1,4 @@
-"""
+﻿"""
 内存状态管理器
 类似于 analysis-engine 的实现，提供快速的状态读写
 """
@@ -145,7 +145,7 @@ class MemoryStateManager:
         # 获取分析参数
         research_depth = parameters.get('research_depth', '标准')
         selected_analysts = parameters.get('selected_analysts', [])
-        from tradingagents.llm_clients.provider_keys import normalize_provider_key
+        from app.llm.provider_keys import normalize_provider_key
 
         llm_provider = normalize_provider_key(parameters.get('llm_provider', 'dashscope'))
 

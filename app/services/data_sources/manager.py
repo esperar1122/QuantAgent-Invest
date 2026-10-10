@@ -1,4 +1,4 @@
-"""
+﻿"""
 Data source manager that orchestrates multiple adapters with priority and optional consistency checks
 """
 from typing import List, Optional, Tuple, Dict

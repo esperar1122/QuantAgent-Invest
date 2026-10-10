@@ -1,4 +1,4 @@
-"""
+﻿"""
 统一API响应格式工具
 """
 from datetime import datetime

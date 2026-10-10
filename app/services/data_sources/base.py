@@ -1,4 +1,4 @@
-"""
+﻿"""
 Base classes and shared typing for data source adapters
 """
 from abc import ABC, abstractmethod

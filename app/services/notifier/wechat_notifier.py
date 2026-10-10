@@ -1,4 +1,4 @@
-"""
+﻿"""
 微信机器人与即时交易信号推送服务 (WeChat & Webhook Notifier)
 支持：企业微信机器人 Webhook、Server酱（微信直达）、飞书机器人
 """

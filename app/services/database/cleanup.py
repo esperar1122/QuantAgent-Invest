@@ -1,4 +1,4 @@
-"""
+﻿"""
 Cleanup routines extracted from DatabaseService.
 """
 from __future__ import annotations

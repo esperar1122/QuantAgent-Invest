@@ -1,4 +1,4 @@
-"""
+﻿"""
 Database status and connection checks, extracted from DatabaseService.
 """
 from __future__ import annotations

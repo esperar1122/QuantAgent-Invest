@@ -1,4 +1,4 @@
-"""
+﻿"""
 股票详情相关API
 - 统一响应包: {success, data, message, timestamp}
 - 所有端点均需鉴权 (Bearer Token)
@@ -537,7 +537,7 @@ async def get_fundamentals(
         logger.error(f"获取财务数据失败: {e}")
 
     # 3. 获取实时PE/PB（优先使用实时计算）
-    from tradingagents.dataflows.realtime_metrics import get_pe_pb_with_fallback
+    from app.data_sources.realtime_metrics import get_pe_pb_with_fallback
     import asyncio
 
     # 在线程池中执行同步的实时计算
@@ -726,7 +726,7 @@ async def get_kline(
     # 2. 备选：从 MongoDB 缓存获取
     if not items or len(items) < 5:
         try:
-            from tradingagents.dataflows.cache.mongodb_cache_adapter import get_mongodb_cache_adapter
+            from app.data_sources.cache.mongodb_cache_adapter import get_mongodb_cache_adapter
             adapter = get_mongodb_cache_adapter()
 
             # 计算日期范围
@@ -855,7 +855,7 @@ async def get_technical_indicators(
     """
     import numpy as np
     import pandas as pd
-    from tradingagents.tools.analysis.indicators import ma, ema, macd, rsi, boll, atr, kdj, obv
+    from app.agent_engine.tools.analysis.indicators import ma, ema, macd, rsi, boll, atr, kdj, obv
 
     # 1. 检测与归一化代码
     market, normalized_code = _detect_market_and_code(code)
@@ -1596,7 +1596,7 @@ async def get_news(code: str, days: int = 30, limit: int = 50, include_announcem
         if not news_list:
             try:
                 logger.info(f"🔄 步骤3b: 从统一数据源管理器直接拉取 {normalized_code} 实时新闻...")
-                from tradingagents.dataflows.data_source_manager import get_data_source_manager
+                from app.data_sources.data_source_manager import get_data_source_manager
                 dm = get_data_source_manager()
                 raw_news = dm.get_news_data(normalized_code, limit=limit)
                 if raw_news:

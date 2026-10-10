@@ -1,4 +1,4 @@
-"""
+﻿"""
 个人量化极速秒级实时行情管道 (Real-time Market Quotes Streamer)
 基于腾讯/新浪极速数据源通道，支持毫秒级批量快照拉取、Redis缓存与 SSE/WebSocket 实时推流
 """

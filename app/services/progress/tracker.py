@@ -1,4 +1,4 @@
-"""
+﻿"""
 进度跟踪器（过渡期）
 - 暂时从旧模块导入 RedisProgressTracker 类
 - 在本模块内提供 get_progress_by_id 的实现（与旧实现一致，修正 cls 引用）
@@ -50,7 +50,7 @@ class RedisProgressTracker:
         self.task_id = task_id
         self.analysts = analysts
         self.research_depth = research_depth
-        from tradingagents.llm_clients.provider_keys import normalize_provider_key
+        from app.llm.provider_keys import normalize_provider_key
 
         self.llm_provider = normalize_provider_key(llm_provider)
 
