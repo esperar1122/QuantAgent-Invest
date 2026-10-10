@@ -6,6 +6,7 @@ FastAPI 后端应用程序入口
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
@@ -621,6 +622,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# GZip 响应压缩中间件（对大于 1KB 的响应自动压缩，大幅减少网络传输带宽与延迟）
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # 操作日志中间件
 app.add_middleware(OperationLogMiddleware)

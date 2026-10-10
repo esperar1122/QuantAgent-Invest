@@ -3089,8 +3089,12 @@ async function switchStock(code: string) {
   router.replace({ path: '/terminal/stock', query: { code } })
 }
 
+// 竞态守卫 Token，杜绝快速切换标的导致的数据时序错乱
+let activeLoadToken = 0
+
 // 加载单只股票数据
 async function loadStockDetail(code: string) {
+  const currentToken = ++activeLoadToken
   pageLoading.value = true
   try {
     // 1. 并发获取实时行情、基本面财务数据、筹码分布、技术指标快照、多智能体案卷库与主力资金/北向持股
@@ -3109,6 +3113,10 @@ async function loadStockDetail(code: string) {
       dossierPromise,
       capitalFlowPromise
     ])
+
+    // 若期间用户已切换到其他标的，丢弃本轮过时响应
+    if (currentToken !== activeLoadToken) return
+
     const q = (quoteRes as any)?.data || quoteRes
     const f = (fundRes as any)?.data || fundRes
     currentChips.value = (chipsRes as any)?.data?.chips || (chipsRes as any)?.chips || (indRes as any)?.data?.chips || (indRes as any)?.chips || null
@@ -3236,9 +3244,11 @@ async function loadStockDetail(code: string) {
   } catch (err) {
     console.warn('获取标的详情失败，保持当前展示:', err)
   } finally {
-    pageLoading.value = false
-    fetchStockNews(code)
-    subscribeLiveQuotes(code)
+    if (currentToken === activeLoadToken) {
+      pageLoading.value = false
+      fetchStockNews(code)
+      subscribeLiveQuotes(code)
+    }
   }
 }
 
@@ -3485,7 +3495,7 @@ onMounted(() => {
   favoritesStore.fetchFavorites()
   const initialCode = (route.query.code as string) || 'sh000001'
   selectedCode.value = initialCode
-  loadStockDetail(initialCode)
+  // 注意：watch(() => route.query.code, ..., { immediate: true }) 已在初次挂载时执行 loadStockDetail，此处无需重复触发
 })
 
 onUnmounted(() => {

@@ -7,11 +7,32 @@
 
 import logging
 import asyncio
+import time
 import requests
+from requests.adapters import HTTPAdapter
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+# 全局复用 HTTP 连接池
+_flow_session = requests.Session()
+_adapter = HTTPAdapter(pool_connections=15, pool_maxsize=30, max_retries=1)
+_flow_session.mount("http://", _adapter)
+_flow_session.mount("https://", _adapter)
+
+# 内存二级缓存
+_FLOW_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
+_NORTH_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
+
+def _is_trading_time() -> bool:
+    """判断当前时间是否处于A股交易窗口"""
+    now = datetime.now()
+    if now.weekday() >= 5:
+        return False
+    t = now.time()
+    return (t >= datetime.strptime("09:15", "%H:%M").time() and t <= datetime.strptime("11:35", "%H:%M").time()) or \
+           (t >= datetime.strptime("12:55", "%H:%M").time() and t <= datetime.strptime("15:05", "%H:%M").time())
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -40,14 +61,21 @@ class CapitalFlowService:
         return c, prefix
 
     @classmethod
-    def fetch_capital_flow(cls, code: str, days: int = 15) -> Dict[str, Any]:
+    def fetch_capital_flow(cls, code: str, days: int = 15, force_refresh: bool = False) -> Dict[str, Any]:
         """
-        拉取个股近 N 个交易日的大单、中单、小单及主力资金流向
+        拉取个股近 N 个交易日的大单、中单、小单及主力资金流向 (连接池复用 + 市场感知缓存)
         """
         c6, sym = cls._normalize_code(code)
+        cache_key = f"{c6}_{days}"
+        now_ts = time.time()
+        if not force_refresh and cache_key in _FLOW_CACHE:
+            expire_at, cached_data = _FLOW_CACHE[cache_key]
+            if now_ts < expire_at:
+                return cached_data
+
         url = f"http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/MoneyFlow.ssl_qsfx_lscjfb?page=1&num={days}&sort=opendate&asc=0&daima={sym}"
         try:
-            resp = requests.get(url, headers=HEADERS, timeout=6)
+            resp = _flow_session.get(url, headers=HEADERS, timeout=5)
             if resp.status_code != 200:
                 logger.warning(f"新浪资金流接口返回状态异常: {resp.status_code}")
                 return {"items": [], "summary": {}}
@@ -103,7 +131,17 @@ class CapitalFlowService:
 
             # 汇总多日动向
             summary = cls._compute_flow_summary(items)
-            return {"items": items, "summary": summary}
+            flow_res = {"items": items, "summary": summary}
+
+            # 写入内存缓存
+            ttl = 60.0 if _is_trading_time() else 3600.0
+            _FLOW_CACHE[cache_key] = (now_ts + ttl, flow_res)
+            if len(_FLOW_CACHE) > 500:
+                expired = [k for k, v in _FLOW_CACHE.items() if v[0] < now_ts]
+                for k in expired:
+                    _FLOW_CACHE.pop(k, None)
+
+            return flow_res
         except Exception as e:
             logger.error(f"拉取标的 {code} 资金流数据失败: {e}")
             return {"items": [], "summary": {}}
@@ -160,12 +198,18 @@ class CapitalFlowService:
         }
 
     @classmethod
-    def fetch_northbound_holding(cls, code: str) -> Dict[str, Any]:
+    def fetch_northbound_holding(cls, code: str, force_refresh: bool = False) -> Dict[str, Any]:
         """
         获取标的北向资金 (陆股通 / 外资) 持股画像
-        注：依据2024年8月19日交易所信披改革，个股全量明细调整为季度末披露
+        注：依据2024年8月19日交易所信披改革，个股全量明细调整为季度末披露 (TTL: 6小时)
         """
         c6, _ = cls._normalize_code(code)
+        now_ts = time.time()
+        if not force_refresh and c6 in _NORTH_CACHE:
+            expire_at, cached_data = _NORTH_CACHE[c6]
+            if now_ts < expire_at:
+                return cached_data
+
         url = "https://datacenter-web.eastmoney.com/api/data/v1/get"
         
         # 1. 尝试查询最新季度末官方权威持股报告
@@ -182,7 +226,7 @@ class CapitalFlowService:
         }
         
         try:
-            r = requests.get(url, params=params_quarterly, headers=EASTMONEY_HEADERS, timeout=5)
+            r = _flow_session.get(url, params=params_quarterly, headers=EASTMONEY_HEADERS, timeout=5)
             data_json = r.json()
             raw_list = (data_json.get("result") or {}).get("data", [])
             
@@ -201,7 +245,7 @@ class CapitalFlowService:
             latest_quarter = quarterly_items[0] if quarterly_items else None
             is_heavy_north = bool(latest_quarter and latest_quarter["hold_ratio_pct"] >= 3.0)
 
-            return {
+            result = {
                 "code": c6,
                 "has_northbound": bool(latest_quarter and latest_quarter["hold_shares_wan"] > 0),
                 "is_heavy_north": is_heavy_north,
@@ -209,6 +253,9 @@ class CapitalFlowService:
                 "history_quarters": quarterly_items,
                 "disclosure_notice": "注：根据2024年8月19日沪深港通监管新规，个股持股明细调整为每季度盘后权威披露；日内实时净买卖额已依规停更。"
             }
+            # 季报数据极稳定，缓存 6 小时
+            _NORTH_CACHE[c6] = (now_ts + 21600.0, result)
+            return result
         except Exception as e:
             logger.error(f"拉取标的 {code} 北向持股失败: {e}")
             return {
@@ -221,11 +268,11 @@ class CapitalFlowService:
             }
 
     @classmethod
-    async def get_combined_analysis(cls, code: str) -> Dict[str, Any]:
+    async def get_combined_analysis(cls, code: str, force_refresh: bool = False) -> Dict[str, Any]:
         """异步聚合个股资金流向与北向持股完整数据"""
         loop = asyncio.get_running_loop()
-        flow_task = loop.run_in_executor(None, cls.fetch_capital_flow, code, 15)
-        north_task = loop.run_in_executor(None, cls.fetch_northbound_holding, code)
+        flow_task = loop.run_in_executor(None, cls.fetch_capital_flow, code, 15, force_refresh)
+        north_task = loop.run_in_executor(None, cls.fetch_northbound_holding, code, force_refresh)
         
         flow_data, north_data = await asyncio.gather(flow_task, north_task)
         return {

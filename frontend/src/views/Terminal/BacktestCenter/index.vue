@@ -891,8 +891,14 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { quantApi, type BacktestResponse, type CustomBacktestStrategy, type CustomBacktestStrategyCreatePayload } from '@/api/quant'
 import { ElMessage } from 'element-plus'
-import { Collection, Plus, ArrowDown } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
+import * as echarts from 'echarts/core'
+import { LineChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+import type { EChartsOption } from 'echarts'
+
+echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
+
 import { useBacktestStrategies } from '@/composables/useBacktestStrategies'
 import BacktestStrategyManageDialog from './components/BacktestStrategyManageDialog.vue'
 import BacktestStrategyEditDialog from './components/BacktestStrategyEditDialog.vue'
@@ -1324,7 +1330,7 @@ function renderChart() {
   const benchmarks = navList.map((d: any) => +(d.benchmark_nav || 1.0).toFixed(3))
   const drawdowns = navList.map((d: any) => -(d.drawdown_pct || 0).toFixed(2))
 
-  const option: echarts.EChartsOption = {
+  const option: EChartsOption = {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'cross' }

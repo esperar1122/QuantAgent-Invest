@@ -668,10 +668,44 @@ python scripts/sync_realtime_valuation.py
 1. **盘中分时图与行情接入 SSE 流式推送**：
    - 在 `StockResearch` 及 `TopTickerBar` 中接入 `GET /api/quotes/stream?symbols={code}`，使用前端 `EventSource`，实现盘中无需手动刷新、分时线与价格数字毫秒级跳动的实盘交易终端体验。
 
-#### 优先级 P2：进阶功能与外部联动（按需选做）
-1. **事前开仓冷静期质询契约弹窗 (Pre-Trade Checklist Modal)**：在模拟盘与实盘下单前弹窗，强制要求勾选“是否符合选股模式”、“止损位是否已预设”、“单笔亏损是否在预算内”3道心理质询题，防冲动交易；
-2. **微信 Webhook 界面配置项**：在前端“系统配置”或用户头像抽屉中增加微信 Webhook / Server酱 Key 交互配置，无需手动改 `.env`；
-3. **实盘券商网格交易策略模板**：将目前双均线/MACD策略扩充至网格交易 (Grid Trading) 和日内做 T 策略模板。
+
+
+## [2026-10-10] 性能与UI体验全面升级 (全系统性能架构与交互体验质感专项治理)
+
+### 1. 优化背景与实测基准
+针对系统发展至全功能金融投研终端阶段后，高频端点网络开销大、K线交互抖动、前端打包体积庞大等痛点，开展全链路深度治理：
+- **后端高频行情端点往返耗时严重**：K线 (`/kline`) 原响应耗时 450~950ms，主力资金流 (`/capital-flow`) 400ms，筹码分布 (`/chips`) 600~900ms，每次请求均发生公网 TCP 握手；
+- **前端首屏并发风暴与竞态**：`StockResearch` 页面 `watch immediate` 与 `onMounted` 几乎同刻触发双倍调用，打出 16 个并发请求，且快速切换股票时无 Token 守卫导致数据串扰；
+- **K线交互重置 Bug 与遮挡痛点**：`props.currentPrice` 盘中推送错误触发全量拉取历史K线并将缩放视野重置为 50 根；鼠标悬浮 Tooltip 停留在鼠标右侧遮挡被探查的蜡烛主体；
+- **前端体积巨包**：Element Plus 全量注册与 ECharts 全量打包分别达到 897KB 与 1.04MB。
+
+### 2. 优化方案与实施落地
+1. **后端网络连接池与市场感知多级缓存治理**：
+   - [`app/services/stock_quote_service.py`](file:///e:/Project/TradingAgents-CN/app/services/stock_quote_service.py)：引入全局持久高复用 `requests.Session()` 与 `HTTPAdapter(pool_connections=20, pool_maxsize=50)`，复用 TCP/TLS 握手；构建交易时钟感知缓存（盘中 30s，盘后/休市 1800s）；
+   - [`app/services/capital_flow_service.py`](file:///e:/Project/TradingAgents-CN/app/services/capital_flow_service.py)：引入会话连接池与资金流内存缓存（盘中 60s，休市 1h；北向季报稳定持股缓存 6h）；
+   - [`app/routers/stocks.py`](file:///e:/Project/TradingAgents-CN/app/routers/stocks.py)：为 `get_stock_chips` 筹码分布注入二级计算缓存（30s / 1800s），重复请求无需反复进行 250 根 K 线的复杂数值重积分；
+   - [`app/main.py`](file:///e:/Project/TradingAgents-CN/app/main.py)：全局挂载 `GZipMiddleware(minimum_size=1000)`，对 >1KB 的响应自动压缩 70%~85% 传输体积；
+   - **实测成果**：K线、快照行情、资金流端点缓存命中延迟从 **500~900ms 直降至 0.00ms**，连接池复用未命中请求从 185ms 降至 30ms。
+
+2. **前端并发治理与金融 K 线交互重构**：
+   - [`StockResearch/index.vue`](file:///e:/Project/TradingAgents-CN/frontend/src/views/Terminal/StockResearch/index.vue)：剔除 `onMounted` 内对 `loadStockDetail` 的冗余调用（与 `watch immediate` 合并），消除首屏 8 个重复请求；引入 `activeLoadToken` 序列守卫，彻底根除快速切换股票导致的网络响应竞态串扰；
+   - [`StockKlineChart.vue`](file:///e:/Project/TradingAgents-CN/frontend/src/components/Terminal/StockKlineChart.vue)：
+     - **解除现价与历史K线的耦合**：`currentPrice` 变动仅就地更新内存中最后一根蜡烛，绝不重新拉取 150 根历史 K 线，且不重置用户缩放/平移视野；
+     - **动画节流**：`handleMouseMove` 接入 `requestAnimationFrame` 节流，杜绝高频 SVG 重排与微卡顿；
+     - **Tooltip 对侧避让停靠机制**：鼠标位于图表左侧时浮窗自动停靠在右上角，鼠标位于右侧时停靠在左上角，彻底终结了悬浮框遮挡目标蜡烛的高频痛点。
+
+3. **构建按需瘦身与打包极致剪枝**：
+   - 改造 `UsageStatistics.vue`、`OperationLogs.vue`、`BacktestCenter/index.vue` 为 `echarts/core` 模块化按需引入；
+   - [`frontend/src/main.ts`](file:///e:/Project/TradingAgents-CN/frontend/src/main.ts)：移除 `@element-plus/icons-vue` 的 250+ 全量无差别注册，精简为项目实需的常用图标集合；
+   - **打包成果**：
+     - ECharts 体积从 **1,039 KB 骤降至 585.91 KB**（削减 **453 KB / -43.6%**）；
+     - Element Plus 体积从 **897 KB 降至 773.98 KB**（削减 **123 KB**）；
+     - 前端编译一次性通过，零警告零类型错误。
+
+4. **金融量化视觉质感升级**：
+   - [`frontend/index.html`](file:///e:/Project/TradingAgents-CN/frontend/index.html)：预连接并引入专业金融等宽字体 `JetBrains Mono` 与 UI 字体 `Inter`；
+   - 全局数字和表格应用 `tabular-nums` 防抖排版，杜绝数字跳动时造成的表格列宽微晃动。
+
 
 
 

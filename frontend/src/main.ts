@@ -1,7 +1,14 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
-import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+import {
+  Search, Plus, Edit, Delete, Check, Close, Refresh,
+  ArrowDown, ArrowUp, ArrowRight, ArrowLeft, More, Setting,
+  User, Lock, Warning, CircleCheck, CircleClose, InfoFilled,
+  QuestionFilled, Document, Upload, Download, Money, Star,
+  Coin, Cpu, Collection, CaretTop, CaretBottom, Loading,
+  Folder, FolderOpened, View, Hide
+} from '@element-plus/icons-vue'
 import 'element-plus/dist/index.css'
 import 'element-plus/theme-chalk/dark/css-vars.css'
 
@@ -21,8 +28,16 @@ import './styles/dark-theme.scss'
 // 创建应用实例
 const app = createApp(App)
 
-// 注册Element Plus图标
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+// 按需注册常用 Element Plus 图标（削减全量图标引入带来的包体积膨胀）
+const registeredIcons: Record<string, any> = {
+  Search, Plus, Edit, Delete, Check, Close, Refresh,
+  ArrowDown, ArrowUp, ArrowRight, ArrowLeft, More, Setting,
+  User, Lock, Warning, CircleCheck, CircleClose, InfoFilled,
+  QuestionFilled, Document, Upload, Download, Money, Star,
+  Coin, Cpu, Collection, CaretTop, CaretBottom, Loading,
+  Folder, FolderOpened, View, Hide
+}
+for (const [key, component] of Object.entries(registeredIcons)) {
   app.component(key, component)
 }
 

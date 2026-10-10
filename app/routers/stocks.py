@@ -1307,6 +1307,9 @@ async def get_technical_indicators(
     })
 
 
+_CHIPS_CACHE: Dict[str, tuple[float, dict]] = {}
+
+
 @router.get("/{code}/chips", response_model=dict)
 async def get_stock_chips(
     code: str,
@@ -1325,7 +1328,7 @@ async def get_stock_chips(
     - 价格直方图 (histogram) 供前端可视化渲染
     """
     from app.services.chips_service import calculate_chips_distribution
-    from app.services.stock_quote_service import fetch_realtime_stock_quote
+    from app.services.stock_quote_service import fetch_realtime_stock_quote, _is_trading_time
 
     market, normalized_code = _detect_market_and_code(code)
     code_padded = normalized_code
@@ -1333,6 +1336,13 @@ async def get_stock_chips(
     limit_val = limit if isinstance(limit, int) else 250
     period_val = period if isinstance(period, str) else "day"
     force_val = force_refresh if isinstance(force_refresh, bool) else False
+
+    cache_key = f"{code_padded}_{period_val}_{limit_val}"
+    now_ts = time.time()
+    if not force_val and cache_key in _CHIPS_CACHE:
+        expire_at, cached_res = _CHIPS_CACHE[cache_key]
+        if now_ts < expire_at:
+            return ok(dict(cached_res))
 
     kline_res = await get_kline(
         code=code_padded,
@@ -1389,21 +1399,34 @@ async def get_stock_chips(
             "quant_debate": {}
         }
 
-    return ok({
+    res_data = {
         "code": code_padded,
         "name": (rt_q.get("name") if rt_q else None) or code_padded,
         "current_price": round(current_px, px_prec),
         "chips": chips
-    })
+    }
+
+    # 写入缓存 (盘中 30s，盘后/周末 30分钟)
+    ttl = 30.0 if _is_trading_time() else 1800.0
+    _CHIPS_CACHE[cache_key] = (now_ts + ttl, res_data)
+    if len(_CHIPS_CACHE) > 500:
+        expired = [k for k, v in _CHIPS_CACHE.items() if v[0] < now_ts]
+        for k in expired:
+            _CHIPS_CACHE.pop(k, None)
+
+    return ok(res_data)
 
 
 @router.get("/{code}/capital-flow", response_model=dict)
-async def get_stock_capital_flow_endpoint(code: str):
+async def get_stock_capital_flow_endpoint(
+    code: str,
+    force_refresh: bool = Query(False, description="是否强制刷新")
+):
     """
     获取个股主力资金流向（超大单/大单/中单/小单）与北向资金(陆股通)持股画像
     """
     from app.services.capital_flow_service import CapitalFlowService
-    res = await CapitalFlowService.get_combined_analysis(code)
+    res = await CapitalFlowService.get_combined_analysis(code, force_refresh=force_refresh)
     return ok(data=res)
 
 

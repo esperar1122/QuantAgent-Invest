@@ -316,7 +316,18 @@ import {
   Download,
   Delete
 } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
+import * as echarts from 'echarts/core'
+import { PieChart, LineChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+
+echarts.use([
+  PieChart,
+  LineChart,
+  GridComponent,
+  TooltipComponent,
+  CanvasRenderer
+])
 import {
   OperationLogsApi,
   type OperationLog,

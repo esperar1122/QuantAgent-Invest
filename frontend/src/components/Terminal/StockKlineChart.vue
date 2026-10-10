@@ -628,11 +628,10 @@
         </g>
       </svg>
 
-      <!-- 悬浮数据框 (K线 Tooltip) -->
+      <!-- 悬浮数据框 (K线 Tooltip - 对侧避让，绝不遮挡当前蜡烛) -->
       <div 
         v-if="currentHoverItem && currentPeriod !== 'timeline'" 
-        class="kline-tooltip" 
-        :style="{ left: tooltipPos.x + 'px', top: '12px' }"
+        :class="['kline-tooltip', `dock-${tooltipSide}`]" 
       >
         <div class="tt-header">
           <span class="tt-date">{{ currentHoverItem.date }}</span>
@@ -650,11 +649,10 @@
         </div>
       </div>
 
-      <!-- 悬浮数据框 (分时 Tooltip) -->
+      <!-- 悬浮数据框 (分时 Tooltip - 对侧避让) -->
       <div 
         v-if="currentHoverTimelineItem && currentPeriod === 'timeline'" 
-        class="kline-tooltip timeline-tooltip" 
-        :style="{ left: tooltipPos.x + 'px', top: '12px' }"
+        :class="['kline-tooltip', 'timeline-tooltip', `dock-${tooltipSide}`]" 
       >
         <div class="tt-header">
           <span class="tt-date">分时 {{ currentHoverTimelineItem.time }}</span>
@@ -1206,8 +1204,9 @@ async function loadKlineData() {
   }
 }
 
+// 仅在切换标的或切换周期时重新加载历史数据序列
 watch(
-  () => [props.stockCode, props.currentPrice, currentPeriod.value],
+  () => [props.stockCode, currentPeriod.value],
   () => {
     if (currentPeriod.value === 'timeline') {
       loadTimelineData()
@@ -1216,6 +1215,25 @@ watch(
     }
   },
   { immediate: true }
+)
+
+// 实盘现价跳动时原地更新最新蜡烛，绝不重新拉取150根历史K线和打乱用户缩放/平移视野
+watch(
+  () => props.currentPrice,
+  (newPrice) => {
+    const px = Number(newPrice)
+    if (!px || isNaN(px) || currentPeriod.value !== 'day' || rawData.value.length === 0) return
+    const last = rawData.value[rawData.value.length - 1]
+    if (last) {
+      last.close = px
+      if (px > last.high) last.high = px
+      if (px < last.low) last.low = px
+      const preClose = rawData.value.length > 1 ? rawData.value[rawData.value.length - 2].close : last.open
+      if (preClose > 0) {
+        last.changePct = +(((px - preClose) / preClose) * 100).toFixed(2)
+      }
+    }
+  }
 )
 
 // 当前视口内展示的 K 线切片
@@ -1730,16 +1748,16 @@ const hoverPrice = ref<number>(0)
 const currentHoverItem = ref<KlineItem | null>(null)
 const currentHoverTimelineItem = ref<TimelineItem | null>(null)
 const hoverPoint = ref<{ x: number; y: number } | null>(null)
-const tooltipPos = ref({ x: 0 })
+const tooltipSide = ref<'left' | 'right'>('right')
+
+let moveRaf: number | null = null
 
 function handleMouseMove(e: MouseEvent) {
-  const target = e.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
-  const mouseX = ((e.clientX - rect.left) / rect.width) * width.value
-  const mouseY = ((e.clientY - rect.top) / rect.height) * height
-
-  // 1. 拖动平移中
+  // 1. 拖动平移中需要即时响应
   if (isDragging.value && currentPeriod.value !== 'timeline') {
+    const target = e.currentTarget as HTMLElement
+    if (!target) return
+    const rect = target.getBoundingClientRect()
     const diffPx = e.clientX - dragStartX
     const usableW = rect.width
     const barW = usableW / Math.max(1, visibleCount.value)
@@ -1749,7 +1767,23 @@ function handleMouseMove(e: MouseEvent) {
     return
   }
 
-  // 2. 画线预览更新
+  // 2. 悬停探测与十字光标使用 rAF 节流，杜绝 Layout Thrashing 与高频重排微卡顿
+  if (moveRaf) cancelAnimationFrame(moveRaf)
+  const target = e.currentTarget as HTMLElement
+  const clientX = e.clientX
+  const clientY = e.clientY
+  moveRaf = requestAnimationFrame(() => {
+    processHoverMove(target, clientX, clientY)
+  })
+}
+
+function processHoverMove(target: HTMLElement, clientX: number, clientY: number) {
+  if (!target) return
+  const rect = target.getBoundingClientRect()
+  const mouseX = ((clientX - rect.left) / rect.width) * width.value
+  const mouseY = ((clientY - rect.top) / rect.height) * height
+
+  // 画线预览更新
   if (drawingDraft.value && draftStartPoint) {
     drawingDraft.value.x2 = mouseX
     drawingDraft.value.y2 = mouseY
@@ -1803,13 +1837,9 @@ function handleMouseMove(e: MouseEvent) {
     }
   }
 
-  // 浮窗位置计算
-  const clientX = e.clientX - rect.left
-  if (clientX > rect.width - 160) {
-    tooltipPos.value.x = clientX - 160
-  } else {
-    tooltipPos.value.x = clientX + 15
-  }
+  // 4. 浮窗对侧避让：鼠标在左半区，Tooltip停靠在右上角；鼠标在右半区，Tooltip停靠在左上角，彻底杜绝遮挡目标蜡烛
+  const relX = clientX - rect.left
+  tooltipSide.value = relX < rect.width / 2 ? 'right' : 'left'
 }
 
 function handleMouseUp() {
@@ -2425,16 +2455,29 @@ function handleMouseLeave() {
 
 .kline-tooltip {
   position: absolute;
+  top: 12px;
   pointer-events: none;
   background-color: rgba(16, 24, 40, 0.92);
+  backdrop-filter: blur(8px);
   border: 1px solid #344054;
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 8px 10px;
   color: #ffffff;
   font-size: 11px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   z-index: 10;
-  min-width: 140px;
+  min-width: 145px;
+  transition: opacity 0.15s ease;
+
+  &.dock-left {
+    left: 16px;
+    right: auto;
+  }
+
+  &.dock-right {
+    right: 16px;
+    left: auto;
+  }
 
   .tt-header {
     display: flex;
