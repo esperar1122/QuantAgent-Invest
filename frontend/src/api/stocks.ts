@@ -394,6 +394,21 @@ export interface StockPoolItem {
   is_index?: boolean
   trade_date?: string
   updated_at?: string
+  // === 统一量化核心引擎全息画像字段 ===
+  regime?: {
+    regime: string
+    label: string
+    description: string
+    is_actionable: boolean
+    tag_type: string
+  }
+  target_price?: number | null
+  stop_price?: number | null
+  ma_bullish?: boolean
+  above_ma20?: boolean
+  risk_passed?: boolean
+  north_ratio?: number | null
+  debt_ratio?: number | null
 }
 
 export interface StockPoolStats {
@@ -440,6 +455,16 @@ export interface StockPoolParams {
   max_risk_reward_ratio?: number | null
   min_amount?: number | null
   max_amount?: number | null
+  // === 新增多维量化筛选参数 ===
+  min_north_ratio?: number | null
+  max_north_ratio?: number | null
+  is_heavy_north?: boolean
+  ma_bullish_only?: boolean
+  above_ma20_only?: boolean
+  min_profit_ratio?: number | null
+  max_concentration_90?: number | null
+  exclude_st?: boolean
+  max_debt_ratio?: number | null
   page?: number
   page_size?: number
   sort_field?: string

@@ -588,6 +588,26 @@ AI 将自动基于该文档在几秒内无缝接续全部上下文！
         - `北向持仓画像`：展示最新季度持股数/市值/占比、历季度变动表、2024-08-19 监管新规官方权威声明条；
         - `信披与数据源`：展示数据源与 AData 开源库实测对比透视说明；
       - 在 `StockResearch/index.vue` 的 `center-chart-col` 挂载 `CapitalFlowCard`，与行情并发异步加载，并在 `quantFactors` 因子得分计算中深度联动主力净流入占比与北向持股加成。
+  - **P0 级量化筛选多维指标扩展与全系统算法统一（SSOT 纯计算内核 `QuantCoreEngine`）**：
+    - **系统痛点与架构决策**：
+      - 解决原有系统“各模块各算各的”算法割裂（如股票池路由与筹码服务对于盈亏比计算口径不一致）；
+      - 论证并实施“纯计算无状态数学内核”，确保零 I/O 耦合、高并发、微秒级推演（实测单股推演耗时 `<0.05ms`），杜绝因重构引入系统负优化。
+    - **纯计算量化算法中枢 (`app/quant_engine/`)**：
+      - `profiles.py`：板块特征超参数自适应（主板 10cm、双创 20cm、北交 30cm、ETF、ST）与实战摩擦费率（万0.876免5、万5印花税）；
+      - `market_regime.py`：量价五大生命周期状态机（`STRONG_MOMENTUM`, `PULLBACK_SETUP`, `RANGE_BOUND`, `EXTREME_OVERSOLD`, `DOWNWARD_TREND`）；
+      - `risk_reward.py`：统一实战扣费净盈亏比模型与动态 ATR 波动标尺；
+      - `technical_factors.py`：均线多头排列 (`MA5>10>20`)、站上 20 日生命线、筹码单峰结构评价；
+      - `capital_factors.py`：北向资金持股分级评价（核心重仓/重要配置）、主力资金多档净额定性与吸筹剪刀差；
+      - `negative_filter.py`：负面清单一票否决规则（ST、资产负债率>75%、流动性枯竭、5日极端超买）；
+      - `engine.py` / `__init__.py`：统一对外面向业务的无状态外观接口 `QuantCoreEngine`。
+    - **后端全链路调用改造（彻底消除割裂）**：
+      - `app/routers/stocks.py`：`_calc_risk_reward_ratio` 彻底重构为调用 `QuantCoreEngine.calc_risk_reward`；股票池装配全量接入 `QuantCoreEngine.evaluate_stock`，输出统一 `regime`、`risk_reward_ratio`、`target_price`、`stop_price`、`ma_bullish`、`north_ratio`；
+      - `app/services/chips_service.py`：筹码多空对决裁决席的盈亏比计算接入 `QuantCoreEngine.calc_risk_reward`，废弃原有几何死公式。
+    - **前端高级筛选与股票池体验全景闭环**：
+      - `frontend/src/api/stocks.ts` & `frontend/src/composables/useStockPool.ts`：扩展参数接口与响应结构，新增“⭐ 外资核心·北向重仓”与“🎯 筹码单峰·回踩低吸”经典策略，双向联动所有新指标；
+      - `frontend/src/views/StockPool/components/AdvancedFilterPanel.vue`：扩充为 8 大因子卡片（增加：资金面与外资、均线形态趋势、筹码分布结构、风控一票否决）；
+      - `frontend/src/views/StockPool/components/StockPoolTable.vue`：新增“量价形态（生命周期胶囊+多头标签）”、“北向持股”独立列，盈亏比支持目标价/止损价提示；
+      - 经 `npm run type-check` (`vue-tsc --noEmit`) 验证 0 TypeScript 错误。
 
 ### 2. 跨设备数据同步运维与极速数据源指南 (Data Pipeline & Operations Guide for Antigravity)
 

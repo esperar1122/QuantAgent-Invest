@@ -1875,142 +1875,10 @@ async def get_quant_candidate_strategy(db) -> dict:
 def _calc_risk_reward_ratio(item: dict, q: dict) -> Optional[float]:
     """
     测算标的扣费真实净盈亏比 (Real Friction-Adjusted Risk-Reward Ratio, Net R:R)
-    与单标的研究 (StockResearch)、回测系统及券商实盘交易摩擦模型保持严格同源：
-    1. 动态波动率标尺 (ATR / Volatility)：
-       优先采用真实振幅 (amplitude)，若缺失则根据板块基础波动率 (ETF/主板/双创/北交) 结合换手率动态测算日内真实波幅 ATR。
-    2. 量价动能形态与空间折算：
-       - 突破/放量主升 (pct >= 1.5% 且未极端冲高): 上方弹性空间拉大 (2.2 ATR)，止损设于下轨支撑 (1.1 ATR)；
-       - 日内极端超买冲高 (pct >= 8.0%): 警惕追高被套，向上空间受挤压 (1.2 ATR)，下方止损拉宽 (1.6 ATR)；
-       - 严重破位下行 (pct <= -3.0%): 趋势走坏，反弹空间受限 (0.85 ATR)，向下破位风险大 (1.4 ATR)；
-       - 震荡良性蓄势 (-3.0% < pct < 1.5%): 箱体中枢，向上空间 (1.5 ATR)，向下止损 (1.0 ATR)。
-    3. 基本面估值与质地加成：
-       - 优质低估 (0 < pe <= 30 且 roe >= 8): 给予 1.15x 向上空间估值安全垫加成；
-       - 亏损或极高估值 (pe < 0 或 pe > 80): 给予 0.88x 向上空间惩罚折减。
-    4. 实战券商交易摩擦扣费 (万0.876免5最低0.5元，个股万5印花税，ETF免印花税)：
-       精准扣除双边佣金与卖出印花税，输出真实的实战净盈亏比 (Net R:R)，杜绝任何伪随机数或单日影线毛刺。
+    统一调用 QuantCoreEngine 量化计算内核，保证全系统同源一致
     """
-    close = q.get("close") if q.get("close") is not None else item.get("close")
-    if close is None:
-        return None
-    try:
-        c = float(close)
-        if c <= 0:
-            return None
-    except (ValueError, TypeError):
-        return None
-
-    code = str(item.get("code") or q.get("code") or "").strip()
-    code_clean = code.lower().replace("sh", "").replace("sz", "").replace("bj", "")
-    market = str(item.get("market") or q.get("market") or "")
-
-    # 判断是否为 ETF
-    is_etf = (
-        code_clean.startswith(("51", "56", "58", "50", "15", "16"))
-        or market == "ETF"
-        or bool(item.get("is_etf"))
-    )
-
-    # 1. 波动率标尺 (vol_pct & atr)
-    amp = q.get("amplitude") if q.get("amplitude") is not None else item.get("amplitude")
-    vol_pct: Optional[float] = None
-    if amp is not None:
-        try:
-            amp_val = float(amp)
-            if amp_val > 0:
-                # 真实日振幅百分比转换为波动率小数，限制在合理边界 [1.2%, 12.0%]
-                vol_pct = max(0.012, min(0.12, amp_val / 100.0))
-        except (ValueError, TypeError):
-            vol_pct = None
-
-    if vol_pct is None:
-        # 依据板块基准波动率兜底
-        if is_etf:
-            base_vol = 0.016  # ETF 平均日波动率 1.6%
-        elif market in ["科创板", "创业板"] or code_clean.startswith(("688", "300", "301")):
-            base_vol = 0.045  # 20cm 标的平均日波动率 4.5%
-        elif market == "北交所" or code_clean.startswith(("8", "4", "920")):
-            base_vol = 0.055  # 30cm 标的 5.5%
-        else:
-            base_vol = 0.030  # 主板 3.0%
-
-        # 换手率调节波动幅度
-        tr = q.get("turnover_rate") if q.get("turnover_rate") is not None else item.get("turnover_rate")
-        try:
-            tr_val = float(tr) if tr is not None else 2.0
-            if tr_val > 0:
-                vol_pct = base_vol * (0.8 + min(1.5, tr_val / 3.0) * 0.4)
-            else:
-                vol_pct = base_vol
-        except (ValueError, TypeError):
-            vol_pct = base_vol
-
-    atr = c * vol_pct
-
-    # 2. 量价动能形态与空间判定
-    pct_raw = q.get("pct_chg") if q.get("pct_chg") is not None else item.get("pct_chg")
-    try:
-        pct = float(pct_raw) if pct_raw is not None else 0.0
-    except (ValueError, TypeError):
-        pct = 0.0
-
-    if pct >= 8.0:
-        # 日内极端冲高/超买，追高风险极大，向上弹性收窄，止损拉宽防高位反杀
-        target_dist = 1.2 * atr
-        stop_dist = 1.6 * atr
-    elif pct >= 1.5:
-        # 突破/强势主升波段，动能充足，向上弹性充分
-        target_dist = 2.2 * atr
-        stop_dist = 1.1 * atr
-    elif pct <= -3.0:
-        # 破位下行/弱势阴跌，多头受压，向上反弹空间逼仄
-        target_dist = 0.85 * atr
-        stop_dist = 1.4 * atr
-    else:
-        # 震荡横盘/良性蓄势
-        target_dist = 1.5 * atr
-        stop_dist = 1.0 * atr
-
-    # 3. 基本面估值与质地安全垫加成
-    pe_raw = q.get("pe") if q.get("pe") is not None else item.get("pe")
-    roe_raw = item.get("roe") if item.get("roe") is not None else q.get("roe")
-    try:
-        pe_val = float(pe_raw) if pe_raw is not None else None
-    except (ValueError, TypeError):
-        pe_val = None
-    try:
-        roe_val = float(roe_raw) if roe_raw is not None else None
-    except (ValueError, TypeError):
-        roe_val = None
-
-    if pe_val is not None:
-        if 0 < pe_val <= 30 and (roe_val is None or roe_val >= 8.0):
-            target_dist *= 1.15
-        elif pe_val < 0 or pe_val > 80:
-            target_dist *= 0.88
-
-    target_px = c + target_dist
-    stop_px = max(0.01, c - stop_dist)
-
-    # 4. 实战券商交易摩擦扣费测算 (用户专属：万0.876，免5最低0.5元，个股万5印花税，ETF免征)
-    # 以标准 1000 股测算实盘扣费摩擦
-    test_shares = 1000.0
-    b_val = test_shares * c
-    t_val = test_shares * target_px
-    s_val = test_shares * stop_px
-
-    buy_comm = max(0.5, (b_val * 0.876) / 10000.0)
-    target_comm = max(0.5, (t_val * 0.876) / 10000.0)
-    stop_comm = max(0.5, (s_val * 0.876) / 10000.0)
-
-    target_stamp = 0.0 if is_etf else (t_val * 0.05) / 100.0
-    stop_stamp = 0.0 if is_etf else (s_val * 0.05) / 100.0
-
-    net_gain = max(0.0, (t_val - b_val) - buy_comm - target_comm - target_stamp)
-    net_loss = max(0.01, (b_val - s_val) + buy_comm + stop_comm + stop_stamp)
-
-    net_rr = net_gain / net_loss
-    return round(max(0.3, min(6.0, net_rr)), 2)
-
+    from app.quant_engine import QuantCoreEngine
+    return QuantCoreEngine.calc_risk_reward(item, q)
 
 
 @router.get("/pool", response_model=dict)
@@ -2049,15 +1917,25 @@ async def get_stock_pool(
     max_risk_reward_ratio: Optional[Union[float, str]] = Query(None, description="最大测算盈亏比 (R:R)"),
     min_amount: Optional[Union[float, str]] = Query(None, description="最小成交额(元/万元/亿元)"),
     max_amount: Optional[Union[float, str]] = Query(None, description="最大成交额(元/万元/亿元)"),
+    # === 新增多维量化筛选体系参数 (资金面/技术面/筹码面/风控面) ===
+    min_north_ratio: Optional[Union[float, str]] = Query(None, description="最小北向持股比例(%)"),
+    max_north_ratio: Optional[Union[float, str]] = Query(None, description="最大北向持股比例(%)"),
+    is_heavy_north: Optional[Union[bool, str]] = Query(None, description="仅筛选外资重仓标的(>=3%)"),
+    ma_bullish_only: Optional[Union[bool, str]] = Query(None, description="仅筛选均线多头排列"),
+    above_ma20_only: Optional[Union[bool, str]] = Query(None, description="仅筛选站上20日生命线"),
+    min_profit_ratio: Optional[Union[float, str]] = Query(None, description="最小筹码获利盘(%)"),
+    max_concentration_90: Optional[Union[float, str]] = Query(None, description="最大90%筹码集中度(%)"),
+    exclude_st: Optional[Union[bool, str]] = Query(None, description="排除ST/退市风险警示股"),
+    max_debt_ratio: Optional[Union[float, str]] = Query(None, description="最大资产负债率(%)"),
     page: int = Query(1, ge=1, description="当前页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    sort_field: str = Query("code", description="排序字段 (code/name/close/pct_chg/amount/turnover_rate/volume_ratio/pe/pb/ps/total_mv/roe/net_profit_growth/revenue_growth/gross_margin/risk_reward_ratio)"),
+    sort_field: str = Query("code", description="排序字段 (code/name/close/pct_chg/amount/turnover_rate/volume_ratio/pe/pb/ps/total_mv/roe/net_profit_growth/revenue_growth/gross_margin/risk_reward_ratio/north_ratio)"),
     sort_order: str = Query("asc", description="排序方式 (asc/desc)"),
     current_user: Optional[dict] = Depends(get_optional_current_user)
 ):
     """
     A股股票池列表与多维量化筛选API
-    整合全市场档案、实时行情与多因子量化指标（新增盈亏比等多维因子）
+    整合全市场档案、实时行情与统一量化核心引擎多因子画像
     """
     db = get_mongo_db()
 
@@ -2125,6 +2003,23 @@ async def get_stock_pool(
     c_page = int(_num(page) or 1)
     c_page_size = int(_num(page_size) or 20)
 
+    def _bool(v):
+        if v is None or hasattr(v, "default") or v == "" or v == "null" or v == "undefined":
+            return False
+        if isinstance(v, bool):
+            return v
+        return str(v).lower() in ["true", "1", "yes"]
+
+    c_min_north = _num(min_north_ratio)
+    c_max_north = _num(max_north_ratio)
+    c_is_heavy_north = _bool(is_heavy_north)
+    c_ma_bullish_only = _bool(ma_bullish_only)
+    c_above_ma20_only = _bool(above_ma20_only)
+    c_min_profit_ratio = _num(min_profit_ratio)
+    c_max_conc90 = _num(max_concentration_90)
+    c_exclude_st = _bool(exclude_st) if exclude_st is not None else False
+    c_max_debt = _num(max_debt_ratio)
+
     # 1. 行情条件预筛选 (market_quotes) - amount 存储单位为万元
     quote_filter: Dict[str, Any] = {}
     cand_params: Optional[Dict[str, Any]] = None
@@ -2183,10 +2078,13 @@ async def get_stock_pool(
         quote_codes = await db["market_quotes"].distinct("code", quote_filter)
 
     # 2. 构造基础信息过滤条件（强制剔除退市标的：名称含“退”或“PT”，或上市状态为退市）
+    name_regex = r"退|^PT|ST|\*ST" if c_exclude_st else r"退|^PT"
     filter_query: Dict[str, Any] = {
-        "name": {"$not": {"$regex": r"退|^PT"}},
+        "name": {"$not": {"$regex": name_regex, "$options": "i"}},
         "status": {"$nin": ["0", "delisted", "D", "退市"]}
     }
+    if c_max_debt is not None:
+        filter_query["debt_ratio"] = {"$lte": c_max_debt}
     if quote_codes is not None:
         filter_query["code"] = {"$in": quote_codes}
 
@@ -2330,7 +2228,19 @@ async def get_stock_pool(
         net_profit_growth = item.get("net_profit_growth") if item.get("net_profit_growth") is not None else q.get("net_profit_growth")
         revenue_growth = item.get("revenue_growth") if item.get("revenue_growth") is not None else q.get("revenue_growth")
         gross_margin = item.get("gross_margin") if item.get("gross_margin") is not None else q.get("gross_margin")
-        risk_reward_ratio = _calc_risk_reward_ratio(item, q)
+        debt_ratio = item.get("debt_ratio") if item.get("debt_ratio") is not None else q.get("debt_ratio")
+        north_ratio = float(item.get("north_hold_ratio") or q.get("north_hold_ratio") or 0.0)
+
+        # 统一量化引擎评估全息画像 (Regime + R:R + Tech + Risk)
+        from app.quant_engine import QuantCoreEngine
+        ev = QuantCoreEngine.evaluate_stock(item, q)
+        risk_reward_ratio = ev["risk_reward"]["risk_reward_ratio"]
+        regime = ev["regime"]
+        ma_bullish = ev["technical"]["ma_bullish"]
+        above_ma20 = ev["technical"]["above_ma20"]
+        risk_passed = ev["risk_control"]["is_passed"]
+        target_price = ev["risk_reward"]["target_price"]
+        stop_price = ev["risk_reward"]["stop_price"]
 
         # 异步更新到 market_quotes 以便长期索引（当比值发生变化时覆写刷新）
         if risk_reward_ratio is not None and code and q.get("risk_reward_ratio") != risk_reward_ratio:
@@ -2364,29 +2274,55 @@ async def get_stock_pool(
             "net_profit_growth": net_profit_growth,
             "revenue_growth": revenue_growth,
             "gross_margin": gross_margin,
+            "debt_ratio": debt_ratio,
             "risk_reward_ratio": risk_reward_ratio,
+            "regime": regime,
+            "target_price": target_price,
+            "stop_price": stop_price,
+            "ma_bullish": ma_bullish,
+            "above_ma20": above_ma20,
+            "risk_passed": risk_passed,
+            "north_ratio": north_ratio,
             "trade_date": q.get("trade_date") or item.get("trade_date", ""),
             "updated_at": updated_at
         })
 
     # 4.1 盈亏比范围多维筛选 (min_risk_reward_ratio / max_risk_reward_ratio)
     if c_min_rrr is not None or c_max_rrr is not None:
-        filtered_by_rrr = []
-        for itm in enriched_items:
-            val = itm.get("risk_reward_ratio")
-            if val is None:
-                continue
-            if c_min_rrr is not None and val < c_min_rrr:
-                continue
-            if c_max_rrr is not None and val > c_max_rrr:
-                continue
-            filtered_by_rrr.append(itm)
-        enriched_items = filtered_by_rrr
+        enriched_items = [
+            itm for itm in enriched_items
+            if itm.get("risk_reward_ratio") is not None
+            and (c_min_rrr is None or itm["risk_reward_ratio"] >= c_min_rrr)
+            and (c_max_rrr is None or itm["risk_reward_ratio"] <= c_max_rrr)
+        ]
 
-    # 若根据行情、估值或盈亏比字段排序，在当前批次内按需求排定
+    # 4.2 技术面均线多头与生命线筛选
+    if c_ma_bullish_only:
+        enriched_items = [itm for itm in enriched_items if itm.get("ma_bullish")]
+    if c_above_ma20_only:
+        enriched_items = [itm for itm in enriched_items if itm.get("above_ma20")]
+
+    # 4.3 资金面北向资金持股筛选
+    if c_is_heavy_north:
+        enriched_items = [itm for itm in enriched_items if (itm.get("north_ratio") or 0.0) >= 3.0]
+    elif c_min_north is not None or c_max_north is not None:
+        enriched_items = [
+            itm for itm in enriched_items
+            if (c_min_north is None or (itm.get("north_ratio") or 0.0) >= c_min_north)
+            and (c_max_north is None or (itm.get("north_ratio") or 0.0) <= c_max_north)
+        ]
+
+    # 4.4 排除 ST 风险股 (后道二次防御)
+    if c_exclude_st:
+        enriched_items = [
+            itm for itm in enriched_items
+            if not any(tag in (itm.get("name") or "") for tag in ["ST", "*ST", "退"])
+        ]
+
+    # 若根据行情、估值、盈亏比或北向比例排序，在当前批次内按需求排定
     if sort_field in [
         "close", "pct_chg", "amount", "volume", "turnover_rate", "volume_ratio",
-        "pe", "pb", "ps", "circ_mv", "total_mv", "roe", "net_profit_growth", "revenue_growth", "gross_margin", "risk_reward_ratio"
+        "pe", "pb", "ps", "circ_mv", "total_mv", "roe", "net_profit_growth", "revenue_growth", "gross_margin", "risk_reward_ratio", "north_ratio"
     ]:
         reverse = (sort_order.lower() == "desc")
         enriched_items.sort(

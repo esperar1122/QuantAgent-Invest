@@ -594,6 +594,206 @@
               </div>
             </div>
           </el-col>
+
+          <!-- 5. 资金面与外资动向 -->
+          <el-col :xs="24" :sm="12" :md="12" :lg="6" class="filter-col">
+            <div class="filter-group-card">
+              <div class="group-header">
+                <div class="group-title">
+                  <span class="group-icon">🌊</span>
+                  <span>资金面与外资</span>
+                </div>
+                <span class="group-tag">Capital</span>
+              </div>
+
+              <div class="group-body">
+                <!-- 北向持股比例 -->
+                <div class="filter-field">
+                  <div class="field-header">
+                    <span class="field-label">北向持股比例 (%)</span>
+                    <span v-if="params.min_north_ratio != null" class="active-indicator">已设</span>
+                  </div>
+                  <div class="field-inputs">
+                    <el-input-number
+                      v-model="params.min_north_ratio"
+                      :min="0"
+                      :max="100"
+                      :precision="1"
+                      placeholder="最低持股占比(%)"
+                      :controls="false"
+                      size="small"
+                      class="range-input full-width"
+                    />
+                  </div>
+                </div>
+
+                <!-- 外资核心重仓 -->
+                <div class="filter-field">
+                  <div class="field-header">
+                    <span class="field-label">外资核心重仓精选</span>
+                    <span v-if="params.is_heavy_north" class="active-indicator">已设</span>
+                  </div>
+                  <div class="field-switch-row">
+                    <el-switch
+                      v-model="params.is_heavy_north"
+                      size="small"
+                      active-text="仅看持股 ≥ 3% 核心重仓"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </el-col>
+
+          <!-- 6. 均线与技术形态 -->
+          <el-col :xs="24" :sm="12" :md="12" :lg="6" class="filter-col">
+            <div class="filter-group-card">
+              <div class="group-header">
+                <div class="group-title">
+                  <span class="group-icon">🎯</span>
+                  <span>均线与形态趋势</span>
+                </div>
+                <span class="group-tag">Technical</span>
+              </div>
+
+              <div class="group-body">
+                <!-- 均线多头排列 -->
+                <div class="filter-field">
+                  <div class="field-header">
+                    <span class="field-label">均线多头排列</span>
+                    <span v-if="params.ma_bullish_only" class="active-indicator">已设</span>
+                  </div>
+                  <div class="field-switch-row">
+                    <el-switch
+                      v-model="params.ma_bullish_only"
+                      size="small"
+                      active-text="MA5 > MA10 > MA20 多头"
+                    />
+                  </div>
+                </div>
+
+                <!-- 站上 20 日生命线 -->
+                <div class="filter-field">
+                  <div class="field-header">
+                    <span class="field-label">站上 20 日生命线</span>
+                    <span v-if="params.above_ma20_only" class="active-indicator">已设</span>
+                  </div>
+                  <div class="field-switch-row">
+                    <el-switch
+                      v-model="params.above_ma20_only"
+                      size="small"
+                      active-text="收盘价处于 MA20 之上"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </el-col>
+
+          <!-- 7. 筹码分布结构 -->
+          <el-col :xs="24" :sm="12" :md="12" :lg="6" class="filter-col">
+            <div class="filter-group-card">
+              <div class="group-header">
+                <div class="group-title">
+                  <span class="group-icon">🥧</span>
+                  <span>筹码分布结构</span>
+                </div>
+                <span class="group-tag">CYQ</span>
+              </div>
+
+              <div class="group-body">
+                <!-- 筹码获利比例 -->
+                <div class="filter-field">
+                  <div class="field-header">
+                    <span class="field-label">筹码获利比例 (%)</span>
+                    <span v-if="params.min_profit_ratio != null" class="active-indicator">已设</span>
+                  </div>
+                  <div class="field-inputs">
+                    <el-input-number
+                      v-model="params.min_profit_ratio"
+                      :min="0"
+                      :max="100"
+                      :precision="1"
+                      placeholder="最低获利盘(如 ≥ 70%)"
+                      :controls="false"
+                      size="small"
+                      class="range-input full-width"
+                    />
+                  </div>
+                </div>
+
+                <!-- 90% 筹码集中度 -->
+                <div class="filter-field">
+                  <div class="field-header">
+                    <span class="field-label">90%筹码集中度上限 (%)</span>
+                    <span v-if="params.max_concentration_90 != null" class="active-indicator">已设</span>
+                  </div>
+                  <div class="field-inputs">
+                    <el-input-number
+                      v-model="params.max_concentration_90"
+                      :min="0"
+                      :max="100"
+                      :precision="1"
+                      placeholder="单峰密集(如 ≤ 15%)"
+                      :controls="false"
+                      size="small"
+                      class="range-input full-width"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </el-col>
+
+          <!-- 8. 风险排雷与负面清单 -->
+          <el-col :xs="24" :sm="12" :md="12" :lg="6" class="filter-col">
+            <div class="filter-group-card">
+              <div class="group-header">
+                <div class="group-title">
+                  <span class="group-icon">🛡️</span>
+                  <span>风控与一票否决</span>
+                </div>
+                <span class="group-tag">Risk Gates</span>
+              </div>
+
+              <div class="group-body">
+                <!-- 剔除 ST / 退市风险 -->
+                <div class="filter-field">
+                  <div class="field-header">
+                    <span class="field-label">排除 ST / 退市股</span>
+                    <span v-if="params.exclude_st" class="active-indicator">已设</span>
+                  </div>
+                  <div class="field-switch-row">
+                    <el-switch
+                      v-model="params.exclude_st"
+                      size="small"
+                      active-text="自动剔除 ST/*ST 股"
+                    />
+                  </div>
+                </div>
+
+                <!-- 资产负债率上限 -->
+                <div class="filter-field">
+                  <div class="field-header">
+                    <span class="field-label">资产负债率上限 (%)</span>
+                    <span v-if="params.max_debt_ratio != null" class="active-indicator">已设</span>
+                  </div>
+                  <div class="field-inputs">
+                    <el-input-number
+                      v-model="params.max_debt_ratio"
+                      :min="0"
+                      :max="100"
+                      :precision="1"
+                      placeholder="最高负债率(如 ≤ 75%)"
+                      :controls="false"
+                      size="small"
+                      class="range-input full-width"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </el-col>
         </el-row>
 
         <!-- 底部统一操作与提示栏 -->
@@ -944,6 +1144,11 @@ defineEmits<{
         min-width: 0;
         width: 0;
 
+        &.full-width {
+          flex: 1 1 100%;
+          width: 100%;
+        }
+
         :deep(.el-input__wrapper) {
           padding: 0 6px;
         }
@@ -959,6 +1164,17 @@ defineEmits<{
         color: #94a3b8;
         font-size: 12px;
         flex-shrink: 0;
+      }
+    }
+
+    .field-switch-row {
+      display: flex;
+      align-items: center;
+      padding: 4px 0;
+
+      :deep(.el-switch__label) {
+        font-size: 11px;
+        color: #475569;
       }
     }
 

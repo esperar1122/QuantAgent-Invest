@@ -167,6 +167,20 @@ export function useStockPool() {
         type: 'warning' as const,
         cannot_delete: false,
         params: { min_risk_reward_ratio: 2.5, market_cap_range: 'medium', min_turnover_rate: 2.0, max_turnover_rate: 8.0, min_pe: 0.01, max_pe: 45.0 }
+      },
+      {
+        id: 'preset_north_core',
+        name: '⭐ 外资核心·北向重仓',
+        type: 'danger' as const,
+        cannot_delete: false,
+        params: { is_heavy_north: true, min_north_ratio: 3.0, min_roe: 12.0, ma_bullish_only: true, min_risk_reward_ratio: 2.0, exclude_st: true }
+      },
+      {
+        id: 'preset_chip_dense',
+        name: '🎯 筹码单峰·回踩低吸',
+        type: 'primary' as const,
+        cannot_delete: false,
+        params: { max_concentration_90: 10.0, above_ma20_only: true, min_risk_reward_ratio: 2.5, min_turnover_rate: 1.5, exclude_st: true }
       }
     ]
   })
@@ -189,6 +203,13 @@ export function useStockPool() {
     if (queryParams.min_risk_reward_ratio != null || queryParams.max_risk_reward_ratio != null) cnt++
     if (queryParams.volume_level || queryParams.min_amount != null || queryParams.max_amount != null) cnt++
     if (queryParams.market_cap_range || queryParams.min_market_cap != null || queryParams.max_market_cap != null) cnt++
+    if (queryParams.min_north_ratio != null || queryParams.max_north_ratio != null || queryParams.is_heavy_north) cnt++
+    if (queryParams.ma_bullish_only) cnt++
+    if (queryParams.above_ma20_only) cnt++
+    if (queryParams.min_profit_ratio != null) cnt++
+    if (queryParams.max_concentration_90 != null) cnt++
+    if (queryParams.exclude_st) cnt++
+    if (queryParams.max_debt_ratio != null) cnt++
     return cnt
   })
 
@@ -271,6 +292,32 @@ export function useStockPool() {
       const capMap: Record<string, string> = { small: '小盘(<100亿)', medium: '中盘(100-500亿)', large: '大盘(>500亿)' }
       tags.push({ key: 'market_cap_range', label: '市值规模', text: capMap[queryParams.market_cap_range] || queryParams.market_cap_range })
     }
+
+    // === 新增多维量化筛选标签 ===
+    if (queryParams.is_heavy_north) {
+      tags.push({ key: 'is_heavy_north', label: '北向资金', text: '外资重仓 (持股≥3%)' })
+    } else if (queryParams.min_north_ratio != null || queryParams.max_north_ratio != null) {
+      tags.push({ key: 'north_ratio', label: '北向持股', text: `${queryParams.min_north_ratio ?? 0}% ~ ${queryParams.max_north_ratio ?? '∞'}%` })
+    }
+    if (queryParams.ma_bullish_only) {
+      tags.push({ key: 'ma_bullish_only', label: '均线形态', text: '多头排列 (MA5>10>20)' })
+    }
+    if (queryParams.above_ma20_only) {
+      tags.push({ key: 'above_ma20_only', label: '生命线', text: '站上20日生命线' })
+    }
+    if (queryParams.min_profit_ratio != null) {
+      tags.push({ key: 'min_profit_ratio', label: '筹码获利盘', text: `≥${queryParams.min_profit_ratio}%` })
+    }
+    if (queryParams.max_concentration_90 != null) {
+      tags.push({ key: 'max_concentration_90', label: '90%集中度', text: `≤${queryParams.max_concentration_90}% (单峰密集)` })
+    }
+    if (queryParams.exclude_st) {
+      tags.push({ key: 'exclude_st', label: '风控红线', text: '排除ST/退市风险' })
+    }
+    if (queryParams.max_debt_ratio != null) {
+      tags.push({ key: 'max_debt_ratio', label: '资产负债率', text: `≤${queryParams.max_debt_ratio}%` })
+    }
+
     return tags
   })
 
@@ -312,6 +359,14 @@ export function useStockPool() {
         queryParams.min_market_cap = null
         queryParams.max_market_cap = null
         break
+      case 'is_heavy_north': queryParams.is_heavy_north = false; break
+      case 'north_ratio': queryParams.min_north_ratio = null; queryParams.max_north_ratio = null; break
+      case 'ma_bullish_only': queryParams.ma_bullish_only = false; break
+      case 'above_ma20_only': queryParams.above_ma20_only = false; break
+      case 'min_profit_ratio': queryParams.min_profit_ratio = null; break
+      case 'max_concentration_90': queryParams.max_concentration_90 = null; break
+      case 'exclude_st': queryParams.exclude_st = false; break
+      case 'max_debt_ratio': queryParams.max_debt_ratio = null; break
     }
     handleSearch()
   }
@@ -359,6 +414,15 @@ export function useStockPool() {
     queryParams.max_market_cap = null
     queryParams.min_amount = null
     queryParams.max_amount = null
+    queryParams.min_north_ratio = null
+    queryParams.max_north_ratio = null
+    queryParams.is_heavy_north = false
+    queryParams.ma_bullish_only = false
+    queryParams.above_ma20_only = false
+    queryParams.min_profit_ratio = null
+    queryParams.max_concentration_90 = null
+    queryParams.exclude_st = true
+    queryParams.max_debt_ratio = null
   }
 
   // 应用策略预设

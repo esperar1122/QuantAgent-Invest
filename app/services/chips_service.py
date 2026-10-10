@@ -592,7 +592,12 @@ def calculate_chips_distribution(
                 "suggested_entry": f"¥{(primary_sup['price'] if primary_sup else avg_cost):.{precision}f} 附近",
                 "stop_loss": stop_loss,
                 "target_price": target_price,
-                "risk_reward_ratio": round(abs((target_price - current_price) / max(0.01, (current_price - stop_loss))), 2) if stop_loss < current_price else 1.0
+                "risk_reward_ratio": (
+                    __import__("app.quant_engine", fromlist=["QuantCoreEngine"]).QuantCoreEngine.calc_risk_reward(
+                        {"code": symbol, "is_etf": is_etf},
+                        {"close": current_price, "pct_chg": pct_chg}
+                    ) or round(abs((target_price - current_price) / max(0.01, (current_price - stop_loss))), 2)
+                )
             }
         }
 

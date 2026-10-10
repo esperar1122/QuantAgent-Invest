@@ -85,6 +85,33 @@
         </template>
       </el-table-column>
 
+      <!-- 量价生命周期状态机 (Regime) -->
+      <el-table-column prop="regime" label="量价形态" width="145" align="center">
+        <template #default="{ row }">
+          <div class="regime-col-cell">
+            <el-tag
+              v-if="row.regime"
+              :type="getRegimeTagType(row.regime)"
+              size="small"
+              effect="light"
+              round
+              :title="getRegimeDesc(row.regime)"
+            >
+              {{ getRegimeLabel(row.regime) }}
+            </el-tag>
+            <span v-else class="text-muted">--</span>
+            <el-tag
+              v-if="row.ma_bullish"
+              type="danger"
+              size="small"
+              effect="plain"
+              class="ma-bullish-tag"
+              title="MA5 > MA10 > MA20 均线多头排列"
+            >多头</el-tag>
+          </div>
+        </template>
+      </el-table-column>
+
       <!-- 所属板块 -->
       <el-table-column prop="market" label="所属板块" width="100">
         <template #default="{ row }">
@@ -137,16 +164,20 @@
       <!-- 测算盈亏比 (Risk-Reward Ratio) -->
       <el-table-column prop="risk_reward_ratio" label="盈亏比(R:R)" width="120" align="right" sortable="custom">
         <template #default="{ row }">
-          <el-tag
+          <el-tooltip
             v-if="row.risk_reward_ratio !== null && row.risk_reward_ratio !== undefined"
-            :type="row.risk_reward_ratio >= 3.0 ? 'success' : row.risk_reward_ratio >= 2.0 ? 'primary' : row.risk_reward_ratio >= 1.5 ? 'warning' : 'info'"
-            size="small"
-            effect="plain"
-            class="num-tabular font-mono"
-            :title="`预期盈利/止损比值: ${row.risk_reward_ratio}`"
+            :content="getRiskRewardTooltip(row)"
+            placement="top"
           >
-            {{ Number(row.risk_reward_ratio).toFixed(2) }}:1
-          </el-tag>
+            <el-tag
+              :type="row.risk_reward_ratio >= 3.0 ? 'success' : row.risk_reward_ratio >= 2.0 ? 'primary' : row.risk_reward_ratio >= 1.5 ? 'warning' : 'info'"
+              size="small"
+              effect="plain"
+              class="num-tabular font-mono"
+            >
+              {{ Number(row.risk_reward_ratio).toFixed(2) }}:1
+            </el-tag>
+          </el-tooltip>
           <span v-else class="text-muted">--</span>
         </template>
       </el-table-column>
@@ -163,6 +194,17 @@
         <template #default="{ row }">
           <span v-if="row.circ_mv !== null && row.circ_mv !== undefined" class="num-cell num-tabular">
             {{ Number(row.circ_mv).toFixed(1) }} 亿
+          </span>
+          <span v-else class="text-muted">--</span>
+        </template>
+      </el-table-column>
+
+      <!-- 北向资金持股比例 -->
+      <el-table-column prop="north_ratio" label="北向持股" width="115" align="right" sortable="custom">
+        <template #default="{ row }">
+          <span v-if="row.north_ratio !== null && row.north_ratio !== undefined" class="num-cell num-tabular" :class="{ 'bold text-up': row.north_ratio >= 3.0 }">
+            <span v-if="row.north_ratio >= 3.0" title="外资核心重仓 (持股 ≥ 3%)" style="font-size: 11px; margin-right: 2px;">⭐</span>
+            {{ Number(row.north_ratio).toFixed(2) }}%
           </span>
           <span v-else class="text-muted">--</span>
         </template>
@@ -435,9 +477,71 @@ const formatTradeDate = (d?: string) => {
   }
   return d
 }
+
+// 量价生命周期状态机辅助方法
+const getRegimeLabel = (regime?: string) => {
+  switch (regime) {
+    case 'STRONG_MOMENTUM': return '🚀 主升加速'
+    case 'PULLBACK_SETUP': return '🎯 良性回踩'
+    case 'RANGE_BOUND': return '🔄 震荡蓄势'
+    case 'EXTREME_OVERSOLD': return '⚡ 极端超跌'
+    case 'DOWNWARD_TREND': return '🛡️ 破位防守'
+    default: return regime || '--'
+  }
+}
+
+const getRegimeTagType = (regime?: string) => {
+  switch (regime) {
+    case 'STRONG_MOMENTUM': return 'danger'
+    case 'PULLBACK_SETUP': return 'success'
+    case 'RANGE_BOUND': return 'primary'
+    case 'EXTREME_OVERSOLD': return 'warning'
+    case 'DOWNWARD_TREND': return 'info'
+    default: return 'info'
+  }
+}
+
+const getRegimeDesc = (regime?: string) => {
+  switch (regime) {
+    case 'STRONG_MOMENTUM': return '均线多头排列且突破放量，适合顺势跟进'
+    case 'PULLBACK_SETUP': return '趋势向好短线缩量回踩，提供低吸盈亏比窗口'
+    case 'RANGE_BOUND': return '箱体多空平衡，高抛低吸或等待方向抉择'
+    case 'EXTREME_OVERSOLD': return '严重超跌远离均线，具备博弈超跌反弹空间'
+    case 'DOWNWARD_TREND': return '空头均线压制破位下行，系统风控防守禁区'
+    default: return ''
+  }
+}
+
+const getRiskRewardTooltip = (row: StockPoolItem) => {
+  const parts: string[] = []
+  if (row.risk_reward_ratio != null) {
+    parts.push(`净盈亏比: ${Number(row.risk_reward_ratio).toFixed(2)}:1`)
+  }
+  if (row.target_price != null) {
+    parts.push(`目标价: ¥${Number(row.target_price).toFixed(2)}`)
+  }
+  if (row.stop_price != null) {
+    parts.push(`止损价: ¥${Number(row.stop_price).toFixed(2)}`)
+  }
+  return parts.join(' | ') || '测算盈亏比'
+}
 </script>
 
 <style scoped lang="scss">
+.regime-col-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: wrap;
+
+  .ma-bullish-tag {
+    font-size: 10px;
+    padding: 0 4px;
+    height: 20px;
+    line-height: 18px;
+  }
+}
 .table-card {
   border: 1px solid var(--el-border-color-lighter, #e2e8f0);
   border-radius: 12px;
