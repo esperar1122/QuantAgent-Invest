@@ -935,6 +935,16 @@
           </div>
         </div>
 
+        <!-- 🌊 主力资金流向与北向筹码透视 -->
+        <CapitalFlowCard
+          :capitalFlow="currentCapitalFlow"
+          :stockCode="currentStock.code"
+          :stockName="currentStock.name"
+          :loading="capitalFlowLoading"
+          :isIndex="isCurrentIndex"
+          @refresh="reloadCapitalFlow"
+        />
+
         <!-- 🔥 中间栏下方：实时新闻资讯与个股舆情快讯 (Stock News & Market Intel) -->
         <div class="stock-news-card">
           <div class="news-card-header">
@@ -1295,6 +1305,7 @@ import StockKlineChart from '@/components/Terminal/StockKlineChart.vue'
 import TechnicalAnalysisModal from '@/components/TechnicalIndicators/TechnicalAnalysisModal.vue'
 import PositionSizerDrawer from '@/components/Terminal/PositionSizerDrawer.vue'
 import PaperTradingModal from '@/components/Terminal/PaperTradingModal.vue'
+import CapitalFlowCard from '@/components/Terminal/CapitalFlowCard.vue'
 import { newsApi, type NewsItem } from '@/api/news'
 import { stocksApi, type StockSearchItem, type ChipsDistribution, type TechnicalSnapshot } from '@/api/stocks'
 import { createQuotesStream, type StreamController } from '@/utils/marketStream'
@@ -1395,6 +1406,23 @@ const isCurrentETF = computed(() => {
     n.includes('ETF')
   )
 })
+
+// 🌊 主力资金流向与北向持股画像状态
+const currentCapitalFlow = ref<any>(null)
+const capitalFlowLoading = ref(false)
+
+const reloadCapitalFlow = async () => {
+  if (isCurrentIndex.value) return
+  capitalFlowLoading.value = true
+  try {
+    const res = await stocksApi.getCapitalFlow(currentStock.value.code)
+    currentCapitalFlow.value = (res as any)?.data || res || null
+  } catch (e) {
+    console.warn('刷新资金流失败', e)
+  } finally {
+    capitalFlowLoading.value = false
+  }
+}
 
 // 🎯 板块与涨跌幅限制自适应超参数配置体系 (Board & Price Limit Adaptive Profile)
 const boardProfile = computed(() => {
@@ -2721,9 +2749,11 @@ const quantFactors = computed(() => {
   // 1. 动量趋势因子: 结合当日涨幅与换手活跃度动态推演
   const momScore = Math.min(98, Math.max(35, Math.round(65 + chg * 4.5 + Math.min(15, turnover * 2))))
 
-  // 2. 机构资金流向: 结合真实 Level-2 盘口买卖比与换手率
+  // 2. 机构资金流向: 结合真实 Level-2 盘口买卖比、新浪主力资金净流入比例与北向持仓权重
   const ratio = parseFloat(orderBookRatio.value) || 1.0
-  const instScore = Math.min(96, Math.max(40, Math.round(55 + (ratio - 1) * 25 + chg * 2)))
+  const mainRatioPct = currentCapitalFlow.value?.flow?.summary?.main_ratio_pct ?? 0
+  const northBonus = currentCapitalFlow.value?.northbound?.is_heavy_north ? 4 : 0
+  const instScore = Math.min(98, Math.max(35, Math.round(55 + (ratio - 1) * 20 + mainRatioPct * 1.5 + northBonus + chg * 1.5)))
 
   // 3. 市场舆情热度: 基于换手率与量能活跃度
   const sentScore = Math.min(98, Math.max(40, Math.round(50 + turnover * 8 + Math.abs(chg) * 2.5)))
@@ -3054,6 +3084,7 @@ async function switchStock(code: string) {
   currentIndicators.value = null
   currentDossier.value = null
   realRatingData.value = null
+  currentCapitalFlow.value = null
   await loadStockDetail(code)
   router.replace({ path: '/terminal/stock', query: { code } })
 }
@@ -3062,25 +3093,28 @@ async function switchStock(code: string) {
 async function loadStockDetail(code: string) {
   pageLoading.value = true
   try {
-    // 1. 并发获取实时行情、基本面财务数据、筹码分布、技术指标快照与多智能体案卷库
+    // 1. 并发获取实时行情、基本面财务数据、筹码分布、技术指标快照、多智能体案卷库与主力资金/北向持股
     const quotePromise = stocksApi.getQuote(code).catch(() => null)
     const fundPromise = stocksApi.getFundamentals(code).catch(() => null)
     const chipsPromise = stocksApi.getChips(code).catch(() => null)
     const indicatorsPromise = stocksApi.getIndicators(code).catch(() => null)
     const dossierPromise = stocksApi.getDossier(code).catch(() => null)
+    const capitalFlowPromise = stocksApi.getCapitalFlow(code).catch(() => null)
 
-    const [quoteRes, fundRes, chipsRes, indRes, dossierRes] = await Promise.all([
+    const [quoteRes, fundRes, chipsRes, indRes, dossierRes, capitalFlowRes] = await Promise.all([
       quotePromise,
       fundPromise,
       chipsPromise,
       indicatorsPromise,
-      dossierPromise
+      dossierPromise,
+      capitalFlowPromise
     ])
     const q = (quoteRes as any)?.data || quoteRes
     const f = (fundRes as any)?.data || fundRes
     currentChips.value = (chipsRes as any)?.data?.chips || (chipsRes as any)?.chips || (indRes as any)?.data?.chips || (indRes as any)?.chips || null
     currentIndicators.value = (indRes as any)?.data?.snapshot || (indRes as any)?.snapshot || null
     currentDossier.value = (dossierRes as any)?.data || dossierRes || null
+    currentCapitalFlow.value = (capitalFlowRes as any)?.data || capitalFlowRes || null
 
     // 双轨混合模式：初始化真实券商研报画像
     if (q?.institution_ratings) {

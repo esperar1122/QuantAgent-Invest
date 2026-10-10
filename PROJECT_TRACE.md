@@ -571,6 +571,23 @@ AI 将自动基于该文档在几秒内无缝接续全部上下文！
   - **P0 级个股与指数研报 K 线指标升级与交易时效纪律画像建仓决策算法**：
     - **K线均线与技术指标优化**：增加 MA10 均线图层，修复 MACD 指标在特定视窗下零轴与柱体显示不良的问题；
     - **交易时效与纪律画像算法建议**：在研报终端提供明确的“建仓决策”与“值博率”量化判断，杜绝脱离资金管理满仓单吊，统一实盘扣费净盈亏比与挂单计划逻辑。
+  - **P0 级个股主力资金流向（超大单/大单/中单/小单）与北向资金持股透视中台及可视化闭环 (`capital_flow_service.py`, `stocks.py`, `CapitalFlowCard.vue`, `StockResearch/index.vue`)**：
+    - **数据源与信披可行性实测深度定性**：
+      - **北向资金 (沪深港通) 监管新规真相**：2024年8月19日起，沪深交易所及港交所全面取消北向资金日内盘中实时分时净买卖额披露，以防范短线投机跟风，全网任何第三方平台（含东财、同花顺、AKShare 等）日内实时净买卖额均已依法停更；个股持股明细调整为每季度后权威披露；
+      - **开源数据源 AData (adata 2.9.5) 实测结论**：`adata.sentiment.north.north_flow()` 2024年8月19日后返回值均为 0（因交易所源头停更）；`adata.stock.market.get_capital_flow()` 直连东财 push2his 抓取因未配置完备请求头，直接被服务端防爬机制主动断开 (`RemoteDisconnected`)，稳定性差；
+      - **落地架构方案（新浪财经 MoneyFlow + 东方财富 Datacenter 官方双通道架构）**：
+        - 新浪财经 MoneyFlow 免 Token、毫秒级极速响应，稳定提供包含 2026 最新收盘日（如 2026-10-09）在内的 15~30 日历史分档大单主力数据（超大单、大单、中单、小单进出）；
+        - 东方财富 Datacenter 官方接口（`RPT_MUTUAL_HOLDSTOCKNORTH_STA`）稳定提供权威季度末北向资金持股数、持股市值、占A股比例、占自由流通股比例。
+    - **后端服务开发与接口开放**：
+      - 新建 `app/services/capital_flow_service.py`：实现 `fetch_capital_flow`、`fetch_northbound_holding`、`get_combined_analysis`，自动推导主力 1日/3日/5日累计净额与多空姿态（爆量抢筹/大幅出逃/温和增配/承压洗盘）；
+      - 在 `app/routers/stocks.py` 开放 `GET /api/stocks/{code}/capital-flow` 接口；
+    - **前端可视化组件与量化画像联动**：
+      - 新建 `frontend/src/components/Terminal/CapitalFlowCard.vue` 专用交互卡片，包含 4 大功能面板：
+        - `主力动向看板`：展示今日主力净流入、5日主力累计净额、超大单 vs 大单机构火力、散户动向、四档进出图谱与量化博弈洞察；
+        - `15日流向明细`：15 交易日历史数据表格（超大单/大单/中单/小单进出净额及红涨绿跌高亮）；
+        - `北向持仓画像`：展示最新季度持股数/市值/占比、历季度变动表、2024-08-19 监管新规官方权威声明条；
+        - `信披与数据源`：展示数据源与 AData 开源库实测对比透视说明；
+      - 在 `StockResearch/index.vue` 的 `center-chart-col` 挂载 `CapitalFlowCard`，与行情并发异步加载，并在 `quantFactors` 因子得分计算中深度联动主力净流入占比与北向持股加成。
 
 ### 2. 跨设备数据同步运维与极速数据源指南 (Data Pipeline & Operations Guide for Antigravity)
 

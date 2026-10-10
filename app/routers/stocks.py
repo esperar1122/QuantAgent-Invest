@@ -1380,6 +1380,16 @@ async def get_stock_chips(
     })
 
 
+@router.get("/{code}/capital-flow", response_model=dict)
+async def get_stock_capital_flow_endpoint(code: str):
+    """
+    获取个股主力资金流向（超大单/大单/中单/小单）与北向资金(陆股通)持股画像
+    """
+    from app.services.capital_flow_service import CapitalFlowService
+    res = await CapitalFlowService.get_combined_analysis(code)
+    return ok(data=res)
+
+
 @router.get("/{code}/dossier", response_model=dict)
 async def get_stock_dossier_endpoint(code: str):
     """

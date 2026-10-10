@@ -241,6 +241,13 @@ export const stocksApi = {
   },
 
   /**
+   * 获取主力资金流向（超大单/大单/中单/小单）与北向资金持股画像
+   */
+  async getCapitalFlow(symbol: string) {
+    return ApiClient.get<any>(`/api/stocks/${symbol}/capital-flow`)
+  },
+
+  /**
    * 获取多智能体证据案卷库 (Case Files)
    * 穿透真实离线大模型报告与实时量化多因子多空辩论
    */
